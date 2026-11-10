@@ -9,3 +9,6 @@ packages/podcasts/data/transcripts/
 packages/podcasts/data/audio/
 packages/podcasts/data/cache/
 packages/podcasts/transcriber/.venv/
+
+# Secrets (never commit)
+client_secret*.json
