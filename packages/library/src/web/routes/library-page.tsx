@@ -112,34 +112,35 @@ export function LibraryPage() {
 
   return (
     <Container className="pb-16">
-      <PageHeader
-        eyebrow="Libreria"
-        title={heading}
-        className="pb-8 sm:pb-10"
-        description={
-          index ? (
-            <>
-              {booksCount(stats.total)}
-              {stats.reading > 0 ? <> · {stats.reading} in lettura</> : null}
-              {stats.read > 0 ? (
-                <>
-                  {" "}
-                  · {stats.read} {stats.read === 1 ? "letto" : "letti"}
-                </>
-              ) : null}
-            </>
-          ) : state.status === "error" ? (
-            " "
-          ) : (
-            <span
-              aria-hidden
-              className="inline-block h-4 w-48 animate-pulse rounded-md bg-muted align-middle"
-            />
-          )
-        }
-      />
-
       <SidePanelLayout
+        header={(stacked) => (
+          <PageHeader
+            stacked={stacked}
+            compact
+            title={heading}
+            description={
+              index ? (
+                <>
+                  {booksCount(stats.total)}
+                  {stats.reading > 0 ? <> · {stats.reading} in lettura</> : null}
+                  {stats.read > 0 ? (
+                    <>
+                      {" "}
+                      · {stats.read} {stats.read === 1 ? "letto" : "letti"}
+                    </>
+                  ) : null}
+                </>
+              ) : state.status === "error" ? (
+                " "
+              ) : (
+                <span
+                  aria-hidden
+                  className="inline-block h-4 w-48 animate-pulse rounded-md bg-muted align-middle"
+                />
+              )
+            }
+          />
+        )}
         description="Filtra la biblioteca per argomento, stato e tag."
         headerAction={
           <ClearFiltersButton

@@ -1,6 +1,7 @@
 import { CheckIcon, SearchIcon, XIcon } from "lucide-react";
 import { type ReactNode, type RefObject, useEffect, useId, useRef } from "react";
-import { SidePanelToggle } from "./layout/side-panel";
+import { createPortal } from "react-dom";
+import { SidePanelToggle, useSidePanel } from "./layout/side-panel";
 import { cn } from "./utils";
 
 /*
@@ -128,6 +129,24 @@ export function SearchToolbar({
   activeFilterCount?: number;
   className?: string;
 }) {
+  const { isDesktop, collapsed, searchSlot } = useSidePanel();
+  // Desktop with the column open: the toggle + search live at the top of the left column; only page actions stay here.
+  if (isDesktop && !collapsed && searchSlot) {
+    return (
+      <>
+        {createPortal(
+          <>
+            <SidePanelToggle activeCount={activeFilterCount} />
+            {search}
+          </>,
+          searchSlot,
+        )}
+        {actions ? (
+          <div className={cn("flex items-center justify-end gap-2 py-3", className)}>{actions}</div>
+        ) : null}
+      </>
+    );
+  }
   return (
     <div
       className={cn(

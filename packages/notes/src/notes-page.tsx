@@ -144,18 +144,23 @@ export function NotesPage({ store = notesStore }: { store?: NotesStore }) {
   ];
   const clearAll = () => update({ q: "", sources: [], pinned: false, item: null });
 
+  const renderHeader = (stacked: boolean) => (
+    <PageHeader
+      stacked={stacked}
+          compact
+          title="Le mie note"
+          description={
+            all.length === 0
+              ? "Le note che scrivi su libri ed episodi, tutte in un posto."
+              : `${notesCount(all.length)} su ${plural(new Set(all.map((n) => itemKey(n.item))).size, "elemento", "elementi")}, ${plural(all.filter((n) => n.pinned).length, "fissata", "fissate")}.`
+          }
+    />
+  );
+  const usesPanel = meta.status !== "loading" && all.length > 0;
+
   return (
     <Container className="pb-16">
-      <PageHeader
-        eyebrow="Note"
-        title="Le mie note"
-        description={
-          all.length === 0
-            ? "Le note che scrivi su libri ed episodi, tutte in un posto."
-            : `${notesCount(all.length)} su ${plural(new Set(all.map((n) => itemKey(n.item))).size, "elemento", "elementi")}, ${plural(all.filter((n) => n.pinned).length, "fissata", "fissate")}.`
-        }
-      />
-
+      {usesPanel ? null : <div className="pt-6 pb-3 sm:pt-8">{renderHeader(false)}</div>}
       <NotesErrorBanner store={store} className="mb-6" />
 
       {meta.status === "loading" ? (
@@ -170,6 +175,7 @@ export function NotesPage({ store = notesStore }: { store?: NotesStore }) {
         )
       ) : (
         <SidePanelLayout
+          header={renderHeader}
           description="Filtra le note per fonte, stato e libro o episodio."
           headerAction={
             <ClearFiltersButton

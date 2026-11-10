@@ -1,10 +1,18 @@
 /**
  * Admin bar above the library grid: add book, topics, and selection mode with bulk edit.
  */
-import { CheckSquareIcon, FolderTreeIcon, PencilLineIcon, PlusIcon, XIcon } from "lucide-react";
+import {
+  CheckSquareIcon,
+  FolderTreeIcon,
+  InfoIcon,
+  PencilLineIcon,
+  PlusIcon,
+  XIcon,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Button } from "@ehub/ui/components/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@ehub/ui/components/popover";
 import { useLibrarySelection } from "@library/selection";
 import { BulkEditDialog } from "./bulk-edit-dialog";
 import { collectTags } from "./lib/tags";
@@ -29,14 +37,26 @@ export function LibraryAdminBar({ index, visibleBooks }: LibraryAdminBarProps) {
       data-elib-admin={ADMIN_BUNDLE_MARKER}
       role="toolbar"
       aria-label="Strumenti di amministrazione"
-      className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-dashed border-brand/40 bg-brand-soft/60 px-3 py-2 text-sm"
+      className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm"
     >
-      <span className="w-full sm:mr-auto sm:w-auto">
-        <span className="font-medium text-brand">Modalità locale</span>
-        <span className="ml-2 text-xs text-muted-foreground">
-          Le modifiche restano sul tuo computer: per pubblicare serve commit e push.
-        </span>
-      </span>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="mr-auto inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand outline-none hover:border-brand/60 focus-visible:ring-3 focus-visible:ring-ring/40"
+          >
+            Locale
+            <InfoIcon aria-hidden className="size-3.5" />
+            <span className="sr-only">: informazioni sulla modalità locale</span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-64 text-sm">
+          <p className="font-medium">Modalità locale</p>
+          <p className="mt-1 text-muted-foreground">
+            Le modifiche restano sul tuo computer: per pubblicare serve commit e push.
+          </p>
+        </PopoverContent>
+      </Popover>
       {selection.selecting ? (
         <>
           <span className="tabular-nums text-muted-foreground" aria-live="polite">

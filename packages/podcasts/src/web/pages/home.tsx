@@ -93,23 +93,29 @@ export function HomePage() {
     })),
   ];
 
+  const renderHeader = (stacked: boolean) => (
+    <PageHeader
+      stacked={stacked}
+      compact
+      title="Podcast ascoltati"
+      description={
+        total === 0
+          ? "Il catalogo è ancora vuoto."
+          : `${plural(total, "episodio", "episodi")} da ${plural(usedShows, "show", "show")}, con sintesi, appunti e conversazioni.`
+      }
+      actions={<DevSlot name="header-actions" />}
+    />
+  );
+
   return (
     <div>
-      <PageHeader
-        eyebrow="Podcast"
-        title="Podcast ascoltati"
-        description={
-          total === 0
-            ? "Il catalogo è ancora vuoto."
-            : `${plural(total, "episodio", "episodi")} da ${plural(usedShows, "show", "show")}, con sintesi, appunti e conversazioni.`
-        }
-        actions={<DevSlot name="header-actions" />}
-      />
+      {total === 0 ? <div className="pt-6 pb-3 sm:pt-8">{renderHeader(false)}</div> : null}
 
       {total === 0 ? (
         <EmptyCatalog />
       ) : (
         <SidePanelLayout
+          header={renderHeader}
           description="Filtra gli episodi per show e tag."
           headerAction={
             <ClearFiltersButton

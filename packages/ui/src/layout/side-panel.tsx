@@ -66,6 +66,9 @@ interface SidePanelState {
   isDesktop: boolean;
   /** Whether the current page renders a panel (the shortcut does nothing elsewhere). */
   registerPanel: () => () => void;
+  /** The element at the top of the desktop column where the page's search field + toggle are portaled. */
+  searchSlot: HTMLElement | null;
+  setSearchSlot: (element: HTMLElement | null) => void;
 }
 
 const SidePanelContext = createContext<SidePanelState | null>(null);
@@ -74,6 +77,7 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [panels, setPanels] = useState(0);
+  const [searchSlot, setSearchSlot] = useState<HTMLElement | null>(null);
   const isDesktop = useIsDesktop();
 
   useEffect(() => {
@@ -112,8 +116,17 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
   }, [panels, toggle]);
 
   const value = useMemo(
-    () => ({ collapsed, sheetOpen, setSheetOpen, toggle, isDesktop, registerPanel }),
-    [collapsed, sheetOpen, toggle, isDesktop, registerPanel],
+    () => ({
+      collapsed,
+      sheetOpen,
+      setSheetOpen,
+      toggle,
+      isDesktop,
+      registerPanel,
+      searchSlot,
+      setSearchSlot,
+    }),
+    [collapsed, sheetOpen, toggle, isDesktop, registerPanel, searchSlot],
   );
   return <SidePanelContext.Provider value={value}>{children}</SidePanelContext.Provider>;
 }
@@ -207,6 +220,8 @@ interface SidePanelLayoutProps {
   description?: string;
   /** Small action in the panel header, e.g. "Azzera". */
   headerAction?: ReactNode;
+  /** Page title block. In the desktop column it tops the panel (stacked); otherwise it sits above the content. */
+  header?: (stacked: boolean) => ReactNode;
   panel: ReactNode;
   mobileFooter?: ReactNode;
   children: ReactNode;
@@ -217,21 +232,26 @@ function PanelLayout({
   title = "Filtri",
   description,
   headerAction,
+  header,
   panel,
   mobileFooter,
   children,
   className,
 }: SidePanelLayoutProps) {
-  const { collapsed, sheetOpen, setSheetOpen, isDesktop, registerPanel } = useSidePanel();
+  const { collapsed, sheetOpen, setSheetOpen, isDesktop, registerPanel, setSearchSlot } =
+    useSidePanel();
   useEffect(registerPanel, [registerPanel]);
   const showColumn = isDesktop && !collapsed;
 
   return (
+    <>
+      {header && !showColumn ? <div className="pt-6 pb-3 sm:pt-8">{header(false)}</div> : null}
     <div
       className={cn(
         "lg:grid lg:gap-10 xl:gap-14",
+        header && showColumn && "pt-6 sm:pt-8",
         showColumn
-          ? "lg:grid-cols-[15rem_minmax(0,1fr)] xl:grid-cols-[16.5rem_minmax(0,1fr)]"
+          ? "lg:grid-cols-[19rem_minmax(0,1fr)] xl:grid-cols-[22rem_minmax(0,1fr)]"
           : "lg:grid-cols-1",
         className,
       )}
@@ -239,6 +259,8 @@ function PanelLayout({
       {showColumn ? (
         <aside id="side-panel" aria-label={title} className="hidden lg:block">
           <div className="sticky top-20 -ml-2.5 flex max-h-[calc(100dvh-6rem)] flex-col pl-2.5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-left-2">
+            {header ? header(true) : null}
+            <div ref={setSearchSlot} className="flex items-center gap-2 pb-5" />
             <div className="flex items-center justify-between gap-2 pb-4">
               <h2 className="font-serif text-xl font-semibold tracking-tight">{title}</h2>
               <div className="flex items-center gap-1">{headerAction}</div>
@@ -274,5 +296,6 @@ function PanelLayout({
 
       <div className="min-w-0">{children}</div>
     </div>
+    </>
   );
 }
