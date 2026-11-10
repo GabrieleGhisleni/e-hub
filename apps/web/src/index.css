@@ -1,0 +1,12 @@
+@import "tailwindcss";
+@import "@ehub/ui/theme.css";
+
+/*
+ * Tailwind scans the feature modules and the shared UI package. They are workspace symlinks under node_modules,
+ * which Tailwind's automatic source detection skips, so they are listed here. Paths are relative to this file
+ * (apps/web/src → repo root is three levels up).
+ */
+@source "../../../packages/library/src";
+@source "../../../packages/podcasts/src";
+@source "../../../packages/ui/src";
+@source "../../../packages/notes/src";

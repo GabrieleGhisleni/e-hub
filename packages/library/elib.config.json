@@ -1,0 +1,22 @@
+{
+  "drive": {
+    "remote": "elib",
+    "root": "",
+    "koboTree": "Rakuten Kobo",
+    "archiveTree": "Archivio",
+    "topicSubfolders": {
+      "kobo": true,
+      "archive": true
+    }
+  },
+  "cache": {
+    "dir": "~/.cache/e-library"
+  },
+  "server": {
+    "port": 8787,
+    "allowedOrigins": ["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:5200", "http://localhost:5200"]
+  },
+  "site": {
+    "basePath": "/e-library/"
+  }
+}

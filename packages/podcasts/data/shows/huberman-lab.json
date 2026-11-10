@@ -1,0 +1,13 @@
+{
+  "slug": "huberman-lab",
+  "name": "Huberman Lab",
+  "host": "Andrew Huberman",
+  "links": {
+    "website": "https://www.hubermanlab.com/",
+    "youtube": "https://www.youtube.com/@hubermanlab"
+  },
+  "youtubeAuthorUrl": "https://www.youtube.com/@hubermanlab",
+  "feedUrl": "https://feeds.megaphone.fm/hubermanlab",
+  "image": "shows/huberman-lab.webp",
+  "extra": {}
+}

@@ -1,0 +1,20 @@
+{
+  "resultCount": 3,
+  "results": [
+    {
+      "collectionName": "Unrelated Show",
+      "artistName": "Someone Else",
+      "feedUrl": "https://feeds.example.com/unrelated.rss",
+      "trackCount": 12
+    },
+    {
+      "collectionName": "Example Talks",
+      "artistName": "Sam Host",
+      "feedUrl": "https://feeds.example.com/example-talks.rss",
+      "artworkUrl600": "https://img.example.com/example-talks-600.jpg",
+      "trackCount": 145,
+      "collectionViewUrl": "https://podcasts.apple.com/us/podcast/example-talks/id1?uo=4"
+    },
+    { "collectionName": "No Feed Here", "artistName": "Sam Host" }
+  ]
+}

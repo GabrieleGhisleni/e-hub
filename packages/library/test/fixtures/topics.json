@@ -1,0 +1,22 @@
+[
+  {
+    "id": "unsorted",
+    "label": "Da smistare"
+  },
+  {
+    "id": "narrativa",
+    "label": "Narrativa"
+  },
+  {
+    "id": "saggistica",
+    "label": "Saggistica"
+  },
+  {
+    "id": "filosofia",
+    "label": "Filosofia"
+  },
+  {
+    "id": "scienze-sociali",
+    "label": "Scienze: società/politica"
+  }
+]

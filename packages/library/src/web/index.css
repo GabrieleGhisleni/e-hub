@@ -1,0 +1,517 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Fonts are self-hosted (@fontsource-variable, imported in main.tsx):
+ *   --font-serif  Newsreader (optical sizes)  → titles and headings (PLAN §10: "serif per i titoli")
+ *   --font-sans   Inter                       → body text and UI
+ */
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Newsreader Variable", ui-serif, Georgia, serif;
+  --font-heading: var(--font-serif);
+
+  /* Site-specific tokens (see :root / .dark below). */
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-status-to-read: var(--status-to-read);
+  --color-status-reading: var(--status-reading);
+  --color-status-read: var(--status-read);
+  --color-status-abandoned: var(--status-abandoned);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/*
+ * Palette: a warm "paper" light theme and a deep "ink" dark theme. Covers carry the colour; the chrome stays
+ * quiet. --brand (oxblood / amber) is the only accent: links, focus rings, small markers.
+ * Contrast (WCAG AA): foreground and muted-foreground pass 4.5:1 on background, card and muted in both themes.
+ */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.975 0.008 82);
+  --foreground: oklch(0.235 0.018 55);
+  --card: oklch(0.99 0.005 82);
+  --card-foreground: oklch(0.235 0.018 55);
+  --popover: oklch(0.99 0.005 82);
+  --popover-foreground: oklch(0.235 0.018 55);
+  --primary: oklch(0.27 0.02 55);
+  --primary-foreground: oklch(0.975 0.008 82);
+  --secondary: oklch(0.94 0.012 80);
+  --secondary-foreground: oklch(0.27 0.02 55);
+  --muted: oklch(0.945 0.011 80);
+  --muted-foreground: oklch(0.47 0.02 60);
+  --accent: oklch(0.93 0.016 78);
+  --accent-foreground: oklch(0.235 0.018 55);
+  --destructive: oklch(0.53 0.19 27);
+  --border: oklch(0.885 0.013 76);
+  --input: oklch(0.85 0.014 76);
+  --ring: oklch(0.52 0.13 35);
+  --brand: oklch(0.5 0.135 33);
+  --brand-soft: oklch(0.94 0.03 55);
+  --status-to-read: oklch(0.62 0.03 75);
+  --status-reading: oklch(0.66 0.15 62);
+  --status-read: oklch(0.55 0.11 150);
+  --status-abandoned: oklch(0.58 0.13 25);
+  --cover-shadow:
+    0 1px 1px oklch(0.3 0.03 55 / 0.1), 0 4px 10px -3px oklch(0.3 0.03 55 / 0.16),
+    0 14px 28px -12px oklch(0.3 0.03 55 / 0.28);
+  --cover-shadow-hover:
+    0 2px 2px oklch(0.3 0.03 55 / 0.1), 0 10px 18px -6px oklch(0.3 0.03 55 / 0.22),
+    0 26px 40px -16px oklch(0.3 0.03 55 / 0.38);
+  --cover-edge: oklch(0 0 0 / 0.06);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.965 0.009 82);
+  --sidebar-foreground: oklch(0.235 0.018 55);
+  --sidebar-primary: oklch(0.27 0.02 55);
+  --sidebar-primary-foreground: oklch(0.975 0.008 82);
+  --sidebar-accent: oklch(0.93 0.016 78);
+  --sidebar-accent-foreground: oklch(0.235 0.018 55);
+  --sidebar-border: oklch(0.885 0.013 76);
+  --sidebar-ring: oklch(0.52 0.13 35);
+}
+
+.dark {
+  --background: oklch(0.175 0.014 258);
+  --foreground: oklch(0.93 0.012 84);
+  --card: oklch(0.21 0.015 258);
+  --card-foreground: oklch(0.93 0.012 84);
+  --popover: oklch(0.225 0.016 258);
+  --popover-foreground: oklch(0.93 0.012 84);
+  --primary: oklch(0.91 0.014 84);
+  --primary-foreground: oklch(0.2 0.015 258);
+  --secondary: oklch(0.255 0.016 258);
+  --secondary-foreground: oklch(0.93 0.012 84);
+  --muted: oklch(0.245 0.015 258);
+  --muted-foreground: oklch(0.72 0.016 80);
+  --accent: oklch(0.27 0.018 258);
+  --accent-foreground: oklch(0.93 0.012 84);
+  --destructive: oklch(0.7 0.17 24);
+  --border: oklch(1 0 0 / 0.1);
+  --input: oklch(1 0 0 / 0.15);
+  --ring: oklch(0.76 0.11 62);
+  --brand: oklch(0.79 0.11 66);
+  --brand-soft: oklch(0.26 0.03 60);
+  --status-to-read: oklch(0.7 0.02 80);
+  --status-reading: oklch(0.78 0.14 70);
+  --status-read: oklch(0.72 0.12 150);
+  --status-abandoned: oklch(0.7 0.13 25);
+  --cover-shadow:
+    0 1px 1px oklch(0 0 0 / 0.3), 0 6px 12px -4px oklch(0 0 0 / 0.45),
+    0 16px 30px -12px oklch(0 0 0 / 0.6);
+  --cover-shadow-hover:
+    0 2px 2px oklch(0 0 0 / 0.3), 0 12px 22px -6px oklch(0 0 0 / 0.55),
+    0 28px 44px -16px oklch(0 0 0 / 0.7);
+  --cover-edge: oklch(1 0 0 / 0.08);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.2 0.015 258);
+  --sidebar-foreground: oklch(0.93 0.012 84);
+  --sidebar-primary: oklch(0.79 0.11 66);
+  --sidebar-primary-foreground: oklch(0.2 0.015 258);
+  --sidebar-accent: oklch(0.27 0.018 258);
+  --sidebar-accent-foreground: oklch(0.93 0.012 84);
+  --sidebar-border: oklch(1 0 0 / 0.1);
+  --sidebar-ring: oklch(0.76 0.11 62);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    color-scheme: light;
+    /* Inter: tabular-ish digits off by default, nicer "1", open digits. */
+    font-feature-settings: "cv05", "cv08", "ss03";
+    -webkit-tap-highlight-color: transparent;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply min-h-dvh bg-background text-foreground antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+    text-wrap: balance;
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--brand) 22%, transparent);
+  }
+  /* Visible keyboard focus everywhere, quiet for mouse users. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* ------------------------------------------------------------------------------------------
+   * Book covers: a 2:3 object with a soft shadow, a hint of spine on the left and a hairline edge.
+   * ---------------------------------------------------------------------------------------- */
+  .book-cover {
+    /* Placeholder text sizes are in cqi of the cover (a container cannot query itself). */
+    container-type: inline-size;
+    position: relative;
+    aspect-ratio: 2 / 3;
+    overflow: hidden;
+    border-radius: 2px 4px 4px 2px;
+    background: var(--muted);
+    box-shadow: var(--cover-shadow);
+    transition:
+      transform 220ms cubic-bezier(0.2, 0.7, 0.3, 1),
+      box-shadow 220ms ease;
+  }
+  .book-cover > img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .book-cover::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 1px var(--cover-edge);
+    background: linear-gradient(
+      90deg,
+      oklch(0 0 0 / 0.16) 0,
+      oklch(1 0 0 / 0.14) 1.4%,
+      oklch(0 0 0 / 0.07) 3%,
+      transparent 6%,
+      transparent 97%,
+      oklch(0 0 0 / 0.06) 100%
+    );
+  }
+  .book-link:hover .book-cover,
+  .book-link:focus-visible .book-cover {
+    transform: translateY(-3px);
+    box-shadow: var(--cover-shadow-hover);
+  }
+  .book-link:focus-visible {
+    outline: none;
+  }
+  .book-link:focus-visible .book-cover {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+
+  /* Typographic placeholder for books without cover.webp: a cloth-bound volume with a frame. */
+  .cover-placeholder {
+    --ph-bg: oklch(0.38 0.1 25);
+    --ph-fg: oklch(0.95 0.02 85);
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6cqi;
+    padding: 14cqi 12cqi;
+    text-align: center;
+    color: var(--ph-fg);
+    background:
+      radial-gradient(120% 80% at 30% 20%, oklch(1 0 0 / 0.08), transparent 60%), var(--ph-bg);
+  }
+  .cover-placeholder::before {
+    content: "";
+    position: absolute;
+    inset: 6cqi;
+    border: 1px solid color-mix(in oklch, var(--ph-fg) 45%, transparent);
+    outline: 1px solid color-mix(in oklch, var(--ph-fg) 22%, transparent);
+    outline-offset: -2.4cqi;
+    pointer-events: none;
+  }
+  .cover-placeholder[data-tone="1"] {
+    --ph-bg: oklch(0.37 0.06 158);
+  }
+  .cover-placeholder[data-tone="2"] {
+    --ph-bg: oklch(0.32 0.06 262);
+  }
+  .cover-placeholder[data-tone="3"] {
+    --ph-bg: oklch(0.72 0.1 80);
+    --ph-fg: oklch(0.24 0.03 60);
+  }
+  .cover-placeholder[data-tone="4"] {
+    --ph-bg: oklch(0.35 0.07 330);
+  }
+  .cover-placeholder[data-tone="5"] {
+    --ph-bg: oklch(0.44 0.025 240);
+  }
+  .cover-placeholder__title {
+    font-family: var(--font-serif);
+    font-size: clamp(0.8rem, 11cqi, 2.6rem);
+    font-weight: 500;
+    line-height: 1.12;
+    letter-spacing: -0.005em;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .cover-placeholder__rule {
+    width: 14cqi;
+    height: 1px;
+    background: currentColor;
+    opacity: 0.6;
+  }
+  .cover-placeholder__author {
+    font-size: clamp(0.55rem, 5.6cqi, 1.1rem);
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    line-height: 1.3;
+    opacity: 0.9;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* ------------------------------------------------------------------------------------------
+   * Prose: notes, recall and study HTML (rendered from Markdown at build time) and descriptions.
+   * Serif body at a comfortable measure; headings demoted so the page outline stays h1 → h2 → h3.
+   * ---------------------------------------------------------------------------------------- */
+  .prose-book {
+    font-family: var(--font-serif);
+    font-size: 1.125rem;
+    line-height: 1.7;
+    color: var(--foreground);
+    max-width: 66ch;
+    overflow-wrap: break-word;
+    hanging-punctuation: first;
+  }
+  @media (min-width: 768px) {
+    .prose-book {
+      font-size: 1.1875rem;
+    }
+  }
+  .prose-book > :first-child {
+    margin-top: 0;
+  }
+  .prose-book > :last-child {
+    margin-bottom: 0;
+  }
+  .prose-book :where(p, ul, ol, blockquote, table, pre, hr, dl) {
+    margin-block: 0 1.1em;
+  }
+  .prose-book :where(h3, h4, h5, h6) {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    margin-block: 1.8em 0.6em;
+  }
+  .prose-book h3 {
+    font-size: 1.35em;
+  }
+  .prose-book h4 {
+    font-size: 1.12em;
+  }
+  .prose-book :where(h5, h6) {
+    font-family: var(--font-sans);
+    font-size: 0.78em;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  .prose-book :where(h3, h4, h5, h6) + * {
+    margin-top: 0;
+  }
+  .prose-book a {
+    color: var(--brand);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.18em;
+    text-decoration-color: color-mix(in oklch, var(--brand) 45%, transparent);
+    transition: text-decoration-color 150ms;
+  }
+  .prose-book a:hover {
+    text-decoration-color: currentColor;
+  }
+  .prose-book strong {
+    font-weight: 650;
+  }
+  .prose-book :where(ul, ol) {
+    padding-left: 1.4em;
+  }
+  .prose-book ul {
+    list-style: none;
+  }
+  .prose-book ul > li {
+    position: relative;
+  }
+  .prose-book ul > li::before {
+    content: "";
+    position: absolute;
+    left: -1em;
+    top: 0.72em;
+    width: 0.32em;
+    height: 0.32em;
+    border-radius: 999px;
+    background: var(--brand);
+    opacity: 0.75;
+  }
+  .prose-book ol {
+    list-style: decimal;
+  }
+  .prose-book ol > li::marker {
+    color: var(--muted-foreground);
+    font-family: var(--font-sans);
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+  }
+  .prose-book li + li,
+  .prose-book li > :where(ul, ol) {
+    margin-top: 0.35em;
+  }
+  .prose-book li > :where(ul, ol) {
+    margin-bottom: 0;
+  }
+  .prose-book blockquote {
+    border-left: 2px solid var(--brand);
+    padding: 0.1em 0 0.1em 1.1em;
+    font-style: italic;
+    color: color-mix(in oklch, var(--foreground) 82%, var(--muted-foreground));
+  }
+  .prose-book blockquote > :last-child {
+    margin-bottom: 0;
+  }
+  .prose-book hr {
+    border: 0;
+    height: 1.2em;
+    margin-block: 1.8em;
+    text-align: center;
+    color: var(--muted-foreground);
+  }
+  .prose-book hr::after {
+    content: "⁂";
+    font-size: 1rem;
+    letter-spacing: 0.4em;
+  }
+  .prose-book :where(code) {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 0.82em;
+    background: var(--muted);
+    border-radius: 4px;
+    padding: 0.12em 0.36em;
+  }
+  .prose-book pre {
+    font-size: 0.88rem;
+    line-height: 1.55;
+    background: var(--muted);
+    border-radius: var(--radius-md);
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+  }
+  .prose-book pre code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+  }
+  .prose-book table {
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-family: var(--font-sans);
+    font-size: 0.82em;
+    line-height: 1.5;
+  }
+  .prose-book :where(th, td) {
+    border-bottom: 1px solid var(--border);
+    padding: 0.5em 1em 0.5em 0;
+    text-align: left;
+    vertical-align: top;
+  }
+  .prose-book th {
+    font-weight: 600;
+    color: var(--muted-foreground);
+    font-size: 0.85em;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-bottom-color: color-mix(in oklch, var(--foreground) 25%, transparent);
+  }
+  .prose-book img {
+    max-width: 100%;
+    height: auto;
+  }
+  .prose-book input[type="checkbox"] {
+    margin-right: 0.4em;
+    accent-color: var(--brand);
+  }
+
+  /* Smaller variant for the "Da ricordare" card. */
+  .prose-book--compact {
+    font-size: 1.0625rem;
+    line-height: 1.62;
+  }
+}

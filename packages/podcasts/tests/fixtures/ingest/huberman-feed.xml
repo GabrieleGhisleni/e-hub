@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic podcast feed (structure of a Megaphone feed, made-up content). -->
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Huberman Lab</title>
+    <itunes:author>Scicomm Media</itunes:author>
+    <itunes:image href="https://img.example.com/huberman-cover.jpg"/>
+    <item>
+      <title>Essentials: How to Fold Paper Boats</title>
+      <link>https://www.hubermanlab.com/episode/essentials-how-to-fold-paper-boats</link>
+      <pubDate>Thu, 09 Apr 2026 09:00:00 -0000</pubDate>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://audio.example.com/boats.mp3" type="audio/mpeg"/>
+    </item>
+    <item>
+      <title>Gizmo Science &amp; Better Waffles | Dr. Pat Example</title>
+      <link>https://www.hubermanlab.com/episode/gizmo-science-and-better-waffles-pat-example</link>
+      <pubDate>Mon, 02 Mar 2026 09:00:00 -0000</pubDate>
+      <itunes:episode>7</itunes:episode>
+      <enclosure url="https://audio.example.com/gizmo.mp3" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>

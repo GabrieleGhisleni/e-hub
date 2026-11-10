@@ -1,0 +1,11 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+packages/podcasts/data/transcripts/
+packages/podcasts/data/audio/
+packages/podcasts/data/cache/
+packages/podcasts/transcriber/.venv/

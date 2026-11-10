@@ -1,0 +1,13 @@
+{
+  "slug": "lex-fridman",
+  "name": "Lex Fridman Podcast",
+  "host": "Lex Fridman",
+  "links": {
+    "website": "https://lexfridman.com/podcast/",
+    "youtube": "https://www.youtube.com/@lexfridman"
+  },
+  "youtubeAuthorUrl": "https://www.youtube.com/@lexfridman",
+  "feedUrl": "https://lexfridman.com/feed/podcast/",
+  "image": "shows/lex-fridman.webp",
+  "extra": {}
+}

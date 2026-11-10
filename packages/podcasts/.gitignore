@@ -1,0 +1,11 @@
+node_modules
+dist
+.next
+.env*
+!.env.example
+*.log
+
+# Dati locali, mai in git (docs/DESIGN.md §2.4)
+data/transcripts/
+data/audio/
+data/cache/

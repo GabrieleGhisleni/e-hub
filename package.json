@@ -1,0 +1,15 @@
+{
+  "name": "e-hub",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Unified e-library + e-podcasts platform (one React app, shared UX)",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @ehub/web --filter @ehub/library run dev",
+    "build": "pnpm --filter @ehub/web build",
+    "preview": "pnpm --filter @ehub/web preview",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  },
+  "devEngines": { "packageManager": { "name": "pnpm", "version": "^11.18.0", "onFail": "download" } }
+}

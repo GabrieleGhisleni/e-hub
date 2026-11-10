@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic podcast feed for a generic show. -->
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title><![CDATA[Example Talks]]></title>
+    <itunes:author>Sam Host</itunes:author>
+    <itunes:image href="https://img.example.com/example-talks.jpg"/>
+    <item>
+      <title><![CDATA[Ada Example — Thinking about thinking]]></title>
+      <link>https://example.com/ep/1</link>
+      <pubDate>Fri, 25 Sep 2026 12:00:00 GMT</pubDate>
+      <itunes:episode>42</itunes:episode>
+    </item>
+  </channel>
+</rss>

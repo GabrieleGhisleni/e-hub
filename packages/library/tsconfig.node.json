@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2024"],
+    "types": ["node"],
+    "outDir": "./node_modules/.tmp/tsc/node",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsc/node.tsbuildinfo"
+  },
+  "include": [
+    "src/node",
+    "src/shared",
+    "src/web/lib",
+    "src/web/admin/lib",
+    "test",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ]
+}

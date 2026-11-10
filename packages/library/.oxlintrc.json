@@ -1,0 +1,81 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {},
+  "env": {
+    "builtin": true
+  },
+  "ignorePatterns": ["data/**", "dist/**"],
+  "overrides": [
+    {
+      "files": ["src/web/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "^\\.{1,2}/(?:.*/)?node(?:/|$)",
+                "message": "src/web must not import from src/node (PLAN §3). Move shared logic to src/shared."
+              },
+              {
+                "regex": "^node:",
+                "message": "src/web runs in the browser: Node built-ins are not allowed."
+              }
+            ],
+            "paths": [
+              { "name": "fs", "message": "Node built-ins are not allowed in src/web." },
+              { "name": "fs/promises", "message": "Node built-ins are not allowed in src/web." },
+              { "name": "path", "message": "Node built-ins are not allowed in src/web." },
+              { "name": "os", "message": "Node built-ins are not allowed in src/web." },
+              { "name": "child_process", "message": "Node built-ins are not allowed in src/web." },
+              { "name": "crypto", "message": "Node built-ins are not allowed in src/web." },
+              { "name": "url", "message": "Node built-ins are not allowed in src/web." },
+              { "name": "stream", "message": "Node built-ins are not allowed in src/web." }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/shared/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "^\\.{1,2}/(?:.*/)?(?:node|web)(?:/|$)",
+                "message": "src/shared must not import from src/node or src/web (PLAN §3)."
+              },
+              {
+                "regex": "^@library/",
+                "message": "src/shared must not import from src/web (the @library/ alias)."
+              },
+              {
+                "regex": "^node:",
+                "message": "src/shared is isomorphic: Node built-ins are not allowed."
+              }
+            ],
+            "paths": [
+              { "name": "fs", "message": "Node built-ins are not allowed in src/shared." },
+              { "name": "fs/promises", "message": "Node built-ins are not allowed in src/shared." },
+              { "name": "path", "message": "Node built-ins are not allowed in src/shared." },
+              { "name": "os", "message": "Node built-ins are not allowed in src/shared." },
+              {
+                "name": "child_process",
+                "message": "Node built-ins are not allowed in src/shared."
+              },
+              { "name": "crypto", "message": "Node built-ins are not allowed in src/shared." },
+              { "name": "url", "message": "Node built-ins are not allowed in src/shared." },
+              { "name": "stream", "message": "Node built-ins are not allowed in src/shared." }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,228 @@
+/**
+ * The local API (contract in src/shared/api.ts): a thin HTTP layer over the services. Testable with `app.request()`.
+ */
+import { Hono } from "hono";
+import type { Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { HTTPException } from "hono/http-exception";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { z } from "zod";
+import {
+  API_LIMITS,
+  type ApiError,
+  type ApiErrorCode,
+  BookPatchSchema,
+  BulkUpdateRequestSchema,
+  CreateBookRequestSchema,
+  type HealthResponse,
+  SetCoverRequestSchema,
+  TopicLabelRequestSchema,
+} from "../../shared/api.ts";
+import type { ElibConfig } from "../../shared/config.ts";
+import { InvalidUploadIdError } from "../cache/index.ts";
+import { InvalidBookIdError } from "../repo/index.ts";
+import { ServiceError, type Services } from "../services/index.ts";
+import { securityConfig, securityMiddleware } from "./security.ts";
+
+export interface AppOptions {
+  /** Request size limits (default `API_LIMITS`). */
+  limits?: Partial<typeof API_LIMITS>;
+}
+
+/** Room for the multipart envelope around the file. */
+const MULTIPART_OVERHEAD = 1024 * 1024;
+
+export function createApp(
+  services: Services,
+  config: Pick<ElibConfig, "server">,
+  options: AppOptions = {},
+): Hono {
+  const limits = { ...API_LIMITS, ...options.limits };
+  const app = new Hono();
+
+  app.use("*", async (c, next) => {
+    await next();
+    c.header("X-Content-Type-Options", "nosniff");
+    if (!c.res.headers.has("Cache-Control")) c.header("Cache-Control", "no-store");
+  });
+  app.use("*", securityMiddleware(securityConfig(config)));
+
+  const limit = (maxSize: number) =>
+    bodyLimit({
+      maxSize,
+      onError: (c) =>
+        apiError(
+          c,
+          413,
+          "payload-too-large",
+          `Richiesta troppo grande: il limite è ${Math.round(maxSize / (1024 * 1024))} MB.`,
+        ),
+    });
+  const jsonLimit = limit(limits.jsonMaxBytes);
+
+  app.get("/api/library/health", (c) => c.json({ ok: true } satisfies HealthResponse));
+
+  // ---- uploads
+  app.post("/api/library/uploads", limit(limits.epubMaxBytes + MULTIPART_OVERHEAD), async (c) => {
+    const file = await multipartFile(c, "file");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    return c.json(await services.analyzeUpload({ fileName: file.name, bytes }));
+  });
+  app.get("/api/library/uploads/:uploadId/covers/:source", async (c) =>
+    webp(c, await services.readUploadCover(c.req.param("uploadId"), c.req.param("source"))),
+  );
+  app.delete("/api/library/uploads/:uploadId", async (c) => {
+    await services.discardUpload(c.req.param("uploadId"));
+    return c.body(null, 204);
+  });
+
+  // ---- books
+  app.post("/api/library/books", jsonLimit, async (c) => {
+    const body = await jsonBody(c, CreateBookRequestSchema);
+    return c.json(await services.createBook(body), 201);
+  });
+  app.post("/api/library/books/bulk", jsonLimit, async (c) => {
+    const body = await jsonBody(c, BulkUpdateRequestSchema);
+    return c.json(await services.bulkUpdate(body));
+  });
+  app.patch("/api/library/books/:id", jsonLimit, async (c) => {
+    const body = await jsonBody(c, BookPatchSchema);
+    return c.json(await services.updateBook(c.req.param("id"), body));
+  });
+  app.delete("/api/library/books/:id", async (c) => c.json(await services.deleteBook(c.req.param("id"))));
+  app.get("/api/library/books/:id/cover-candidates", async (c) =>
+    c.json(await services.coverCandidates(c.req.param("id"))),
+  );
+  app.get("/api/library/books/:id/cover-candidates/:source", async (c) =>
+    webp(c, await services.readBookCoverCandidate(c.req.param("id"), c.req.param("source"))),
+  );
+  app.put("/api/library/books/:id/cover", limit(limits.imageMaxBytes + MULTIPART_OVERHEAD), async (c) => {
+    const id = c.req.param("id");
+    if (isMultipart(c)) {
+      const image = await multipartFile(c, "image");
+      return c.json(
+        await services.setBookCover(id, { image: new Uint8Array(await image.arrayBuffer()) }),
+      );
+    }
+    if (Number(c.req.header("content-length") ?? 0) > limits.jsonMaxBytes) {
+      return apiError(c, 413, "payload-too-large", "Richiesta troppo grande.");
+    }
+    return c.json(await services.setBookCover(id, await jsonBody(c, SetCoverRequestSchema)));
+  });
+
+  // ---- topics
+  app.get("/api/library/topics", async (c) => c.json(await services.listTopics()));
+  app.post("/api/library/topics", jsonLimit, async (c) => {
+    const { label } = await jsonBody(c, TopicLabelRequestSchema);
+    return c.json(await services.addTopic(label), 201);
+  });
+  app.patch("/api/library/topics/:id", jsonLimit, async (c) => {
+    const { label } = await jsonBody(c, TopicLabelRequestSchema);
+    return c.json(await services.renameTopic(c.req.param("id"), label));
+  });
+  app.delete("/api/library/topics/:id", async (c) => c.json(await services.deleteTopic(c.req.param("id"))));
+
+  app.notFound((c) =>
+    apiError(c, 404, "not-found", `Nessun endpoint ${c.req.method} ${c.req.path}.`),
+  );
+
+  app.onError((error, c) => {
+    if (error instanceof ServiceError) {
+      return apiError(
+        c,
+        error.status as ContentfulStatusCode,
+        error.code,
+        error.message,
+        error.details,
+      );
+    }
+    if (error instanceof InvalidUploadIdError || error instanceof InvalidBookIdError) {
+      return apiError(c, 400, "invalid-request", error.message);
+    }
+    if (error instanceof HTTPException) {
+      const status = error.status as ContentfulStatusCode;
+      return apiError(
+        c,
+        status,
+        status === 413 ? "payload-too-large" : "invalid-request",
+        error.message,
+      );
+    }
+    services.ctx.logger.error(`${c.req.method} ${c.req.path} failed`, error);
+    return apiError(c, 500, "internal-error", `Errore interno: ${(error as Error).message}`);
+  });
+
+  return app;
+}
+
+function apiError(
+  c: Context,
+  status: ContentfulStatusCode,
+  code: ApiErrorCode,
+  message: string,
+  details?: unknown,
+): Response {
+  const body: ApiError = {
+    error: { code, message, ...(details === undefined ? {} : { details }) },
+  };
+  return c.json(body, status);
+}
+
+function webp(c: Context, bytes: Uint8Array): Response {
+  return c.body(bytes as Uint8Array<ArrayBuffer>, 200, {
+    "Content-Type": "image/webp",
+    "Content-Length": String(bytes.length),
+  });
+}
+
+function isMultipart(c: Context): boolean {
+  return (c.req.header("content-type") ?? "").toLowerCase().startsWith("multipart/form-data");
+}
+
+/** The `field` file of a multipart body: 415 when the body is not multipart, 400 when the file is missing. */
+async function multipartFile(c: Context, field: string): Promise<File> {
+  if (!isMultipart(c)) {
+    throw new ServiceError(
+      "unsupported-media-type",
+      415,
+      `Serve un corpo multipart/form-data con il campo "${field}".`,
+    );
+  }
+  let body: Record<string, unknown>;
+  try {
+    body = await c.req.parseBody();
+  } catch (error) {
+    if (error instanceof HTTPException) throw error;
+    throw new ServiceError("invalid-request", 400, "Corpo multipart non leggibile.");
+  }
+  const file = body[field];
+  if (!(file instanceof File)) {
+    throw new ServiceError("invalid-request", 400, `Manca il file nel campo "${field}".`);
+  }
+  return file;
+}
+
+/** JSON body validated with `schema`: 415 when not JSON, 400 `invalid-request` (Zod issues in details) otherwise. */
+async function jsonBody<T extends z.ZodType>(c: Context, schema: T): Promise<z.output<T>> {
+  const type = (c.req.header("content-type") ?? "").toLowerCase();
+  if (!type.startsWith("application/json")) {
+    throw new ServiceError("unsupported-media-type", 415, "Serve un corpo application/json.");
+  }
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch (error) {
+    if (error instanceof HTTPException) throw error;
+    throw new ServiceError("invalid-request", 400, "JSON non valido.");
+  }
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    throw new ServiceError(
+      "invalid-request",
+      400,
+      `Richiesta non valida: ${z.prettifyError(parsed.error)}`,
+      { details: { issues: parsed.error.issues } },
+    );
+  }
+  return parsed.data;
+}

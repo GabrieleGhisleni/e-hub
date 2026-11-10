@@ -1,0 +1,7 @@
+{
+  // Web tests (src/web/**/*.test.ts[x]): web settings (DOM, no Node types in the app code)
+  // plus the test files, which the app config excludes.
+  "extends": "./tsconfig.web.json",
+  "include": ["src/web"],
+  "exclude": []
+}
