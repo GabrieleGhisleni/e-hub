@@ -103,4 +103,9 @@ Il codice lo scrivono subagent (Haiku), una fase alla volta. Il coordinatore fa 
   - C'è un controllo della lingua, con un nuovo tentativo se è sbagliata.
   - Prova vera su "Four Thousand Weeks": 17 capitoli in circa 1–2,5 minuti.
   - Per i test c'è un libro finto in `packages/chat/test/fixtures/books/fx000001/`. Il campo `summary` degli episodi è ancora vuoto.
-- **Da rivedere**: il modello a volte cita frasi lunghe (circa 25 parole) nonostante il prompt; la metadata del modello arriva solo a fine risposta.
+- **Fase 4 (fatta)**: la chat sui libri, con i tool `list_chapters`, `read_chapter` e `search_book`. Il testo si carica alla prima chiamata a un tool. Provata contro il router: il modello cerca in inglese se il libro è in inglese, legge il capitolo e cita "(cap. N)".
+  - Gli errori del router compaiono in italiano, con il tempo d'attesa.
+  - Le sintesi aspettano su 429/503 e riprendono dai capitoli salvati in cache.
+- **Limiti dei piani gratuiti**: le prove del 12/11 hanno esaurito le quote giornaliere di OpenRouter, OpenCode e Gemini. Una sintesi di un libro intero costa circa 20–30 chiamate.
+- **Da rivedere**: alcuni test web della libreria stanno in `src/web/` e nessun tsconfig li controlla, e un test importa il mock LLM con un `import` dinamico. Va aggiunta una configurazione TypeScript per i test.
+- il modello a volte cita frasi lunghe (circa 25 parole) nonostante il prompt; la metadata del modello arriva solo a fine risposta.
