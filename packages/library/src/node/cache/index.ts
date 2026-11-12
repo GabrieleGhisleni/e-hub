@@ -21,6 +21,7 @@ export const CACHE_HIGHLIGHTS_DIR = "highlights";
 export const CACHE_EPUB_FILE = "book.epub";
 export const CACHE_KEPUB_FILE = "book.kepub.epub";
 export const CACHE_TEXT_DIR = "text";
+export const CACHE_SUMMARY_PROGRESS_FILE = "summary-progress.json";
 
 /** `<cache>/books`. */
 export function cacheBooksDir(cacheDir: string): string {
@@ -46,6 +47,11 @@ export function cachedKepubPath(cacheDir: string, id: string): string {
 /** `<cache>/books/<id>/text/` (W4b writes one Markdown file per chapter here). */
 export function cachedTextDir(cacheDir: string, id: string): string {
   return path.join(cacheBookDir(cacheDir, id), CACHE_TEXT_DIR);
+}
+
+/** `<cache>/books/<id>/summary-progress.json` (chapter summaries saved while a book summary is being made). */
+export function cachedSummaryProgressPath(cacheDir: string, id: string): string {
+  return path.join(cacheBookDir(cacheDir, id), CACHE_SUMMARY_PROGRESS_FILE);
 }
 
 /** `<cache>/uploads`. */

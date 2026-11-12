@@ -6,7 +6,10 @@ import type { Server } from "node:http";
 import { serve, type ServerType } from "@hono/node-server";
 
 export type MockToolCall = { name: string; arguments: Record<string, unknown> };
-export type MockTurn = { text: string } | { toolCalls: MockToolCall[] };
+/** A scripted error response: HTTP `status`, extra `headers`, and a JSON `body` (sent as is). */
+export type MockErrorTurn = { status: number; headers?: Record<string, string>; body?: unknown };
+export type MockOkTurn = { text: string } | { toolCalls: MockToolCall[] };
+export type MockTurn = MockOkTurn | MockErrorTurn;
 
 export type MockLlm = {
   /** Base URL including `/v1`, ready for EHUB_AI_BASE_URL. */
@@ -38,6 +41,10 @@ export async function startMockLlm(turns: MockTurn[], options: MockLlmOptions = 
     const turn = turns[next++];
     if (!turn) return c.json({ error: { message: "mock: no scripted turn left" } }, 500, extraHeaders);
 
+    if ("status" in turn) {
+      return c.json(turn.body ?? {}, turn.status as any, { ...extraHeaders, ...turn.headers });
+    }
+
     if (body.stream) {
       return c.body(streamBody(turn), 200, { "content-type": "text/event-stream", ...extraHeaders });
     }
@@ -64,7 +71,7 @@ export async function startMockLlm(turns: MockTurn[], options: MockLlmOptions = 
 
 const usage = { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 };
 
-function completionBody(turn: MockTurn, model: string) {
+function completionBody(turn: MockOkTurn, model: string) {
   const base = { id: "chatcmpl-mock", object: "chat.completion", created: 0, model: model ?? "smart", usage };
   if ("text" in turn) {
     return { ...base, choices: [{ index: 0, message: { role: "assistant", content: turn.text }, finish_reason: "stop" }] };
@@ -81,7 +88,7 @@ function completionBody(turn: MockTurn, model: string) {
 }
 
 /** SSE body with `chat.completion.chunk` events, ending with `data: [DONE]`. */
-function streamBody(turn: MockTurn): string {
+function streamBody(turn: MockOkTurn): string {
   const events: unknown[] = [];
   const chunk = (delta: unknown, finish_reason: string | null = null) => ({
     id: "chatcmpl-mock",

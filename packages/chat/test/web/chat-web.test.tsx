@@ -54,9 +54,10 @@ describe("MessageList", () => {
     expect(screen.getByText("declassato a balanced")).toBeTruthy();
   });
 
-  it("falls back to plain text without renderMarkdown", () => {
-    render(<MessageList messages={[assistantMessage("a1", undefined, "riga uno\nriga due")]} />);
-    expect(screen.getByText(/riga uno/).className).toContain("whitespace-pre-wrap");
+  it("renders assistant Markdown by default without renderMarkdown", () => {
+    render(<MessageList messages={[assistantMessage("a1", undefined, "**Forte** e [sito](https://example.com)")]} />);
+    expect(screen.getByText("Forte").tagName).toBe("STRONG");
+    expect(screen.getByRole("link", { name: "sito" }).getAttribute("target")).toBe("_blank");
   });
 
   it("names tool parts from their type and shows their state", () => {
@@ -69,7 +70,7 @@ describe("MessageList", () => {
           type: "tool-read_chapter",
           toolCallId: "c1",
           state: "output-available",
-          input: { n: 2 },
+          input: { chapter: 2 },
           output: "testo",
         },
         { type: "tool-search_book", toolCallId: "c2", state: "input-streaming", input: undefined },
@@ -78,11 +79,11 @@ describe("MessageList", () => {
     } as unknown as ChatUIMessage;
     render(<MessageList messages={[message]} />);
 
-    expect(screen.getByText("Strumento: read_chapter")).toBeTruthy();
+    expect(screen.getByText("Legge il capitolo 2")).toBeTruthy();
     expect(screen.getByText("· fatto")).toBeTruthy();
     expect(screen.getByText("· in corso")).toBeTruthy();
     expect(screen.getByText("· errore")).toBeTruthy();
-    expect(screen.getAllByText("Strumento: search_book")).toHaveLength(2);
+    expect(screen.getAllByText("Cerca nel libro")).toHaveLength(2);
   });
 });
 
@@ -95,6 +96,11 @@ describe("describeChatError", () => {
 
   it("returns plain messages unchanged", () => {
     expect(describeChatError(new Error("Network down"))).toBe("Network down");
+  });
+
+  it("returns the Italian text of a stream error unchanged", () => {
+    const text = "Il modello non è disponibile in questo momento (limiti dei piani gratuiti). Riprova tra 78 secondi.";
+    expect(describeChatError(new Error(text))).toBe(text);
   });
 });
 
@@ -116,5 +122,18 @@ describe("ChatPanel", () => {
     expect(screen.getByText("Episodio alfa · Show beta")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Domanda uno" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Invia/ }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("shows the notice above the messages", () => {
+    render(
+      <ChatPanel
+        source={{ kind: "book", id: "eec5cpre" }}
+        title="Libro"
+        notice="Senza sintesi la chat è più lenta."
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+    expect(screen.getByText("Senza sintesi la chat è più lenta.")).toBeTruthy();
   });
 });

@@ -104,13 +104,16 @@ function printProgress(ctx: CliContext, event: SummarizeProgress): void {
 /** One progress line for the terminal (a warning is not a line of this kind: see `printProgress`). */
 export function progressLine(event: Exclude<SummarizeProgress, { kind: "warning" }>): string {
   if (event.kind === "book") return "  Sintesi del libro… ok";
+  if (event.kind === "waiting") return `  in attesa del modello (${event.seconds}s)…`;
   const width = String(event.total).length;
   const label =
     event.status === "summarized"
       ? "ok"
-      : event.reason === "front-back-matter"
-        ? "saltato (parte accessoria)"
-        : "saltato (meno di 150 parole)";
+      : event.status === "reused"
+        ? "riusato"
+        : event.reason === "front-back-matter"
+          ? "saltato (parte accessoria)"
+          : "saltato (meno di 150 parole)";
   return `  ${String(event.done).padStart(width)}/${event.total} Capitolo ${event.chapter.n} "${event.chapter.title}"… ${label}`;
 }
 

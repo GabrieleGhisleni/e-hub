@@ -17,6 +17,8 @@ export type RunAgentOptions = {
   tools?: ToolSet;
   /** Maximum number of model calls in one run (tool round trips included). */
   maxSteps?: number;
+  /** Retries of failed model calls. Omitted: the AI SDK default (2). */
+  maxRetries?: number;
   abortSignal?: AbortSignal;
 };
 
@@ -24,13 +26,14 @@ export type RunAgentOptions = {
  * Streams a reply from `model`, letting it call `tools` for up to `maxSteps` steps.
  * Returns the AI SDK stream result (textStream, fullStream, toUIMessageStreamResponse, ...).
  */
-export function runAgent({ model, system, messages, tools = {}, maxSteps = 8, abortSignal }: RunAgentOptions) {
+export function runAgent({ model, system, messages, tools = {}, maxSteps = 8, maxRetries, abortSignal }: RunAgentOptions) {
   return streamText({
     model,
     system,
     messages,
     tools: hardenTools(tools, abortSignal),
     stopWhen: stepCountIs(maxSteps),
+    maxRetries,
     abortSignal,
   });
 }

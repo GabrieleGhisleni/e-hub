@@ -113,6 +113,38 @@ describe("POST /api/chat", () => {
     expect(mock.requests).toHaveLength(0);
   });
 
+  it("streams the Italian message when the model is busy (503 after the SDK retries)", async () => {
+    const busy = {
+      status: 503,
+      // retry-after-ms 0 keeps the SDK's retry delay at zero; the message reads the router's retry_in_seconds.
+      headers: { "retry-after-ms": "0" },
+      body: {
+        error: { message: "every matching endpoint is cooling down", type: "all_providers_busy", retry_in_seconds: 78, tried: [] },
+      },
+    };
+    // The chat runs with maxRetries: 1, so the mock answers two attempts.
+    mock = await startMockLlm([busy, busy]);
+    const response = await post(appFor(mock.baseURL), body());
+
+    expect(response.status).toBe(200);
+    const chunks = parseChunks(await response.text());
+    const error = chunks.find((c) => c.type === "error");
+    expect(error?.errorText).toBe(
+      "Il modello non è disponibile in questo momento (limiti dei piani gratuiti). Riprova tra 78 secondi.",
+    );
+  }, 5_000);
+
+  it("streams the Italian message for a rejected API key without retrying", async () => {
+    mock = await startMockLlm([{ status: 401, body: { error: { message: "invalid api key" } } }]);
+    const response = await post(appFor(mock.baseURL), body());
+
+    const chunks = parseChunks(await response.text());
+    expect(chunks.find((c) => c.type === "error")?.errorText).toBe(
+      "Chiave API non valida: controlla EHUB_AI_API_KEY in .env.local.",
+    );
+    expect(mock.requests).toHaveLength(1);
+  });
+
   it("returns 503 with the config problems when the configuration is missing", async () => {
     const response = await post(appFor("http://unused.test/v1", {}), body());
 

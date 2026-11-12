@@ -2,6 +2,7 @@
 import { ImageIcon, PencilIcon, SparklesIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@ehub/ui/components/button";
+import { BookChat } from "./book-chat";
 import { ChangeCoverDialog } from "./change-cover-dialog";
 import { DeleteBookDialog } from "./delete-book-dialog";
 import { EditBookSheet } from "./edit-book-sheet";
@@ -27,6 +28,7 @@ export function BookAdminActions({ book, index }: BookAdminActionsProps) {
         <SparklesIcon />
         {book.summary ? "Rigenera sintesi" : "Genera sintesi"}
       </Button>
+      <BookChat book={book} />
       <Button variant="destructive" size="sm" onClick={() => setDialog("delete")}>
         <Trash2Icon />
         Elimina

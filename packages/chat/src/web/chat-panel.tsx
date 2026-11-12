@@ -26,10 +26,12 @@ export interface ChatPanelProps {
   /** Name of the source, shown under the heading (e.g. the episode title). */
   title: string;
   subtitle?: string;
-  /** Renders assistant text as Markdown (e.g. with clickable timestamps). Falls back to plain text. */
+  /** Renders assistant text (e.g. with clickable timestamps). Defaults to `ChatMarkdown`. */
   renderMarkdown?: (text: string) => ReactNode;
   /** Empty-state suggestions. */
   suggestions?: readonly string[];
+  /** Small note shown above the messages (e.g. a hint about how the answers are produced). */
+  notice?: ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -63,6 +65,7 @@ export function ChatPanel({
   subtitle,
   renderMarkdown,
   suggestions,
+  notice,
   open,
   onOpenChange,
 }: ChatPanelProps) {
@@ -128,6 +131,7 @@ export function ChatPanel({
         </SheetHeader>
 
         <div className="flex min-h-0 flex-1 flex-col px-4">
+          {notice && <div className="pt-4 text-xs text-muted-foreground">{notice}</div>}
           <MessageList
             messages={messages}
             streaming={busy}

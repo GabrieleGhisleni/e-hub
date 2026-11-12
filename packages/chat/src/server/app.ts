@@ -15,6 +15,7 @@ import {
   type ChatSource,
   type ChatUIMessage,
 } from "../shared/types.ts";
+import { describeLlmError } from "./errors.ts";
 
 /** What the chat knows about its source: the system prompt, its size, and optional tools. */
 export type ChatSourceContext = {
@@ -158,12 +159,18 @@ export function createChatApp({ getLlm, resolveSource }: ChatAppOptions) {
         system: context.system,
         messages: modelMessages,
         tools: context.tools,
+        // The router already retries across providers; one more retry here only adds waiting.
+        maxRetries: 1,
         abortSignal: c.req.raw.signal,
       });
 
       return result.toUIMessageStreamResponse({
         originalMessages: messages,
         messageMetadata: ({ part }) => metadataFor(part, routerInfo),
+        onError: (error) => {
+          console.error("[chat] LLM call failed", error);
+          return describeLlmError(error, { baseUrl: llm.config.baseUrl });
+        },
       });
     },
   );

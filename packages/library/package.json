@@ -8,7 +8,8 @@
   "exports": {
     "./web": "./src/web/entry.tsx",
     "./vite": "./src/node/vite/index.ts",
-    "./config": "./src/node/config/index.ts"
+    "./config": "./src/node/config/index.ts",
+    "./chat-context": "./src/node/chat/index.ts"
   },
   "scripts": {
     "dev": "pnpm server",

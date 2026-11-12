@@ -4,7 +4,8 @@
  *
  * The model is injected (`SummarizerDeps.model`, an AI SDK `LanguageModel`), so tests use a mock model.
  */
-import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { type LanguageModel, generateText } from "@ehub/chat/node";
 import type { SummarizeResponse } from "../../shared/api.ts";
@@ -13,8 +14,10 @@ import {
   type BookSummary,
   type ChapterSummary,
 } from "../../shared/schema.ts";
+import { cachedSummaryProgressPath } from "../cache/index.ts";
 import type { DriveContext } from "../drive/context.ts";
 import { readBook, writeBookSummary } from "../repo/index.ts";
+import { writeFileAtomic } from "../repo/fs.ts";
 import { type TextManifestChapter, extractBookText } from "../text/index.ts";
 import { countWords } from "../text/markdown.ts";
 
@@ -26,15 +29,32 @@ export const LONG_CHAPTER_WORDS = 25_000;
 export const PART_WORDS = 12_000;
 export const DEFAULT_CONCURRENCY = 2;
 export const DEFAULT_RETRY_DELAY_MS = 2_000;
+/** Attempts of one model call that is rate limited (HTTP 429 or 503). Other errors get 2 attempts. */
+export const RATE_LIMIT_ATTEMPTS = 4;
+/** Wait when a rate-limited answer has no usable `retry-after` header. */
+export const DEFAULT_RETRY_AFTER_SECONDS = 30;
+/** Longest wait for one rate-limited answer, whatever the `retry-after` header says. */
+export const MAX_RETRY_AFTER_SECONDS = 120;
 
-/** A model call failed twice (or the summary could not be produced). `step` names the chapter or the book. */
+/**
+ * A model call failed for good (or the summary could not be produced). `step` names the chapter or the book.
+ * `savedChapters` is how many chapter summaries are in the progress file: the message tells the user to run again.
+ */
 export class AiFailedError extends Error {
   readonly step: string;
+  readonly savedChapters: number;
 
-  constructor(step: string, options?: ErrorOptions) {
-    super(`Sintesi non riuscita per ${step}: ${errorMessage(options?.cause)}`, options);
+  constructor(step: string, options?: ErrorOptions & { savedChapters?: number }) {
+    const saved = options?.savedChapters ?? 0;
+    const cause = errorMessage(options?.cause).replace(/\.$/, "");
+    const resume =
+      saved > 0
+        ? `. ${saved === 1 ? "1 capitolo salvato" : `${saved} capitoli salvati`}: rilancia per riprendere`
+        : "";
+    super(`Sintesi non riuscita per ${step}: ${cause}${resume}`, options);
     this.name = "AiFailedError";
     this.step = step;
+    this.savedChapters = saved;
   }
 }
 
@@ -62,8 +82,8 @@ export interface SummarizerDeps {
   reasoningEffort?: string;
   /** Clock for `generatedAt` and `durationMs` (tests). */
   now?: () => Date;
-  /** Wait between the two attempts of a call (tests pass a no-op). */
-  sleep?: (ms: number) => Promise<void>;
+  /** Wait between attempts of a call (tests pass a no-op). Rejects with the signal's reason when aborted. */
+  sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   /** Default `DEFAULT_RETRY_DELAY_MS`. */
   retryDelayMs?: number;
   /** Overrides the repo root used by the text cache guard (tests). */
@@ -80,10 +100,13 @@ export type SummarizeProgress =
       done: number;
       total: number;
       chapter: TextManifestChapter;
-      status: "summarized" | "skipped";
+      /** "reused": the summary was saved by an earlier run and taken from the progress file (no model call). */
+      status: "summarized" | "skipped" | "reused";
       /** Set when `status` is "skipped". */
       reason?: SkipReason;
     }
+  /** The model is rate limited: the run sleeps `seconds` before the next attempt of `chapter` (a step label). */
+  | { kind: "waiting"; seconds: number; chapter: string }
   | { kind: "book" }
   /** A summary is not in the requested language after its retry: kept anyway, the run goes on. */
   | { kind: "warning"; step: string; message: string };
@@ -114,6 +137,19 @@ export async function summarizeBook(
   const concurrency = Math.max(1, Math.floor(options.concurrency ?? DEFAULT_CONCURRENCY));
   const { language, signal } = options;
   const started = now().getTime();
+  const progressFile = cachedSummaryProgressPath(deps.drive.cacheDir, id);
+  // A forced run starts from scratch: the chapter summaries saved by an earlier run are dropped.
+  if (options.force === true) await rm(progressFile, { force: true });
+  // Chapter summaries saved by an earlier run, by `${n}:${hash of the chapter text}` (same language only).
+  const reusable = options.force === true ? new Map<string, string>() : await readCheckpoint(progressFile, language);
+  // Every chapter summary of this run so far (reused or new), written to the progress file after each chapter.
+  const checkpoint: CheckpointChapter[] = [];
+  let saving: Promise<void> = Promise.resolve();
+  const saveCheckpoint = (): Promise<void> => {
+    const snapshot = `${JSON.stringify({ version: 1, bookId: id, language, chapters: checkpoint }, null, 2)}\n`;
+    saving = saving.then(() => writeFileAtomic(progressFile, snapshot));
+    return saving;
+  };
 
   const book = await readBook(deps.dataDir, id);
   let extracted: Awaited<ReturnType<typeof extractBookText>>;
@@ -155,8 +191,15 @@ export async function summarizeBook(
         if (reported) routerModel = reported;
       } catch (error) {
         if (signal?.aborted) throw error;
+        const waitSeconds = rateLimitWaitSeconds(error);
+        if (waitSeconds !== undefined) {
+          if (attempt >= RATE_LIMIT_ATTEMPTS) throw new AiFailedError(step, { cause: error });
+          options.onProgress?.({ kind: "waiting", seconds: waitSeconds, chapter: step });
+          await sleep(waitSeconds * 1000, signal);
+          continue;
+        }
         if (attempt >= 2) throw new AiFailedError(step, { cause: error });
-        await sleep(retryDelayMs);
+        await sleep(retryDelayMs, signal);
         continue;
       }
       if (looksLikeLanguage(text, language)) return text;
@@ -200,43 +243,61 @@ export async function summarizeBook(
     );
   }
 
-  await runPool(
-    manifest.chapters.map((_, i) => i),
-    concurrency,
-    async (i) => {
-      signal?.throwIfAborted();
-      const chapter = manifest.chapters[i]!;
-      let summary: string | null = null;
-      let status: "summarized" | "skipped" = "skipped";
-      let reason: SkipReason | undefined;
-      if (isFrontOrBackMatter(chapter.title)) reason = "front-back-matter";
-      else if (chapter.words < SHORT_CHAPTER_WORDS) reason = "short";
-      if (reason === undefined) {
-        const text = await readFile(path.join(outputDir, chapter.file), "utf8");
-        summary = await summarizeChapter(text, chapter);
-        status = "summarized";
-      }
-      chapters[i] = { n: chapter.n, title: chapter.title, words: chapter.words, summary };
-      done += 1;
-      options.onProgress?.({
-        kind: "chapter",
-        done,
-        total: manifest.chapters.length,
-        chapter,
-        status,
-        ...(reason !== undefined ? { reason } : {}),
-      });
-    },
-  );
+  let bookText: string;
+  try {
+    await runPool(
+      manifest.chapters.map((_, i) => i),
+      concurrency,
+      async (i) => {
+        signal?.throwIfAborted();
+        const chapter = manifest.chapters[i]!;
+        let summary: string | null = null;
+        let status: "summarized" | "skipped" | "reused" = "skipped";
+        let reason: SkipReason | undefined;
+        if (isFrontOrBackMatter(chapter.title)) reason = "front-back-matter";
+        else if (chapter.words < SHORT_CHAPTER_WORDS) reason = "short";
+        if (reason === undefined) {
+          const text = await readFile(path.join(outputDir, chapter.file), "utf8");
+          const hash = sha256(text);
+          const saved = reusable.get(`${chapter.n}:${hash}`);
+          if (saved !== undefined) {
+            summary = saved;
+            status = "reused";
+          } else {
+            summary = await summarizeChapter(text, chapter);
+            status = "summarized";
+          }
+          checkpoint.push({ n: chapter.n, hash, summary });
+          await saveCheckpoint();
+        }
+        chapters[i] = { n: chapter.n, title: chapter.title, words: chapter.words, summary };
+        done += 1;
+        options.onProgress?.({
+          kind: "chapter",
+          done,
+          total: manifest.chapters.length,
+          chapter,
+          status,
+          ...(reason !== undefined ? { reason } : {}),
+        });
+      },
+    );
 
-  const bookText = await callModel(
-    "sintesi del libro",
-    bookSystem(langName, language),
-    bookPrompt(
-      { title: book.title, authors: book.authors.join(", "), description: book.description },
-      chapters,
-    ),
-  );
+    bookText = await callModel(
+      "sintesi del libro",
+      bookSystem(langName, language),
+      bookPrompt(
+        { title: book.title, authors: book.authors.join(", "), description: book.description },
+        chapters,
+      ),
+    );
+  } catch (error) {
+    // The chapters saved so far stay in the progress file: the next run resumes from them.
+    if (error instanceof AiFailedError) {
+      throw new AiFailedError(error.step, { cause: error.cause, savedChapters: checkpoint.length });
+    }
+    throw error;
+  }
   options.onProgress?.({ kind: "book" });
 
   const summary: BookSummary = {
@@ -249,6 +310,8 @@ export async function summarizeBook(
     chapters,
   };
   await writeBookSummary(deps.dataDir, summary);
+  // summary.json is written: the progress file has nothing left to resume.
+  await rm(progressFile, { force: true });
   return {
     summary,
     summarizedChapters: chapters.filter((c) => c.summary !== null).length,
@@ -518,6 +581,77 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function defaultSleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** Waits `ms`; rejects with the signal's reason as soon as the signal aborts. */
+function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/**
+ * Seconds to wait before retrying a rate-limited call (HTTP 429 or 503, as the local router answers when every
+ * provider is busy), from the `retry-after` header (seconds). `undefined` for any other error.
+ */
+export function rateLimitWaitSeconds(error: unknown): number | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const { statusCode, responseHeaders } = error as { statusCode?: unknown; responseHeaders?: unknown };
+  if (statusCode !== 429 && statusCode !== 503) return undefined;
+  const raw = headerValue(
+    responseHeaders !== null && typeof responseHeaders === "object"
+      ? (responseHeaders as Record<string, string>)
+      : undefined,
+    "retry-after",
+  );
+  const seconds = raw !== undefined && /^\d+(\.\d+)?$/.test(raw) ? Number(raw) : DEFAULT_RETRY_AFTER_SECONDS;
+  return Math.min(seconds, MAX_RETRY_AFTER_SECONDS);
+}
+
+/** One chapter summary in the progress file: `hash` is the SHA-256 of the chapter text (the key with `n`). */
+interface CheckpointChapter {
+  n: number;
+  hash: string;
+  summary: string;
+}
+
+function sha256(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+/**
+ * Chapter summaries of an earlier run in `file`, keyed `${n}:${hash}`, for the given language. A missing or unreadable
+ * file gives an empty map (the run then summarizes everything).
+ */
+async function readCheckpoint(file: string, language: string): Promise<Map<string, string>> {
+  const saved = new Map<string, string>();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(file, "utf8"));
+  } catch {
+    return saved;
+  }
+  const { language: savedLanguage, chapters } = (parsed ?? {}) as { language?: unknown; chapters?: unknown };
+  if (savedLanguage !== language || !Array.isArray(chapters)) return saved;
+  for (const entry of chapters as Partial<CheckpointChapter>[]) {
+    if (
+      typeof entry?.n === "number" &&
+      typeof entry.hash === "string" &&
+      typeof entry.summary === "string" &&
+      entry.summary.trim() !== ""
+    ) {
+      saved.set(`${entry.n}:${entry.hash}`, entry.summary);
+    }
+  }
+  return saved;
 }

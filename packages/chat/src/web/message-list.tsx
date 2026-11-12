@@ -8,6 +8,8 @@ import { isToolUIPart, getToolName, type UIMessagePart, type UIDataTypes, type U
 import { Badge } from "@ehub/ui/components/badge";
 import { cn } from "@ehub/ui";
 import type { ChatUIMessage } from "../shared/types";
+import { ChatMarkdown } from "./markdown";
+import { describeToolCall } from "./tool-labels";
 
 export const DEFAULT_SUGGESTIONS = [
   "Riassumi i punti principali",
@@ -21,7 +23,7 @@ export interface MessageListProps {
   messages: ChatUIMessage[];
   /** Shown while the reply is still streaming (keeps the list scrolled to the bottom). */
   streaming?: boolean;
-  /** Renders assistant text as Markdown. Falls back to plain text. */
+  /** Renders assistant text. Defaults to `ChatMarkdown`. */
   renderMarkdown?: (text: string) => ReactNode;
   /** Empty-state suggestions (clickable). */
   suggestions?: readonly string[];
@@ -106,17 +108,20 @@ function MessageItem({
         if (part.type === "text") {
           if (part.text === "") return null;
           return (
-            <div key={key} className="text-sm leading-relaxed">
-              {renderMarkdown ? (
-                renderMarkdown(part.text)
-              ) : (
-                <p className="whitespace-pre-wrap">{part.text}</p>
-              )}
+            <div key={key}>
+              {renderMarkdown ? renderMarkdown(part.text) : <ChatMarkdown>{part.text}</ChatMarkdown>}
             </div>
           );
         }
         if (isToolUIPart(part)) {
-          return <ToolChip key={key} name={getToolName(part)} state={part.state} />;
+          return (
+            <ToolChip
+              key={key}
+              name={getToolName(part)}
+              input={part.input}
+              state={part.state}
+            />
+          );
         }
         return null;
       })}
@@ -150,17 +155,17 @@ export function ReplyMeta({ metadata }: { metadata: ChatUIMessage["metadata"] })
   );
 }
 
-/** A tool call, shown as a small muted chip. Works for any tool, named from its part. */
-export function ToolChip({ name, state }: { name: string; state: string }) {
+/** A tool call, shown as a small muted chip with a readable label (see `describeToolCall`). */
+export function ToolChip({ name, input, state }: { name: string; input?: unknown; state: string }) {
   const status = toolStatus(state);
   return (
     <div
       className={cn(
-        "inline-flex w-fit items-center gap-2 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground",
+        "inline-flex w-fit max-w-full items-center gap-2 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground",
         status === "errore" && "border-destructive/40 text-destructive",
       )}
     >
-      <span>Strumento: {name}</span>
+      <span>{describeToolCall(name, input)}</span>
       <span className="font-medium">· {status}</span>
     </div>
   );
