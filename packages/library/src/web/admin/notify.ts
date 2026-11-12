@@ -1,7 +1,8 @@
 /** Toasts for write outcomes; writes with warnings/errors also open the reconcile report dialog. */
 import { toast } from "sonner";
-import type { ReconcileReport } from "@shared/api";
+import type { ReconcileReport, SummarizeResponse } from "@shared/api";
 import { friendlyMessage } from "./lib/errors";
+import { summaryDoneText } from "./lib/summary";
 import { summarizeReport } from "./lib/report";
 import { showReport } from "./report-store";
 import { ApiRequestError } from "./lib/errors";
@@ -23,4 +24,9 @@ export function announceError(prefix: string, error: unknown): void {
   if (error instanceof ApiRequestError && error.report) {
     showReport({ title: prefix, report: error.report });
   }
+}
+
+/** Success toast of a generated summary (the summary has no reconcile report: nothing goes to Drive). */
+export function announceSummary(response: SummarizeResponse): void {
+  toast.success(summaryDoneText(response));
 }

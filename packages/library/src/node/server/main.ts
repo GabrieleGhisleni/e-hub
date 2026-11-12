@@ -4,11 +4,14 @@
  */
 import { serve } from "@hono/node-server";
 import { loadConfig } from "../config/index.ts";
+import { loadLocalEnv } from "../summary/llm.ts";
 import { createServiceContext, createServices } from "../services/index.ts";
 import { createApp } from "./app.ts";
 
 const HOSTNAME = "127.0.0.1";
 
+// EHUB_AI_* (summaries, chat) from the monorepo's .env.local, before any service reads the environment.
+loadLocalEnv();
 const config = loadConfig();
 const services = createServices(createServiceContext(config));
 const removed = await services.cleanupStaleUploads();

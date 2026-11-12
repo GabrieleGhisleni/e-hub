@@ -4,4 +4,5 @@ export { AiConfigError, loadAiConfig, loadDotEnvLocal, type AiConfig } from "./c
 export { createLlm, type Llm } from "./llm.ts";
 export { estimateTokens, fitsBudget } from "./tokens.ts";
 export { defineTool, runAgent, type RunAgentOptions } from "./agent.ts";
+export { generateText } from "ai";
 export type { LanguageModel, ModelMessage, ToolSet } from "ai";

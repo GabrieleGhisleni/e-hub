@@ -33,14 +33,27 @@ describe("loadAiConfig", () => {
     );
   });
 
-  it("applies the defaults: model smart, summary model = model, 1_000_000 tokens", () => {
+  it("applies the defaults: model smart, summary model fast, reasoning off for summaries, 1_000_000 tokens", () => {
     expect(loadAiConfig(base)).toEqual({
       baseUrl: "https://llm.example.test/v1",
       apiKey: "key-123",
       model: "smart",
-      summaryModel: "smart",
+      summaryModel: "fast",
+      summaryReasoningEffort: "none",
       maxContextTokens: 1_000_000,
     });
+  });
+
+  it("reads an explicit summary reasoning effort", () => {
+    expect(loadAiConfig({ ...base, EHUB_AI_SUMMARY_REASONING_EFFORT: "low" }).summaryReasoningEffort).toBe("low");
+  });
+
+  it("maps the literal 'default' to undefined (no reasoning_effort field is sent)", () => {
+    expect(loadAiConfig({ ...base, EHUB_AI_SUMMARY_REASONING_EFFORT: "default" }).summaryReasoningEffort).toBeUndefined();
+  });
+
+  it("treats an empty summary reasoning effort as unset (default none)", () => {
+    expect(loadAiConfig({ ...base, EHUB_AI_SUMMARY_REASONING_EFFORT: "  " }).summaryReasoningEffort).toBe("none");
   });
 
   it("reads explicit model, summary model and context size", () => {

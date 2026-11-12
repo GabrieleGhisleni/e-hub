@@ -19,6 +19,7 @@ import {
   BookIdSchema,
   BookSchema,
   BookStatusSchema,
+  BookSummarySchema,
   IsoDateSchema,
   NonBlankStringSchema,
   TopicIdSchema,
@@ -56,6 +57,11 @@ export const apiPaths = {
   topics: "/api/library/topics",
   /** PATCH `TopicLabelRequest` → `TopicWriteResponse`; DELETE → `DeleteTopicResponse`. */
   topic: (id: string) => `/api/library/topics/${encodeURIComponent(id)}`,
+  /**
+   * POST `SummarizeRequest` → `SummarizeResponse`: (re)generates `summary.json` with the LLM (docs/chat.md §4).
+   * Slow (one model call per chapter, minutes for a long book); 503 `ai-not-configured` without EHUB_AI_* settings.
+   */
+  bookSummary: (id: string) => `/api/library/books/${encodeURIComponent(id)}/summary`,
 } as const;
 
 /** Request size limits enforced by the server (HTTP 413 `payload-too-large` beyond them). */
@@ -109,6 +115,9 @@ export type ApiErrorCode =
   | "drive-failed"
   | "kepub-failed"
   | "busy"
+  | "ai-not-configured"
+  | "ai-failed"
+  | "text-unavailable"
   | "internal-error";
 
 export const ApiErrorSchema = z.object({
@@ -393,3 +402,22 @@ export const DeleteTopicResponseSchema = z.object({
   report: ReconcileReportSchema,
 });
 export type DeleteTopicResponse = z.infer<typeof DeleteTopicResponseSchema>;
+
+// ---------------------------------------------------------------------------------------------
+// Book summary (docs/chat.md §4)
+// ---------------------------------------------------------------------------------------------
+
+/** POST /api/library/books/:id/summary — `language` is the caller's (default "it"); `force` regenerates the text too. */
+export const SummarizeRequestSchema = z.strictObject({
+  language: z.string().min(2).max(10).default("it"),
+  force: z.boolean().default(false),
+});
+export type SummarizeRequest = z.input<typeof SummarizeRequestSchema>;
+
+export const SummarizeResponseSchema = z.object({
+  summary: BookSummarySchema,
+  /** Chapters summarized in this run (chapters too short to summarize are not counted). */
+  summarizedChapters: z.number().int().nonnegative(),
+  durationMs: z.number().int().nonnegative(),
+});
+export type SummarizeResponse = z.infer<typeof SummarizeResponseSchema>;

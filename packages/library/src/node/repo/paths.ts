@@ -6,6 +6,8 @@ export type BookMarkdownKind = "notes" | "recall" | "study";
 
 export const BOOK_JSON = "book.json";
 export const COVER_FILE = "cover.webp";
+/** LLM-written summaries (docs/chat.md §4), written by `elib summarize`. */
+export const SUMMARY_FILE = "summary.json";
 export const MARKDOWN_FILES: Readonly<Record<BookMarkdownKind, string>> = {
   notes: "notes.md",
   recall: "recall.md",
@@ -47,6 +49,11 @@ export function coverPath(dataDir: string, id: string): string {
 
 export function markdownPath(dataDir: string, id: string, kind: BookMarkdownKind): string {
   return path.join(bookDir(dataDir, id), MARKDOWN_FILES[kind]);
+}
+
+/** `<dataDir>/books/<id>/summary.json`. */
+export function summaryPath(dataDir: string, id: string): string {
+  return path.join(bookDir(dataDir, id), SUMMARY_FILE);
 }
 
 export function notesPath(dataDir: string, id: string): string {

@@ -11,8 +11,13 @@ export type AiConfig = {
   apiKey: string;
   /** Model for chat and tool calls. */
   model: string;
-  /** Model for chapter and book summaries. Defaults to `model`. */
+  /** Model for chapter and book summaries. Defaults to `fast`. */
   summaryModel: string;
+  /**
+   * Reasoning effort sent with the summary calls (`reasoning_effort`). Defaults to `none` (reasoning off).
+   * `undefined` when the variable is `default`: the field is not sent and the router decides.
+   */
+  summaryReasoningEffort: string | undefined;
   /** Context window budget in tokens. */
   maxContextTokens: number;
 };
@@ -32,6 +37,7 @@ const envSchema = z.object({
   EHUB_AI_API_KEY: z.string(),
   EHUB_AI_MODEL: z.string().default("smart"),
   EHUB_AI_SUMMARY_MODEL: z.string().optional(),
+  EHUB_AI_SUMMARY_REASONING_EFFORT: z.string().optional(),
   EHUB_AI_MAX_CONTEXT_TOKENS: z
     .string()
     .regex(/^\d+$/, { error: "must be a positive integer" })
@@ -60,12 +66,13 @@ export function loadAiConfig(env: Record<string, string | undefined> = process.e
   }
 
   const data = parsed.data;
-  const model = data.EHUB_AI_MODEL;
+  const reasoningEffort = data.EHUB_AI_SUMMARY_REASONING_EFFORT ?? "none";
   return {
     baseUrl: data.EHUB_AI_BASE_URL,
     apiKey: data.EHUB_AI_API_KEY,
-    model,
-    summaryModel: data.EHUB_AI_SUMMARY_MODEL ?? model,
+    model: data.EHUB_AI_MODEL,
+    summaryModel: data.EHUB_AI_SUMMARY_MODEL ?? "fast",
+    summaryReasoningEffort: reasoningEffort === "default" ? undefined : reasoningEffort,
     maxContextTokens: data.EHUB_AI_MAX_CONTEXT_TOKENS ?? 1_000_000,
   };
 }

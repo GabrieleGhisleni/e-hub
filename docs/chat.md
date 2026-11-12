@@ -96,5 +96,11 @@ Il codice lo scrivono subagent (Haiku), una fase alla volta. Il coordinatore fa 
 
 - **Fase 1 (fatta)**: `@ehub/chat` sull'AI SDK v7. Smoke test verde contro il router locale (`freeway`, `127.0.0.1:4100`).
 - **Fase 2 (fatta)**: chat sugli episodi. Pulsante "Chatta" nella pagina dell'episodio, solo in dev. Sotto ogni risposta compaiono il modello che ha risposto e i token. I timestamp sono link a YouTube. L'header `x-router-session` è uno per conversazione. Provata nel browser sull'episodio di Lex Fridman: circa 53k token di contesto, risposta da `gemini-3.6-flash`.
-- **Sintesi dei libri**: non ancora. Non c'è nessun `summary.json` reale e nessun comando `summarize`, e `elib text` non è mai stato lanciato. Per le prove c'è un libro finto in `packages/chat/test/fixtures/books/fx000001/`. Il campo `summary` degli episodi è vuoto in tutti e tre gli episodi.
+- **Fase 3 (fatta)**: le sintesi dei libri.
+  - `elib summarize <id> | --missing [--lang it] [--force]`, più il pulsante admin "Genera sintesi".
+  - Le sintesi usano il tier **`fast`** con `reasoning_effort: none` (`EHUB_AI_SUMMARY_MODEL`, `EHUB_AI_SUMMARY_REASONING_EFFORT`), mentre la chat resta su `smart`.
+  - Le parti accessorie (copyright, note, ringraziamenti…) e i capitoli sotto le 150 parole vengono saltati.
+  - C'è un controllo della lingua, con un nuovo tentativo se è sbagliata.
+  - Prova vera su "Four Thousand Weeks": 17 capitoli in circa 1–2,5 minuti.
+  - Per i test c'è un libro finto in `packages/chat/test/fixtures/books/fx000001/`. Il campo `summary` degli episodi è ancora vuoto.
 - **Da rivedere**: il modello a volte cita frasi lunghe (circa 25 parole) nonostante il prompt; la metadata del modello arriva solo a fine risposta.

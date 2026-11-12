@@ -6,6 +6,7 @@ import { API_LIMITS } from "../../shared/api.ts";
 import type { LoadedConfig } from "../config/index.ts";
 import { type DriveContext, type DriveContextOptions, createDriveContext } from "../drive/index.ts";
 import { RateLimiter } from "../openlibrary/index.ts";
+import { type SummaryModel, summaryModelFromEnv } from "../summary/llm.ts";
 import { LOCK_FILE_NAME, Mutex, ProcessLock } from "./mutex.ts";
 import path from "node:path";
 
@@ -50,6 +51,10 @@ export interface ServiceContext {
   readonly lock: Mutex;
   /** Cross-process lock file (`<cache>/.elib.lock`): hold it for a whole CLI run (`sync`, `import`). */
   readonly processLock: ProcessLock;
+  /** Summary model of the configuration; throws `AiConfigError` when EHUB_AI_* is missing or invalid. */
+  readonly summaryModel: () => SummaryModel;
+  /** Books being summarized by this process: a second run for the same book is refused (409 `busy`). */
+  readonly summariesInProgress: Set<string>;
 }
 
 export interface ServiceContextOptions extends DriveContextOptions {
@@ -60,6 +65,8 @@ export interface ServiceContextOptions extends DriveContextOptions {
   logger?: Logger;
   openLibraryLimiter?: RateLimiter;
   limits?: Partial<ServiceLimits>;
+  /** Summary model (default: EHUB_AI_* from `env`, else `process.env`). Tests inject a mock model here. */
+  summaryModel?: () => SummaryModel;
 }
 
 export function createServiceContext(
@@ -73,6 +80,7 @@ export function createServiceContext(
     logger,
     openLibraryLimiter,
     limits,
+    summaryModel,
     ...driveOptions
   } = options;
   const driveCtx = drive ?? createDriveContext(config, driveOptions);
@@ -94,5 +102,7 @@ export function createServiceContext(
     },
     lock: new Mutex(processLock),
     processLock,
+    summaryModel: summaryModel ?? (() => summaryModelFromEnv(options.env ?? process.env)),
+    summariesInProgress: new Set<string>(),
   };
 }

@@ -315,6 +315,9 @@ importers:
 
   packages/library:
     dependencies:
+      '@ehub/chat':
+        specifier: workspace:*
+        version: link:../chat
       '@ehub/notes':
         specifier: workspace:*
         version: link:../notes

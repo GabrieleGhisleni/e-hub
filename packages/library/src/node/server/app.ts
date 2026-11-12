@@ -16,6 +16,7 @@ import {
   CreateBookRequestSchema,
   type HealthResponse,
   SetCoverRequestSchema,
+  SummarizeRequestSchema,
   TopicLabelRequestSchema,
 } from "../../shared/api.ts";
 import type { ElibConfig } from "../../shared/config.ts";
@@ -108,6 +109,12 @@ export function createApp(
       return apiError(c, 413, "payload-too-large", "Richiesta troppo grande.");
     }
     return c.json(await services.setBookCover(id, await jsonBody(c, SetCoverRequestSchema)));
+  });
+
+  // ---- summaries (docs/chat.md §4). Literal path: `apiPaths.bookSummary(":id")` would encode the colon.
+  app.post("/api/library/books/:id/summary", jsonLimit, async (c) => {
+    const body = await optionalJsonBody(c, SummarizeRequestSchema);
+    return c.json(await services.summarizeBook(c.req.param("id"), body));
   });
 
   // ---- topics
@@ -215,6 +222,32 @@ async function jsonBody<T extends z.ZodType>(c: Context, schema: T): Promise<z.o
     if (error instanceof HTTPException) throw error;
     throw new ServiceError("invalid-request", 400, "JSON non valido.");
   }
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    throw new ServiceError(
+      "invalid-request",
+      400,
+      `Richiesta non valida: ${z.prettifyError(parsed.error)}`,
+      { details: { issues: parsed.error.issues } },
+    );
+  }
+  return parsed.data;
+}
+
+/** Like `jsonBody`, but an empty body means `{}` (every field of the schema has a default). */
+async function optionalJsonBody<T extends z.ZodType>(c: Context, schema: T): Promise<z.output<T>> {
+  const text = await c.req.text();
+  if (text.trim() === "") return jsonBodyFrom(schema, {});
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new ServiceError("invalid-request", 400, "JSON non valido.");
+  }
+  return jsonBodyFrom(schema, raw);
+}
+
+function jsonBodyFrom<T extends z.ZodType>(schema: T, raw: unknown): z.output<T> {
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
     throw new ServiceError(

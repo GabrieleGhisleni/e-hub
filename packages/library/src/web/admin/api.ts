@@ -11,6 +11,7 @@ import {
   CoverCandidatesResponseSchema,
   DeleteBookResponseSchema,
   DeleteTopicResponseSchema,
+  SummarizeResponseSchema,
   TopicWriteResponseSchema,
   TopicsResponseSchema,
   UploadResponseSchema,
@@ -25,6 +26,8 @@ import {
   type DeleteBookResponse,
   type DeleteTopicResponse,
   type SetCoverRequest,
+  type SummarizeRequest,
+  type SummarizeResponse,
   type TopicWriteResponse,
   type TopicsResponse,
   type UploadResponse,
@@ -176,6 +179,11 @@ export const adminApi = {
 
   deleteTopic(id: string): Promise<DeleteTopicResponse> {
     return written(request("DELETE", apiPaths.topic(id), DeleteTopicResponseSchema));
+  },
+
+  /** Slow: one model call per chapter. No client timeout; the dialog shows a spinner meanwhile. */
+  summarizeBook(id: string, body: SummarizeRequest): Promise<SummarizeResponse> {
+    return written(request("POST", apiPaths.bookSummary(id), SummarizeResponseSchema, body));
   },
 };
 

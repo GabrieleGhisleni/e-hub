@@ -3,6 +3,7 @@
  */
 import type { CliCommand } from "../program.ts";
 import { importCommand } from "./import.ts";
+import { summarizeCommand } from "./summarize.ts";
 import { syncCommand } from "./sync.ts";
 import { textCommand } from "./text.ts";
 import { validateCommand } from "./validate.ts";
@@ -12,4 +13,5 @@ export const COMMANDS: readonly CliCommand[] = [
   importCommand,
   validateCommand,
   textCommand,
+  summarizeCommand,
 ];

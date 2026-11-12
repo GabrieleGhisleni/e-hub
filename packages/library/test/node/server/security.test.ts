@@ -39,6 +39,7 @@ export function fakeServices(overrides: Partial<Services> = {}): Services {
     }),
     renameTopic: unused,
     deleteTopic: unused,
+    summarizeBook: unused,
     ...overrides,
   };
 }

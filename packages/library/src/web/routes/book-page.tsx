@@ -5,6 +5,11 @@ import { isBookId } from "@shared/ids";
 import type { BookCard, BookDetail } from "@shared/schema";
 import { BookAdminActionsSlot } from "@library/admin-slots";
 import { BookCover } from "@library/components/book-cover";
+import {
+  BookSummarySection,
+  SUMMARY_SECTION_ID,
+  SUMMARY_SECTION_TITLE,
+} from "@library/components/book/book-summary-section";
 import { isFromLibraryState } from "@library/components/library/book-card";
 import { Container, PageHeader } from "@ehub/ui";
 import { type NoteItemRef, NoteThread, NotesJumpLink } from "@ehub/notes";
@@ -134,6 +139,11 @@ export function BookPage() {
   const full = detail.data;
   const topic = book && index.data ? topicLabel(index.data, book.topic) : null;
   const sections = full ? noteSections(full) : [];
+  // In-page navigation: "Sintesi" (when the book has one) comes first, then the notes sections.
+  const navSections: { id: string; title: string }[] = [
+    ...(full?.summary ? [{ id: SUMMARY_SECTION_ID, title: SUMMARY_SECTION_TITLE }] : []),
+    ...sections,
+  ];
   const noteItem: NoteItemRef | null = book
     ? {
         module: "library",
@@ -279,13 +289,13 @@ export function BookPage() {
                     ) : null}
                   </dl>
 
-                  {sections.length > 1 ? (
+                  {navSections.length > 1 ? (
                     <nav
                       aria-label="In questa pagina"
                       className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm"
                     >
                       <span className="text-muted-foreground">In questa pagina:</span>
-                      {sections.map((s) => (
+                      {navSections.map((s) => (
                         <a
                           key={s.id}
                           href={`#${s.id}`}
@@ -300,6 +310,8 @@ export function BookPage() {
                       ))}
                     </nav>
                   ) : null}
+
+                  {full.summary ? <BookSummarySection summary={full.summary} /> : null}
 
                   {sections.map((section) =>
                     section.compact ? (

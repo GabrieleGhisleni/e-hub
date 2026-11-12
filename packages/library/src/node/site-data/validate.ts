@@ -1,7 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { isBookId } from "../../shared/ids.ts";
-import { readAllBooks, readTopics } from "../repo/index.ts";
+import { InvalidDataError, readAllBooks, readBookSummary, readTopics } from "../repo/index.ts";
 
 export interface DataIssue {
   /** Path relative to the data dir, when the issue concerns a file or folder. */
@@ -21,6 +21,7 @@ export const ALLOWED_BOOK_FILES: ReadonlySet<string> = new Set([
   "notes.md",
   "recall.md",
   "study.md",
+  "summary.json",
 ]);
 
 /**
@@ -150,6 +151,15 @@ export async function validateData(dataDir: string): Promise<ValidationResult> {
     }
   } catch {
     // missing or unparsable: reported above
+  }
+  // summary.json: schema, and bookId equal to the folder (readBookSummary checks both). Its text is not scanned.
+  for (const id of [...books.map((b) => b.id), ...invalid.map((b) => b.id)].filter(isBookId)) {
+    try {
+      await readBookSummary(dataDir, id);
+    } catch (error) {
+      if (!(error instanceof InvalidDataError)) throw error;
+      result.errors.push({ path: `books/${id}/summary.json`, message: error.message });
+    }
   }
   // Suspicious keys and values: also in books that failed schema validation, as long as the JSON parses.
   const allIds = [...books.map((b) => b.id), ...invalid.map((b) => b.id)].filter(isBookId);

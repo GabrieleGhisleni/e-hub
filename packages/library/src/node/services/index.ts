@@ -11,6 +11,8 @@ import type {
   CreateBookRequest,
   DeleteBookResponse,
   DeleteTopicResponse,
+  SummarizeRequest,
+  SummarizeResponse,
   TopicWriteResponse,
   TopicsResponse,
   UploadResponse,
@@ -23,6 +25,7 @@ import {
   readBookCoverCandidate,
   setBookCover,
 } from "./covers.ts";
+import { type SummarizeServiceOptions, summarizeBookService } from "./summary.ts";
 import { addTopic, deleteTopic, listTopics, renameTopic } from "./topics.ts";
 import {
   type AnalyzeUploadOptions,
@@ -68,6 +71,7 @@ export {
   importFolder,
   scanImportFolder,
 } from "./import.ts";
+export { type SummarizeServiceOptions, summarizeBookService } from "./summary.ts";
 export { addTopic, deleteTopic, listTopics, renameTopic } from "./topics.ts";
 export {
   type AnalyzeUploadOptions,
@@ -97,6 +101,11 @@ export interface Services {
   addTopic(label: string): Promise<TopicWriteResponse>;
   renameTopic(id: string, label: string): Promise<TopicWriteResponse>;
   deleteTopic(id: string): Promise<DeleteTopicResponse>;
+  summarizeBook(
+    id: string,
+    request: SummarizeRequest,
+    options?: SummarizeServiceOptions,
+  ): Promise<SummarizeResponse>;
 }
 
 export function createServices(ctx: ServiceContext): Services {
@@ -117,5 +126,6 @@ export function createServices(ctx: ServiceContext): Services {
     addTopic: (label) => addTopic(ctx, label),
     renameTopic: (id, label) => renameTopic(ctx, id, label),
     deleteTopic: (id) => deleteTopic(ctx, id),
+    summarizeBook: (id, request, options) => summarizeBookService(ctx, id, request, options),
   };
 }

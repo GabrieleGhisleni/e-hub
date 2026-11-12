@@ -11,7 +11,14 @@ import {
   type SiteIndex,
   SiteIndexSchema,
 } from "../../shared/schema.ts";
-import { coverPath, readAllBooks, readBookMarkdown, readTopics } from "../repo/index.ts";
+import {
+  InvalidDataError,
+  coverPath,
+  readAllBooks,
+  readBookMarkdown,
+  readBookSummary,
+  readTopics,
+} from "../repo/index.ts";
 import { renderMarkdown } from "./markdown.ts";
 
 export interface SiteDataProblem {
@@ -43,6 +50,29 @@ async function readCover(dataDir: string, id: string): Promise<Buffer | null> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
+  }
+}
+
+/** The public part of `summary.json` (no version, no bookId, no `words`). Null when the book has no summary. */
+async function publicSummary(
+  dataDir: string,
+  id: string,
+  problems: SiteDataProblem[],
+): Promise<BookDetail["summary"]> {
+  try {
+    const summary = await readBookSummary(dataDir, id);
+    if (!summary) return null;
+    return {
+      language: summary.language,
+      model: summary.model,
+      generatedAt: summary.generatedAt,
+      book: summary.book,
+      chapters: summary.chapters.map((c) => ({ n: c.n, title: c.title, summary: c.summary })),
+    };
+  } catch (error) {
+    if (!(error instanceof InvalidDataError)) throw error;
+    problems.push({ id, message: `summary.json non valido, pubblicato senza sintesi: ${error.message}` });
+    return null;
   }
 }
 
@@ -102,6 +132,7 @@ export async function buildSiteData(
       readBookMarkdown(dataDir, book.id, "recall"),
       readBookMarkdown(dataDir, book.id, "study"),
     ]);
+    const summary = await publicSummary(dataDir, book.id, problems);
     const detail = BookDetailSchema.parse({
       ...card,
       ...optional(
@@ -116,6 +147,7 @@ export async function buildSiteData(
       notesHtml: renderMarkdown(notes),
       recallHtml: renderMarkdown(recall),
       studyHtml: renderMarkdown(study),
+      summary,
     });
     cards.push(card);
     details.set(book.id, detail);
