@@ -1,14 +1,23 @@
 /**
  * Chat panel: a right-side sheet that talks to `POST /api/chat` about one
- * source (a book, an episode, an exploration). State lives in memory only;
- * history persistence is a later phase.
+ * source (a book, an episode, an exploration). The conversation is saved to
+ * localStorage per source when a reply finishes (see `history.ts`), and the
+ * most recent one is restored when the panel opens.
  */
-import { type KeyboardEvent, type ReactNode, useMemo, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { MessageSquareText, Plus, RotateCcw, Send, Square } from "lucide-react";
+import { History, MessageSquareText, Plus, RotateCcw, Send, Square, Trash2 } from "lucide-react";
 import { Alert, AlertDescription } from "@ehub/ui/components/alert";
 import { Button } from "@ehub/ui/components/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@ehub/ui/components/dropdown-menu";
 import {
   Sheet,
   SheetContent,
@@ -20,6 +29,14 @@ import { Textarea } from "@ehub/ui/components/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@ehub/ui/components/tooltip";
 import { CHAT_API_PATH, type ChatSource, type ChatUIMessage } from "../shared/types";
 import { MessageList } from "./message-list";
+import { type SaveNote } from "./notes";
+import {
+  deleteConversation,
+  loadConversations,
+  relativeDate,
+  saveConversation,
+  type StoredConversation,
+} from "./history";
 
 export interface ChatPanelProps {
   source: ChatSource;
@@ -32,9 +49,13 @@ export interface ChatPanelProps {
   suggestions?: readonly string[];
   /** Small note shown above the messages (e.g. a hint about how the answers are produced). */
   notice?: ReactNode;
+  /** When given, finished replies offer "Salva come nota" and the caller stores the note. */
+  onSaveNote?: SaveNote;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+type Session = { id: string; messages: ChatUIMessage[] };
 
 export function newConversationId(): string {
   return crypto.randomUUID();
@@ -66,11 +87,15 @@ export function ChatPanel({
   renderMarkdown,
   suggestions,
   notice,
+  onSaveNote,
   open,
   onOpenChange,
 }: ChatPanelProps) {
-  const [conversationId, setConversationId] = useState(newConversationId);
+  // The conversation shown: its ID (also the chat's ID) and the messages it starts with.
+  const [session, setSession] = useState<Session>(() => ({ id: newConversationId(), messages: [] }));
   const [draft, setDraft] = useState("");
+  const [history, setHistory] = useState<StoredConversation[]>([]);
+  const restoredRef = useRef(false);
 
   // Recreated only when the source changes; the body is exactly `{ id, messages, source }`.
   const transport = useMemo(
@@ -85,11 +110,33 @@ export function ChatPanel({
   );
 
   const { messages, sendMessage, status, stop, regenerate, error } = useChat<ChatUIMessage>({
-    id: conversationId,
+    id: session.id,
+    messages: session.messages,
     transport,
   });
 
   const busy = status === "submitted" || status === "streaming";
+
+  // First time the panel opens: restore the most recent saved conversation.
+  useEffect(() => {
+    if (!open || restoredRef.current) return;
+    restoredRef.current = true;
+    const [latest] = loadConversations(source);
+    if (latest) setSession({ id: latest.id, messages: latest.messages });
+  }, [open, source]);
+
+  // Save when a reply finishes. The ID check skips a chat that was just replaced
+  // (its last reply is then not saved, the previous state stays in history).
+  const sessionIdRef = useRef(session.id);
+  const wasBusyRef = useRef(false);
+  useEffect(() => {
+    const sameConversation = sessionIdRef.current === session.id;
+    sessionIdRef.current = session.id;
+    if (wasBusyRef.current && !busy && sameConversation) {
+      saveConversation(source, { id: session.id, messages });
+    }
+    wasBusyRef.current = busy;
+  }, [busy, messages, session.id, source]);
 
   const send = (text: string) => {
     const trimmed = text.trim();
@@ -110,9 +157,23 @@ export function ChatPanel({
   };
 
   const newConversation = () => {
+    if (!busy) saveConversation(source, { id: session.id, messages });
     void stop();
     setDraft("");
-    setConversationId(newConversationId());
+    setSession({ id: newConversationId(), messages: [] });
+  };
+
+  const openConversation = (conversation: StoredConversation) => {
+    if (busy) return;
+    setDraft("");
+    setSession({ id: conversation.id, messages: conversation.messages });
+  };
+
+  const deleteCurrent = () => {
+    void stop();
+    deleteConversation(source, session.id);
+    setDraft("");
+    setSession({ id: newConversationId(), messages: [] });
   };
 
   return (
@@ -123,10 +184,45 @@ export function ChatPanel({
           <SheetDescription className="truncate">
             {subtitle ? `${title} · ${subtitle}` : title}
           </SheetDescription>
-          <div className="pt-1">
+          <div className="flex flex-wrap items-center gap-1 pt-1">
             <Button variant="ghost" size="sm" onClick={newConversation}>
               <Plus aria-hidden /> Nuova conversazione
             </Button>
+            <DropdownMenu
+              onOpenChange={(next) => {
+                if (next) setHistory(loadConversations(source));
+              }}
+            >
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <History aria-hidden /> Conversazioni
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-72">
+                <DropdownMenuLabel>Conversazioni salvate</DropdownMenuLabel>
+                {history.length === 0 ? (
+                  <DropdownMenuItem disabled>Nessuna conversazione salvata</DropdownMenuItem>
+                ) : (
+                  history.map((conversation) => (
+                    <DropdownMenuItem
+                      key={conversation.id}
+                      disabled={busy}
+                      onSelect={() => openConversation(conversation)}
+                      className="gap-3"
+                    >
+                      <span className="min-w-0 flex-1 truncate">{conversation.title}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {relativeDate(conversation.updatedAt)}
+                      </span>
+                    </DropdownMenuItem>
+                  ))
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" disabled={busy} onSelect={deleteCurrent}>
+                  <Trash2 aria-hidden /> Elimina questa conversazione
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </SheetHeader>
 
@@ -138,6 +234,7 @@ export function ChatPanel({
             renderMarkdown={renderMarkdown}
             suggestions={suggestions}
             onSuggestion={send}
+            onSaveNote={onSaveNote}
           />
         </div>
 

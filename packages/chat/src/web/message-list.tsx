@@ -3,12 +3,16 @@
  * messages (text, tool chips, the model line under each assistant reply).
  * Has no hooks from `useChat`, so it can be tested with plain messages.
  */
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { isToolUIPart, getToolName, type UIMessagePart, type UIDataTypes, type UITools } from "ai";
+import { NotebookPen } from "lucide-react";
 import { Badge } from "@ehub/ui/components/badge";
+import { Button } from "@ehub/ui/components/button";
 import { cn } from "@ehub/ui";
 import type { ChatUIMessage } from "../shared/types";
 import { ChatMarkdown } from "./markdown";
+import type { SaveNote, SaveNoteInput } from "./notes";
+import { markdownToPlainText } from "./plain-text";
 import { describeToolCall } from "./tool-labels";
 
 export const DEFAULT_SUGGESTIONS = [
@@ -28,6 +32,8 @@ export interface MessageListProps {
   /** Empty-state suggestions (clickable). */
   suggestions?: readonly string[];
   onSuggestion?: (text: string) => void;
+  /** When given, each finished assistant reply offers "Salva come nota". */
+  onSaveNote?: SaveNote;
 }
 
 export function MessageList({
@@ -36,8 +42,11 @@ export function MessageList({
   renderMarkdown,
   suggestions = DEFAULT_SUGGESTIONS,
   onSuggestion,
+  onSaveNote,
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Replies saved as notes in this session (by message ID).
+  const [savedIds, setSavedIds] = useState<ReadonlySet<string>>(() => new Set());
 
   // Follow the conversation while it grows. Scroll the container, not the page.
   useEffect(() => {
@@ -76,19 +85,76 @@ export function MessageList({
       aria-label="Messaggi"
       className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-1 py-4"
     >
-      {messages.map((message) => (
-        <MessageItem key={message.id} message={message} renderMarkdown={renderMarkdown} />
-      ))}
+      {messages.map((message, index) => {
+        const finished = !(streaming && index === messages.length - 1);
+        const note = finished && onSaveNote ? noteFor(messages, index) : undefined;
+        return (
+          <MessageItem
+            key={message.id}
+            message={message}
+            renderMarkdown={renderMarkdown}
+            note={note}
+            saved={savedIds.has(message.id)}
+            onSave={
+              note && onSaveNote
+                ? () => {
+                    const result = onSaveNote(note);
+                    const markSaved = () => setSavedIds((current) => new Set(current).add(message.id));
+                    if (isPromiseLike(result)) {
+                      result.then(markSaved, (error: unknown) => console.error("Salvataggio della nota fallito", error));
+                    } else {
+                      markSaved();
+                    }
+                  }
+                : undefined
+            }
+          />
+        );
+      })}
     </div>
+  );
+}
+
+/**
+ * The note for an assistant reply: the question is the closest user message before it, the answer
+ * is its text parts as plain text. `undefined` when either one is missing.
+ */
+export function noteFor(messages: readonly ChatUIMessage[], index: number): SaveNoteInput | undefined {
+  const message = messages[index];
+  if (!message || message.role !== "assistant") return undefined;
+  const question = [...messages.slice(0, index)].reverse().find((item) => item.role === "user");
+  if (!question) return undefined;
+  const questionText = textOf(question.parts).trim();
+  const answerText = message.parts
+    .flatMap((part) => (part.type === "text" && part.text.trim() !== "" ? [part.text] : []))
+    .join("\n\n");
+  const answer = markdownToPlainText(answerText);
+  if (questionText === "" || answer === "") return undefined;
+  const model = message.metadata?.model;
+  return model ? { question: questionText, answer, model } : { question: questionText, answer };
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    value !== null &&
+    (typeof value === "object" || typeof value === "function") &&
+    typeof (value as { then?: unknown }).then === "function"
   );
 }
 
 function MessageItem({
   message,
   renderMarkdown,
+  note,
+  saved,
+  onSave,
 }: {
   message: ChatUIMessage;
   renderMarkdown?: (text: string) => ReactNode;
+  /** The note this reply would become; `undefined` hides the save button. */
+  note?: SaveNoteInput;
+  saved: boolean;
+  onSave?: () => void;
 }) {
   if (message.role === "user") {
     const text = textOf(message.parts);
@@ -126,6 +192,19 @@ function MessageItem({
         return null;
       })}
       <ReplyMeta metadata={message.metadata} />
+      {note && onSave && (
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-2 h-7 px-2 text-xs text-muted-foreground"
+            disabled={saved}
+            onClick={onSave}
+          >
+            <NotebookPen aria-hidden /> {saved ? "Salvata" : "Salva come nota"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
