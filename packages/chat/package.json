@@ -1,0 +1,39 @@
+{
+  "name": "@ehub/chat",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Chat with an AI agent over books and podcast episodes: OpenAI-compatible LLM client on the Vercel AI SDK, tool-calling agent loop",
+  "exports": {
+    "./node": "./src/node/index.ts",
+    "./server": "./src/server/app.ts",
+    "./shared": "./src/shared/types.ts",
+    "./web": "./src/web/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "smoke": "tsx scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.90",
+    "ai": "^7.0.169",
+    "hono": "^4.13.17",
+    "zod": "^4.6.7",
+    "@ai-sdk/react": "^4.0.174",
+    "@ehub/ui": "workspace:*",
+    "lucide-react": "^1.70.0",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@ai-sdk/provider": "^4.0.37",
+    "@hono/node-server": "^2.1.6",
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0",
+    "@types/react": "^19.3.0",
+    "@testing-library/react": "^16.3.3",
+    "jsdom": "^31.0.0"
+  }
+}

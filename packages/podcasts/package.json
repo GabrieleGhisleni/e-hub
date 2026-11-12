@@ -7,7 +7,8 @@
     "./web": "./src/web/entry.tsx",
     "./vite": "./scripts/static-pages.ts",
     "./server": "./src/server/index.ts",
-    "./note-guard": "./src/core/note-guard.ts"
+    "./note-guard": "./src/core/note-guard.ts",
+    "./chat-context": "./src/core/chat-context.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -45,7 +46,8 @@
     "yaml": "^2.9.1",
     "zod": "^4.6.7",
     "@ehub/ui": "workspace:*",
-    "@ehub/notes": "workspace:*"
+    "@ehub/notes": "workspace:*",
+    "@ehub/chat": "workspace:*"
   },
   "devDependencies": {
     "@hono/vite-dev-server": "^0.26.1",

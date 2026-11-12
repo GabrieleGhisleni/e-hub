@@ -10,6 +10,7 @@ import type { DevSlots } from "../dev-slot";
 import { AddEpisodeButton } from "./add-episode";
 import { AddConversation } from "./conversation-dialog";
 import { DevLayout } from "./dev-layout";
+import { EpisodeChat } from "./episode-chat";
 import { EpisodeTools } from "./episode-tools";
 import { NoTranscriptBadge } from "./transcript-status";
 
@@ -24,6 +25,7 @@ export const slots: DevSlots = {
     </div>
   ),
   "episode-actions": ({ episode }) => <EpisodeTools episode={episode} />,
+  "episode-chat": ({ episode, show }) => <EpisodeChat episode={episode} show={show} />,
   "episode-transcript": ({ episode, children }) =>
     episode.transcriptSource ? children : <NoTranscriptBadge episode={episode} />,
   "episode-conversations": ({ episode }) => <AddConversation episode={episode} />,

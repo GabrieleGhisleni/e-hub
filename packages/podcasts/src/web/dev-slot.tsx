@@ -28,6 +28,8 @@ export interface DevSlotPropsMap {
   "home-empty": { shows: readonly Show[] };
   /** Detail header, after the external link buttons (e.g. "Copia per l'agente"). */
   "episode-actions": { episode: Episode; show: Show | undefined };
+  /** Detail header, next to the actions. Opens the chat about the episode (`@ehub/chat`). */
+  "episode-chat": { episode: Episode; show: Show | undefined };
   /** Detail header, transcript status. Children: the "Nessuna trascrizione" badge when there is no transcript. */
   "episode-transcript": { episode: Episode };
   /** Wraps guests + tags in the detail header. Children: their read-only rendering. */

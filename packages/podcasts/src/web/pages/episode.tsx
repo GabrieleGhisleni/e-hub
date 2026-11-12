@@ -163,6 +163,7 @@ function EpisodePage({ episode, show }: { episode: Episode; show: Show | undefin
           )}
           <NotesJumpLink item={noteItem} />
           <DevSlot name="episode-actions" episode={episode} show={show} />
+          <DevSlot name="episode-chat" episode={episode} show={show} />
         </div>
       </header>
 

@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "bookId": "fx000001",
+  "generatedAt": "2026-11-12T10:00:00.000Z",
+  "model": "smart",
+  "language": "it",
+  "book": "Saggio breve che lega la percezione del tempo all'attenzione. L'autore sostiene che il tempo vissuto si allunga quando l'attenzione è piena e si accorcia nella routine, e propone l'abitudine consapevole come modo per 'coltivare' le ore.",
+  "chapters": [
+    {
+      "n": 1,
+      "title": "Le ore che scivolano",
+      "words": 412,
+      "summary": "Distingue il tempo dell'orologio dal tempo vissuto. Con l'esempio delle vacanze mostra che le giornate nuove sembrano lunghe mentre accadono e lunghe nel ricordo, mentre quelle ripetitive spariscono dalla memoria."
+    },
+    {
+      "n": 2,
+      "title": "Il giardiniere distratto",
+      "words": 538,
+      "summary": "L'attenzione come risorsa limitata. La metafora del giardiniere che annaffia tutto e niente: la distrazione frammenta le ore. Introduce la 'regola dell'unica aiuola', cioè un compito alla volta per blocchi di 50 minuti."
+    },
+    {
+      "n": 3,
+      "title": "Abitudini che fioriscono",
+      "words": 467,
+      "summary": "Le abitudini liberano attenzione ma rischiano di cancellare il ricordo dei giorni. Propone di variare deliberatamente un dettaglio al giorno ('il seme nuovo') per tenere viva la memoria senza perdere i benefici della routine."
+    }
+  ]
+}

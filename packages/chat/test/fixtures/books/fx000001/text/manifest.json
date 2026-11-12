@@ -1,0 +1,11 @@
+{
+  "id": "fx000001",
+  "title": "Il giardino delle ore",
+  "authors": ["Autore Fittizio"],
+  "generatedAt": "2026-11-12T09:00:00.000Z",
+  "chapters": [
+    { "n": 1, "file": "01-le-ore-che-scivolano.md", "title": "Le ore che scivolano", "words": 412 },
+    { "n": 2, "file": "02-il-giardiniere-distratto.md", "title": "Il giardiniere distratto", "words": 538 },
+    { "n": 3, "file": "03-abitudini-che-fioriscono.md", "title": "Abitudini che fioriscono", "words": 467 }
+  ]
+}

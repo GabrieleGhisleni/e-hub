@@ -39,6 +39,12 @@ export default defineConfig(({ command }) => {
               exclude: [/^(?!\/api\/notes(\/|\?|$)).*/],
               injectClientScript: false,
             }),
+            // Chat local server (Hono): /api/chat only, streams the LLM reply. LLM config from .env.local.
+            devServer({
+              entry: "./server/chat-dev.ts",
+              exclude: [/^(?!\/api\/chat(\/|\?|$)).*/],
+              injectClientScript: false,
+            }),
           ]
         : []),
     ],
