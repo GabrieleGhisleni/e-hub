@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createChatApp, type ChatSourceContext } from "../src/server/app.ts";
 import { createLlm, loadAiConfig } from "../src/node/index.ts";
 import type { ChatRequestBody } from "../src/shared/types.ts";
-import { startMockLlm, type MockLlm } from "./mock-llm.ts";
+import { startMockLlm, type MockLlm } from "@ehub/chat/testing";
 
 let mock: MockLlm | undefined;
 

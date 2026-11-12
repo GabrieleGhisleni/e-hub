@@ -1,15 +1,15 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { apiPaths } from "../../shared/api.ts";
-import { adminApi } from "./api.ts";
-import { ApiRequestError } from "./lib/errors.ts";
-import { summaryFailure } from "./lib/summary.ts";
+import { apiPaths } from "@shared/api.ts";
+import { adminApi } from "@library/admin/api.ts";
+import { ApiRequestError } from "@library/admin/lib/errors.ts";
+import { summaryFailure } from "@library/admin/lib/summary.ts";
 import {
   SUMMARY_BUSY_TEXT,
   SummarizeForm,
   type SummarizeFormProps,
-} from "./summarize-book-dialog.tsx";
+} from "@library/admin/summarize-book-dialog.tsx";
 
 const ID = "eec5cpre";
 

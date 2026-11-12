@@ -8,7 +8,8 @@
     "./node": "./src/node/index.ts",
     "./server": "./src/server/app.ts",
     "./shared": "./src/shared/types.ts",
-    "./web": "./src/web/index.ts"
+    "./web": "./src/web/index.ts",
+    "./testing": "./src/testing/mock-llm.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -25,11 +26,11 @@
     "lucide-react": "^1.70.0",
     "react": "^19.3.1",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "@hono/node-server": "^2.1.6"
   },
   "devDependencies": {
     "@ai-sdk/provider": "^4.0.37",
-    "@hono/node-server": "^2.1.6",
     "@types/node": "^26.6.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

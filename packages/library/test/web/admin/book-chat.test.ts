@@ -2,9 +2,9 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
-import type { BookDetail } from "../../shared/schema.ts";
-import { BookAdminActions } from "./book-admin-actions.tsx";
-import { bookChatSuggestions } from "./book-chat.tsx";
+import type { BookDetail } from "@shared/schema.ts";
+import { BookAdminActions } from "@library/admin/book-admin-actions.tsx";
+import { bookChatSuggestions } from "@library/admin/book-chat.tsx";
 
 const book = {
   id: "eec5cpre",

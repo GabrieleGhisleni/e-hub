@@ -11,16 +11,7 @@ import { createChatApp } from "@ehub/chat/server";
 import type { ChatRequestBody } from "@ehub/chat/shared";
 import { createBookChatSource, type BookText } from "../../../src/node/chat/index.ts";
 import type { TextManifest } from "../../../src/node/text/index.ts";
-// The mock lives in @ehub/chat's tests. It is loaded through a variable path so that this package's `tsc -b`
-// (rootDir = this package) does not pull it into the program; the path is absolute.
-const MOCK_LLM = path.resolve(import.meta.dirname, "../../../../chat/test/mock-llm.ts");
-type MockTurn =
-  | { text: string }
-  | { toolCalls: { name: string; arguments: Record<string, unknown> }[] };
-type MockLlm = { baseURL: string; requests: any[]; close(): Promise<void> };
-const { startMockLlm } = (await import(/* @vite-ignore */ MOCK_LLM)) as {
-  startMockLlm(turns: MockTurn[]): Promise<MockLlm>;
-};
+import { startMockLlm, type MockLlm } from "@ehub/chat/testing";
 
 const FIXTURE = path.resolve(import.meta.dirname, "../../../../chat/test/fixtures/books/fx000001");
 

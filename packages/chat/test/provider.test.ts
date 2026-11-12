@@ -4,7 +4,7 @@ import { generateText, streamText } from "ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createLlm, defineTool, loadAiConfig, runAgent } from "../src/node/index.ts";
-import { startMockLlm, type MockLlm } from "./mock-llm.ts";
+import { startMockLlm, type MockLlm } from "@ehub/chat/testing";
 
 let mock: MockLlm;
 

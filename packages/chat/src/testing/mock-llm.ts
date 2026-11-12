@@ -1,3 +1,4 @@
+// Test-only: fake OpenAI-compatible LLM server. Imported by tests (@ehub/chat/testing), never by app code.
 // Fake OpenAI-compatible server for tests: POST /v1/chat/completions with scripted turns.
 // Each request consumes the next turn; every request body is recorded in `requests`.
 

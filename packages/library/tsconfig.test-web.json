@@ -1,0 +1,35 @@
+{
+  "extends": "./tsconfig.base.json",
+  "references": [
+    {
+      "path": "./tsconfig.web.json"
+    }
+  ],
+  "compilerOptions": {
+    "lib": [
+      "es2023",
+      "dom",
+      "dom.iterable"
+    ],
+    "types": [
+      "vite/client",
+      "node"
+    ],
+    "jsx": "react-jsx",
+    "paths": {
+      "@library/*": [
+        "./src/web/*"
+      ],
+      "@shared/*": [
+        "./src/shared/*"
+      ]
+    },
+    "outDir": "./node_modules/.tmp/tsc/test-web",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsc/test-web.tsbuildinfo"
+  },
+  "include": [
+    "test/web",
+    "src/web/**/*.test.ts",
+    "src/web/**/*.test.tsx"
+  ]
+}

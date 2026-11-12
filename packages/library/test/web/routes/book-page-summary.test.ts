@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { describe, expect, it, vi } from "vitest";
-import type { BookDetail, SiteIndex } from "../../shared/schema.ts";
+import type { BookDetail, SiteIndex } from "@shared/schema.ts";
 
 // Admin code is not part of this test: the book page only reads the flag.
 vi.hoisted(() => {
@@ -13,7 +13,7 @@ const detail = { value: null as BookDetail | null };
 const index = { value: null as SiteIndex | null };
 
 // The page reads its data from the site-data store (fetch + effects): serve it from the test instead.
-vi.mock("../data/site-data.ts", () => ({
+vi.mock("@library/data/site-data.ts", () => ({
   useBookDetail: () => {
     const data = detail.value ?? undefined;
     return {
@@ -36,7 +36,7 @@ vi.mock("../data/site-data.ts", () => ({
   prefetchBook: () => undefined,
 }));
 
-const { BookPage } = await import("./book-page.tsx");
+const { BookPage } = await import("@library/routes/book-page.tsx");
 
 const ID = "eec5cpre";
 const SLUG = "libro-di-prova";
