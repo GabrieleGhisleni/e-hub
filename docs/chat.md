@@ -135,4 +135,5 @@ Il codice lo scrivono subagent (Haiku), una fase alla volta. Il coordinatore fa 
   - I capitoli restano `(cap. N)`, il numero del manifest (scelta dell'utente).
 - **Feel rich**: interruttore accanto ad "Appunti"; il client manda `rich: true` e il server usa `EHUB_AI_RICH_MODEL` (default `gpt-6-luna`). Non è ancora su freeway: finché il router risponde 400/404, la chat dice che il modello non è disponibile. Non viene ricordato tra un caricamento e l'altro.
 - **Sottolineature**: `elib sync` le riporta dal Kobo in `data/books/<id>/highlights.json`. La chat non le vede ancora (proposta C dello schema del 13/11).
+- **Quaderno delle esplorazioni (13/11)**: nella chat di un'esplorazione, "Salva come nota" diventa "Aggiungi al quaderno" (etichette in `noteLabels`), che accoda la domanda in grassetto e la risposta al quaderno condiviso. Il tool `save_note` fa lo stesso. Il nuovo tool `propose_notebook({ body })` mostra una scheda: l'utente conferma la riscrittura completa ("Sostituisci il quaderno") oppure l'aggiunta in fondo. Nulla cambia prima della conferma. La pagina dell'esplorazione si aggiorna subito, accanto alla chat.
 

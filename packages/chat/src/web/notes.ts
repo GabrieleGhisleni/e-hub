@@ -37,6 +37,34 @@ export const NOTE_SAVED_OUTPUT = "Nota salvata.";
 /** The same, in notes mode: the text went into the draft, not into the notes. */
 export const NOTE_DRAFTED_OUTPUT = "Aggiunta alla bozza degli appunti.";
 
+/**
+ * Labels of the save buttons, for callers that store the notes somewhere else (an exploration's notebook, say).
+ * `savedOutput` is what the model reads back after a `save_note` call that went through, outside notes mode.
+ */
+export type NoteLabels = {
+  /** Label of the save button of a reply and of the draft. */
+  save?: string;
+  /** Label of the save button once the reply is saved. */
+  saved?: string;
+  /** Answer sent to the model on success. */
+  savedOutput?: string;
+  /** Title of the card the chat shows for a note the model saved. */
+  savedTitle?: string;
+  /** Placeholder of the question box when notes can be saved. */
+  placeholder?: string;
+};
+
+/** The labels with the defaults filled in. */
+export function resolveNoteLabels(labels?: NoteLabels): Required<NoteLabels> {
+  return {
+    save: labels?.save ?? "Salva come nota",
+    saved: labels?.saved ?? "Salvata",
+    savedOutput: labels?.savedOutput ?? NOTE_SAVED_OUTPUT,
+    savedTitle: labels?.savedTitle ?? "Nota salvata",
+    placeholder: labels?.placeholder ?? "Fai una domanda, o chiedi di salvare una nota",
+  };
+}
+
 export type SaveNoteToolHandlerArgs = {
   toolCall: SaveNoteToolCall;
   onSaveNote?: SaveNote;

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ChatPanel } from "../../src/web/chat-panel.tsx";
 import { MessageList, noteFor } from "../../src/web/message-list.tsx";
 import { chatNoteBody } from "../../src/web/notes.ts";
 import type { ChatUIMessage } from "../../src/shared/types.ts";
@@ -139,5 +140,110 @@ describe("expanded panel text size", () => {
     rerender(<MessageList messages={conversation()} textSize="large" />);
     expect(reply()?.className).toContain("text-[1.0625rem]");
     expect(screen.getByText("Qual è la tesi?").className).toContain("text-[1.0625rem]");
+  });
+});
+
+describe("noteLabels", () => {
+  it("renames the save button and the saved one, and keeps the defaults otherwise", async () => {
+    const onSaveNote = vi.fn(() => Promise.resolve());
+    render(
+      <MessageList
+        messages={conversation()}
+        onSaveNote={onSaveNote}
+        noteLabels={{ save: "Aggiungi al quaderno", saved: "Nel quaderno" }}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Salva come nota" })).toBeNull();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Aggiungi al quaderno" })[0] as HTMLElement);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Nel quaderno" })).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Aggiungi al quaderno" })).toBeTruthy();
+  });
+
+  it("reads a save_note result of the custom savedOutput as saved, not as a failure", () => {
+    const messages: ChatUIMessage[] = [
+      user("u1", "Aggiungilo al quaderno"),
+      assistant("a1", [
+        {
+          type: "tool-save_note",
+          toolCallId: "c1",
+          state: "output-available",
+          input: { text: "**Tesi** (cap. 2)" },
+          output: "Aggiunto in fondo al quaderno.",
+        } as unknown as ChatUIMessage["parts"][number],
+      ]),
+    ];
+    render(<MessageList messages={messages} noteLabels={{ savedOutput: "Aggiunto in fondo al quaderno." }} />);
+    expect(screen.getByText("Nota salvata")).toBeTruthy();
+    expect(screen.queryByText("Aggiunto in fondo al quaderno.")).toBeNull();
+  });
+
+  it("titles the card of a saved note with savedTitle", () => {
+    const messages: ChatUIMessage[] = [
+      user("u1", "Aggiungilo al quaderno"),
+      assistant("a1", [
+        {
+          type: "tool-save_note",
+          toolCallId: "c1",
+          state: "output-available",
+          input: { text: "**Tesi** (cap. 2)" },
+          output: "Aggiunto in fondo al quaderno.",
+        } as unknown as ChatUIMessage["parts"][number],
+      ]),
+    ];
+    render(
+      <MessageList
+        messages={messages}
+        noteLabels={{ savedOutput: "Aggiunto in fondo al quaderno.", savedTitle: "Aggiunto al quaderno" }}
+      />,
+    );
+    expect(screen.getByText("Aggiunto al quaderno")).toBeTruthy();
+    expect(screen.queryByText("Nota salvata")).toBeNull();
+  });
+
+  it("keeps the failure title of the card when savedTitle is set", () => {
+    const messages: ChatUIMessage[] = [
+      user("u1", "Aggiungilo al quaderno"),
+      assistant("a1", [
+        {
+          type: "tool-save_note",
+          toolCallId: "c1",
+          state: "output-available",
+          input: { text: "**Tesi**" },
+          output: "Nota non salvata: rifiutata",
+        } as unknown as ChatUIMessage["parts"][number],
+      ]),
+    ];
+    render(<MessageList messages={messages} noteLabels={{ savedTitle: "Aggiunto al quaderno" }} />);
+    expect(screen.getByText("Nota non salvata: rifiutata")).toBeTruthy();
+    expect(screen.queryByText("Aggiunto al quaderno")).toBeNull();
+  });
+
+  it("shows the placeholder of the question box from noteLabels when notes can be saved", () => {
+    const placeholder = "Fai una domanda, o chiedi di aggiungere al quaderno";
+    const source = { kind: "episode", id: "alpha" } as const;
+    const { unmount } = render(
+      <ChatPanel
+        source={source}
+        title="Episodio alfa"
+        open
+        onOpenChange={() => {}}
+        onSaveNote={vi.fn()}
+        noteLabels={{ placeholder }}
+      />,
+    );
+    expect((screen.getByLabelText("Messaggio") as HTMLTextAreaElement).placeholder).toBe(placeholder);
+    unmount();
+
+    render(<ChatPanel source={source} title="Episodio alfa" open onOpenChange={() => {}} />);
+    expect((screen.getByLabelText("Messaggio") as HTMLTextAreaElement).placeholder).toBe("Fai una domanda");
+  });
+
+  it("keeps the default placeholder when the caller does not set one", () => {
+    const source = { kind: "episode", id: "alpha" } as const;
+    render(<ChatPanel source={source} title="Episodio alfa" open onOpenChange={() => {}} onSaveNote={vi.fn()} />);
+    expect((screen.getByLabelText("Messaggio") as HTMLTextAreaElement).placeholder).toBe(
+      "Fai una domanda, o chiedi di salvare una nota",
+    );
   });
 });

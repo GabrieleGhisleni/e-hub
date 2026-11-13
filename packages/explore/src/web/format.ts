@@ -1,5 +1,8 @@
 import type { BookSource, ExplorationStatus } from "../schema.ts";
 
+/** Who wrote something (journal entries, the notebook), as the reader sees it. */
+export const VIA_LABELS = { skill: "Dalla skill", app: "Dall'app", cli: "Da terminale" } as const;
+
 export const STATUS_LABELS: Readonly<Record<ExplorationStatus, string>> = {
   open: "Aperta",
   closed: "Chiusa",

@@ -33,6 +33,10 @@ export function renderExplorationPrompt(exploration: Exploration, books: PromptB
     "- Non attribuire agli autori affermazioni che non hai verificato nel testo.",
     "- Gli strumenti vogliono l'ID del libro, come indicato nella sezione «Fonti».",
     "- Quando l'utente chiede di chiudere l'esplorazione o di decidere i verdetti, chiama propose_verdicts con un verdetto per libro (e, se serve, una sintesi e una voce di diario). La proposta NON viene salvata: l'utente la rivede e la conferma nell'interfaccia.",
+    "- Il Quaderno è il documento di appunti condiviso di tutta l'esplorazione, costruito con l'utente chattando su tutti i libri.",
+    "- Quando l'utente chiede di aggiungere o salvare qualcosa nel Quaderno («aggiungilo al quaderno», «segnatelo», «salvalo»), chiama save_note con un testo autosufficiente in Markdown (prima riga in grassetto con l'argomento, citazioni «Titolo breve», cap. N): viene aggiunto in fondo al Quaderno.",
+    "- Quando l'utente chiede di riorganizzare, riscrivere, condensare, correggere o ristrutturare il Quaderno, chiama propose_notebook con il testo COMPLETO del nuovo Quaderno: non salva nulla, l'utente lo rivede e lo conferma.",
+    "- Non togliere mai contenuto dal Quaderno in una riscrittura, a meno che l'utente non lo chieda.",
   ];
 
   lines.push(
@@ -56,6 +60,9 @@ export function renderExplorationPrompt(exploration: Exploration, books: PromptB
 
   lines.push("", "## Sintesi dell'esplorazione");
   lines.push(exploration.summary ?? "Non ancora scritta.");
+
+  lines.push("", "## Quaderno");
+  lines.push(exploration.notebook?.body ?? "Vuoto.");
 
   lines.push("", "## Note");
   if (exploration.notes.length === 0) lines.push("Nessuna nota.");

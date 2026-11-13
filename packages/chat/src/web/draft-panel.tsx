@@ -15,6 +15,7 @@ export function DraftPanel({
   onChange,
   onSave,
   onClose,
+  saveLabel = "Salva come nota",
   className,
 }: {
   entries: readonly DraftEntry[];
@@ -23,6 +24,8 @@ export function DraftPanel({
   onSave: (text: string) => void | Promise<void>;
   /** Docked panel: back to the conversation. */
   onClose?: () => void;
+  /** Label of the save button. */
+  saveLabel?: string;
   className?: string;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
@@ -190,7 +193,7 @@ export function DraftPanel({
           onClick={() => void save()}
         >
           {status === "saved" && entries.length === 0 ? <Check aria-hidden /> : <NotebookPen aria-hidden />}
-          Salva come nota
+          {saveLabel}
         </Button>
       </div>
     </aside>

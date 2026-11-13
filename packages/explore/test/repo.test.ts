@@ -9,16 +9,19 @@ import {
   addJournal,
   addLibraryBook,
   addNote,
+  appendNotebook,
   checkExplorations,
   createExploration,
   listExplorations,
   readExploration,
   removeBook,
   removeNote,
+  setNotebook,
   setVerdict,
   updateExploration,
   updateNote,
 } from "../src/node/index.ts";
+import { MAX_NOTEBOOK_LENGTH } from "../src/schema.ts";
 import { fakeLibrary, FAKE_EPUB } from "./fakes.ts";
 
 let dir: string;
@@ -296,5 +299,51 @@ describe("concurrency and files on disk", () => {
     await writeFile(path.join(dir, "2026-11-12-altro.json"), content);
     const check = await checkExplorations();
     expect(check.problems.map((p) => p.message)).toContain("Il nome del file non corrisponde all'ID: 2026-11-12-altro.json");
+  });
+});
+
+describe("notebook", () => {
+  it("sets the notebook, replaces it, and clears it with an empty body", async () => {
+    const deps = lib();
+    const e = await createExploration({ title: "T", question: "Q" }, AT, deps);
+    expect(e.notebook).toBeUndefined();
+    const set = await setNotebook(e.id, "  # Titolo  ", "app", AT);
+    expect(set.notebook).toEqual({ body: "# Titolo", updatedAt: AT.toISOString(), via: "app" });
+    const replaced = await setNotebook(e.id, "Nuovo", "cli", AT);
+    expect(replaced.notebook).toMatchObject({ body: "Nuovo", via: "cli" });
+    const cleared = await setNotebook(e.id, "   ", "app", AT);
+    expect(cleared.notebook).toBeUndefined();
+    expect(cleared).not.toHaveProperty("notebook");
+    expect((await readExploration(e.id)).notebook).toBeUndefined();
+  });
+
+  it("appends after a blank line, and starts an empty notebook with the first text", async () => {
+    const deps = lib();
+    const e = await createExploration({ title: "T", question: "Q" }, AT, deps);
+    const first = await appendNotebook(e.id, "  Primo  ", "skill", AT);
+    expect(first.notebook).toMatchObject({ body: "Primo", via: "skill" });
+    const second = await appendNotebook(e.id, "Secondo", "app", AT);
+    expect(second.notebook).toMatchObject({ body: "Primo\n\nSecondo", via: "app" });
+    await expectError(appendNotebook(e.id, "  \n ", "cli", AT), "invalid-input");
+  });
+
+  it("refuses a notebook over the limit, both when setting and when appending", async () => {
+    const deps = lib();
+    const e = await createExploration({ title: "T", question: "Q" }, AT, deps);
+    const tooLong = "x".repeat(MAX_NOTEBOOK_LENGTH + 1);
+    await expectError(setNotebook(e.id, tooLong, "cli", AT), "invalid-input");
+    const fits = "x".repeat(MAX_NOTEBOOK_LENGTH - 2);
+    await setNotebook(e.id, fits, "cli", AT);
+    const error = await expectError(appendNotebook(e.id, "abc", "cli", AT), "invalid-input");
+    expect(error.message).toContain("Il quaderno supera");
+    expect((await readExploration(e.id)).notebook?.body).toBe(fits);
+  });
+
+  it("moves the exploration's updatedAt forward on every notebook write", async () => {
+    const deps = lib();
+    const e = await createExploration({ title: "T", question: "Q" }, AT, deps);
+    const later = new Date(AT.getTime() + 60_000);
+    const after = await setNotebook(e.id, "Testo", "app", later);
+    expect(after.updatedAt).toBe(later.toISOString());
   });
 });

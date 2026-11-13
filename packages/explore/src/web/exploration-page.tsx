@@ -10,13 +10,19 @@ import {
   DevExplorationToolbar,
   DevNoteComposer,
   DevNoteDelete,
+  DevNotebookEditor,
   DevSourceActions,
 } from "./dev-slots.tsx";
-import { ORIGIN_LABELS, STATUS_LABELS, formatDay, libraryBookHref } from "./format.ts";
+import {
+  ORIGIN_LABELS,
+  STATUS_LABELS,
+  VIA_LABELS,
+  formatDay,
+  libraryBookHref,
+} from "./format.ts";
+import { NotebookView } from "./notebook-view.tsx";
 import { ExploreErrorBanner, MessageState } from "./status.tsx";
 import { ExploreApiError, type ExploreStore, exploreStore, useExploration } from "./store.ts";
-
-const VIA_LABELS = { skill: "Dalla skill", app: "Dall'app", cli: "Da terminale" } as const;
 
 type LoadState =
   | { status: "loading" }
@@ -113,7 +119,7 @@ function NoteItem({
   );
 }
 
-/** One exploration: question, sources with verdicts, summary, notes and journal. Read-only unless `devTools`. */
+/** One exploration: question, sources with verdicts, notebook, summary, notes and journal. Read-only unless `devTools`. */
 export function ExplorationPage({
   store = exploreStore,
   devTools = import.meta.env.DEV,
@@ -229,6 +235,23 @@ export function ExplorationPage({
                 />
               ))}
             </ul>
+          )}
+        </section>
+
+        <section aria-labelledby="quaderno" className="mt-12 max-w-[48rem]">
+          <SectionTitle id="quaderno">Quaderno</SectionTitle>
+          {devTools && DevNotebookEditor ? (
+            <div className="mt-6">
+              <Suspense
+                fallback={<NotebookView notebook={exploration.notebook} />}
+              >
+                <DevNotebookEditor exploration={exploration} store={store} />
+              </Suspense>
+            </div>
+          ) : (
+            <div className="mt-6">
+              <NotebookView notebook={exploration.notebook} />
+            </div>
           )}
         </section>
 

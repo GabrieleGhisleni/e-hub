@@ -6,6 +6,7 @@ import { createLlm, loadAiConfig, type ToolSet } from "@ehub/chat/node";
 import { startMockLlm, type MockLlm } from "@ehub/chat/testing";
 import type { BookSummary, BookText, TextManifest } from "@ehub/library/explore";
 import { createExplorationChatSource, type ExplorationChatDeps } from "../src/chat/index.ts";
+import { NOTEBOOK_PROPOSAL_MESSAGE, ProposeNotebookInput } from "../src/chat/notebook.ts";
 import { PROPOSAL_ACCEPTED_MESSAGE, ProposeVerdictsInput, checkVerdictProposal } from "../src/chat/proposal.ts";
 import { ExploreError } from "../src/node/index.ts";
 import type { BookSource, Exploration } from "../src/schema.ts";
@@ -217,13 +218,42 @@ describe("createExplorationChatSource: prompt", () => {
     expect(system).toContain("chiama propose_verdicts");
     expect(system).toContain("NON viene salvata");
   });
+
+  it("shows the whole notebook after the summary, or «Vuoto.» when there is none", async () => {
+    const system = (await createExplorationChatSource(fakeDeps().deps)(EXPLORATION_ID))!.system;
+    expect(system).toContain("## Quaderno\nVuoto.\n");
+    expect(system.indexOf("## Sintesi dell'esplorazione")).toBeLessThan(system.indexOf("## Quaderno"));
+    expect(system.indexOf("## Quaderno")).toBeLessThan(system.indexOf("## Note"));
+
+    const { deps } = fakeDeps();
+    const base = await deps.readExploration!(EXPLORATION_ID);
+    const withBook = createExplorationChatSource({
+      ...deps,
+      readExploration: async () => ({
+        ...base,
+        notebook: { body: "**Tesi** (cap. 2)\n\nIl ressentimento è il filo rosso.", updatedAt: base.updatedAt, via: "app" },
+      }),
+    });
+    const notebook = (await withBook(EXPLORATION_ID))!.system;
+    expect(notebook).toContain("## Quaderno\n**Tesi** (cap. 2)\n\nIl ressentimento è il filo rosso.\n");
+    expect(notebook).not.toContain("Vuoto.");
+  });
+
+  it("tells the model how to use the notebook: save_note to add, propose_notebook to rewrite", async () => {
+    const system = (await createExplorationChatSource(fakeDeps().deps)(EXPLORATION_ID))!.system;
+    expect(system).toContain("Il Quaderno è il documento di appunti condiviso");
+    expect(system).toContain("chiama save_note");
+    expect(system).toContain("chiama propose_notebook con il testo COMPLETO");
+    expect(system).toContain("non salva nulla");
+    expect(system).toContain("Non togliere mai contenuto dal Quaderno");
+  });
 });
 
 describe("createExplorationChatSource: tools and text", () => {
   it("offers the multi-book tools and propose_verdicts", async () => {
     const source = await createExplorationChatSource(fakeDeps().deps)(EXPLORATION_ID);
     expect(Object.keys(source!.tools!).sort()).toEqual(
-      ["list_chapters", "propose_verdicts", "read_chapter", "search_book"].sort(),
+      ["list_chapters", "propose_notebook", "propose_verdicts", "read_chapter", "search_book"].sort(),
     );
   });
 
@@ -303,6 +333,29 @@ describe("propose_verdicts", () => {
     ).toBe(false);
     const parsed = ProposeVerdictsInput.parse(valid);
     expect(checkVerdictProposal(parsed, [{ id: LET_THEM, title: "x" }, { id: GENEALOGY, title: "y" }])).toEqual([]);
+  });
+});
+
+describe("propose_notebook", () => {
+  it("answers that the proposal is shown and not saved yet", async () => {
+    const source = await createExplorationChatSource(fakeDeps().deps)(EXPLORATION_ID);
+    const reply = await callTool(source!.tools!, "propose_notebook", { body: "**Tesi**\n\nTesto riscritto." });
+    expect(reply).toBe(NOTEBOOK_PROPOSAL_MESSAGE);
+    expect(reply).toContain("Non è ancora stata salvata");
+  });
+
+  it("refuses an empty text, with the reason, so the model can retry", async () => {
+    const source = await createExplorationChatSource(fakeDeps().deps)(EXPLORATION_ID);
+    const reply = await callTool(source!.tools!, "propose_notebook", { body: "   " });
+    expect(reply).toContain("Il quaderno proposto non è valido");
+    expect(reply).toContain("Correggi la proposta");
+  });
+
+  it("validates the input with the schema the web card uses too", () => {
+    expect(ProposeNotebookInput.safeParse({ body: "Un testo." }).success).toBe(true);
+    expect(ProposeNotebookInput.safeParse({ body: "  " }).success).toBe(false);
+    expect(ProposeNotebookInput.safeParse({ body: "x".repeat(100_001) }).success).toBe(false);
+    expect(ProposeNotebookInput.safeParse({ body: "ok", extra: 1 }).success).toBe(false);
   });
 });
 

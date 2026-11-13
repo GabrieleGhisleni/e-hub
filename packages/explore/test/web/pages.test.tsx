@@ -70,6 +70,31 @@ describe("exploration detail (read-only)", () => {
     expect(screen.queryByRole("button", { name: /Modifica verdetto/ })).toBeNull();
   });
 
+  it("shows the notebook between the sources and the summary, as Markdown", async () => {
+    const exploration = sampleExploration({
+      notebook: { body: "## Appunti\n\nUna **prova** sul quaderno.", updatedAt: "2026-11-13T10:00:00.000Z", via: "skill" },
+    });
+    renderDetail(createMemoryExploreStore([exploration]));
+
+    await screen.findByRole("heading", { name: "Quaderno" });
+    expect(screen.getByRole("heading", { name: "Appunti" })).toBeTruthy();
+    expect(screen.getByText("prova").tagName).toBe("STRONG");
+    expect(screen.getByText(/Aggiornato il 13 novembre 2026/)).toBeTruthy();
+    expect(screen.getByText(/Dalla skill/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Modifica/ })).toBeNull();
+
+    const headings = screen.getAllByRole("heading").map((h) => h.textContent);
+    expect(headings.indexOf("Fonti")).toBeLessThan(headings.indexOf("Quaderno"));
+    expect(headings.indexOf("Quaderno")).toBeLessThan(headings.indexOf("Sintesi"));
+  });
+
+  it("says the notebook is empty when there is none", async () => {
+    renderDetail(createMemoryExploreStore([sampleExploration()]));
+    await screen.findByRole("heading", { name: "Quaderno" });
+    expect(screen.getByText("Il quaderno è vuoto.")).toBeTruthy();
+    expect(screen.queryByText(/Scrivilo qui/)).toBeNull();
+  });
+
   it("says so when the exploration does not exist", async () => {
     renderDetail(createMemoryExploreStore([]));
     expect(await screen.findByText("Esplorazione non trovata")).toBeTruthy();

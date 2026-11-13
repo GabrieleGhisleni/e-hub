@@ -21,6 +21,7 @@ import {
 } from "@ehub/library/explore";
 import { ExploreError, readExploration } from "../node/repo.ts";
 import { ExplorationId, type BookSource, type Exploration } from "../schema.ts";
+import { NOTEBOOK_PROPOSAL_MESSAGE, ProposeNotebookInput } from "./notebook.ts";
 import { PROPOSAL_ACCEPTED_MESSAGE, ProposeVerdictsInput, checkVerdictProposal } from "./proposal.ts";
 import { type PromptBook, renderExplorationPrompt } from "./prompt.ts";
 
@@ -101,6 +102,7 @@ export function createExplorationChatSource(
         })),
       ),
       propose_verdicts: proposeVerdictsTool(exploration.sources),
+      propose_notebook: proposeNotebookTool(),
     };
     return { system, tokens: estimateTokens(system), tools };
   };
@@ -125,6 +127,26 @@ function proposeVerdictsTool(sources: BookSource[]) {
         ].join("\n");
       }
       return PROPOSAL_ACCEPTED_MESSAGE;
+    },
+  });
+}
+
+/**
+ * `propose_notebook`: checks the new text of the notebook and answers. It never saves: the web UI shows the text and
+ * the user decides whether it replaces the notebook.
+ */
+function proposeNotebookTool() {
+  return defineTool({
+    description:
+      "Propone il testo completo di un nuovo Quaderno dell'esplorazione, da usare per riorganizzare, riscrivere, condensare o correggere quello attuale. Non salva nulla: l'utente rivede il testo e decide se sostituire il Quaderno. Per aggiungere in fondo, usa save_note.",
+    inputSchema: ProposeNotebookInput,
+    execute: (input) => {
+      const parsed = ProposeNotebookInput.safeParse(input);
+      if (!parsed.success) {
+        const message = parsed.error.issues[0]?.message ?? "formato non valido";
+        return `Il quaderno proposto non è valido: ${message}. Correggi la proposta e chiama di nuovo propose_notebook.`;
+      }
+      return NOTEBOOK_PROPOSAL_MESSAGE;
     },
   });
 }

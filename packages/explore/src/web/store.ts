@@ -5,6 +5,7 @@ import type {
   ExplorationStatus,
   JournalEntry,
   Note,
+  Notebook,
   VerdictDecision,
 } from "../schema.ts";
 
@@ -87,6 +88,10 @@ export interface ExploreStore {
   addNote(id: string, input: { body: string; book?: string }): Promise<Exploration>;
   removeNote(id: string, noteId: string): Promise<Exploration>;
   addJournal(id: string, text: string): Promise<Exploration>;
+  /** Replaces the notebook; an empty body clears it (`PUT /api/explore/:id/notebook`). */
+  setNotebook(id: string, body: string): Promise<Exploration>;
+  /** Appends text to the notebook after a blank line (`POST /api/explore/:id/notebook/append`). */
+  appendNotebook(id: string, text: string): Promise<Exploration>;
   dismissError(): void;
 }
 
@@ -177,6 +182,8 @@ export function createStaticExploreStore(explorations: readonly unknown[]): Expl
     addNote: reject,
     removeNote: reject,
     addJournal: reject,
+    setNotebook: reject,
+    appendNotebook: reject,
     dismissError: () => {},
   };
 }
@@ -285,6 +292,8 @@ export function createHttpExploreStore(
     addNote: (id, input) => send("POST", `${at(id)}/notes`, input),
     removeNote: (id, noteId) => send("DELETE", `${at(id)}/notes/${encodeURIComponent(noteId)}`),
     addJournal: (id, text) => send("POST", `${at(id)}/journal`, { text }),
+    setNotebook: (id, body) => send("PUT", `${at(id)}/notebook`, { body }),
+    appendNotebook: (id, text) => send("POST", `${at(id)}/notebook/append`, { text }),
     dismissError: () => state.setMeta({ error: null }),
   };
 }
@@ -380,6 +389,24 @@ export function createMemoryExploreStore(
         const entry: JournalEntry = { at, via: "app", text: text.trim() };
         return { ...e, journal: [...e.journal, entry] };
       }),
+    setNotebook: async (id, body) =>
+      change(id, (e, at) => {
+        const text = body.trim();
+        if (text === "") {
+          const { notebook: _cleared, ...rest } = e;
+          return rest;
+        }
+        const notebook: Notebook = { body: text, updatedAt: at, via: "app" };
+        return { ...e, notebook };
+      }),
+    appendNotebook: async (id, text) =>
+      change(id, (e, at) => {
+        const addition = text.trim();
+        if (addition === "") throw new ExploreApiError("Il testo da aggiungere al quaderno è vuoto.", 422);
+        const body = e.notebook ? `${e.notebook.body}\n\n${addition}` : addition;
+        const notebook: Notebook = { body, updatedAt: at, via: "app" };
+        return { ...e, notebook };
+      }),
     dismissError: () => {},
   };
 }
@@ -412,6 +439,8 @@ export const exploreStore: ExploreStore = {
   addNote: (id, input) => active.addNote(id, input),
   removeNote: (id, noteId) => active.removeNote(id, noteId),
   addJournal: (id, text) => active.addJournal(id, text),
+  setNotebook: (id, body) => active.setNotebook(id, body),
+  appendNotebook: (id, text) => active.appendNotebook(id, text),
   dismissError: () => active.dismissError(),
 };
 

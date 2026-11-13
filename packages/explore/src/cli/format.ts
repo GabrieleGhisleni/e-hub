@@ -43,6 +43,9 @@ export function formatExploration(e: Exploration): string[] {
   lines.push("Sintesi");
   lines.push(e.summary ? indent(e.summary) : "  nessuna sintesi");
   lines.push("");
+  lines.push("Quaderno");
+  lines.push(e.notebook ? indent(e.notebook.body) : "  Vuoto");
+  lines.push("");
   lines.push(`Note (${e.notes.length})`);
   if (e.notes.length === 0) lines.push("  nessuna nota");
   for (const note of e.notes) {

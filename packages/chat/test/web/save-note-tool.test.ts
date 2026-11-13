@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { chatNoteBody, handleSaveNoteToolCall } from "../../src/web/notes.ts";
+import { chatNoteBody, handleSaveNoteToolCall, resolveNoteLabels } from "../../src/web/notes.ts";
 
 const call = (toolName: string, input: unknown) => ({ toolName, toolCallId: "call-1", input });
 
@@ -111,5 +111,39 @@ describe("chatNoteBody without a question", () => {
 
   it("skips an empty question", () => {
     expect(chatNoteBody({ question: "   ", answer: "Risposta." })).toBe("Risposta.\n\n*— Dalla chat con l'AI*");
+  });
+});
+
+describe("resolveNoteLabels", () => {
+  it("fills in the chat's own labels by default", () => {
+    expect(resolveNoteLabels()).toEqual({
+      save: "Salva come nota",
+      saved: "Salvata",
+      savedOutput: "Nota salvata.",
+      savedTitle: "Nota salvata",
+      placeholder: "Fai una domanda, o chiedi di salvare una nota",
+    });
+  });
+
+  it("keeps the labels the caller gives and defaults the others", () => {
+    expect(resolveNoteLabels({ save: "Aggiungi", savedOutput: "Fatto." })).toEqual({
+      save: "Aggiungi",
+      saved: "Salvata",
+      savedOutput: "Fatto.",
+      savedTitle: "Nota salvata",
+      placeholder: "Fai una domanda, o chiedi di salvare una nota",
+    });
+  });
+
+  it("takes the card title and the placeholder from the caller", () => {
+    expect(
+      resolveNoteLabels({
+        savedTitle: "Aggiunto al quaderno",
+        placeholder: "Fai una domanda, o chiedi di aggiungere al quaderno",
+      }),
+    ).toMatchObject({
+      savedTitle: "Aggiunto al quaderno",
+      placeholder: "Fai una domanda, o chiedi di aggiungere al quaderno",
+    });
   });
 });

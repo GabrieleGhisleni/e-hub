@@ -186,3 +186,35 @@ describe("explore CLI", () => {
     expect(help.out).toContain("verdict");
   });
 });
+
+describe("explore CLI: notebook", () => {
+  it("replaces, appends to and clears the notebook, and show prints it", async () => {
+    await cli(["new", "--title", "Prova", "--question", "Q"]);
+    expect((await cli(["show", ID])).out).toMatch(/Quaderno\n\s+Vuoto/);
+
+    const replaced = await cli(["notebook", ID, "--text", "# Primo"]);
+    expect(replaced.code).toBe(0);
+    expect(replaced.out).toContain("Quaderno salvato.");
+    expect((await cli(["show", ID])).out).toContain("# Primo");
+
+    const appended = await cli(["notebook", ID, "--text", "Secondo", "--append", "--via", "skill"]);
+    expect(appended.out).toContain("Testo aggiunto al quaderno.");
+    const shown = await cli(["show", ID]);
+    expect(shown.out).toMatch(/# Primo\n\s*\n\s+Secondo/);
+
+    const json = await cli(["notebook", ID, "--text-file", "-", "--append", "--json"], { stdin: "Terzo\n" });
+    expect(JSON.parse(json.out)).toMatchObject({ notebook: { body: "# Primo\n\nSecondo\n\nTerzo", via: "cli" } });
+
+    const cleared = await cli(["notebook", ID, "--clear"]);
+    expect(cleared.out).toContain("Quaderno svuotato.");
+    expect((await cli(["show", ID])).out).toMatch(/Quaderno\n\s+Vuoto/);
+  });
+
+  it("refuses --clear with --append or --text, and a missing source of text", async () => {
+    await cli(["new", "--title", "Prova", "--question", "Q"]);
+    expect((await cli(["notebook", ID, "--clear", "--append"])).code).toBe(2);
+    expect((await cli(["notebook", ID, "--clear", "--text", "x"])).code).toBe(2);
+    expect((await cli(["notebook", ID])).code).toBe(2);
+    expect((await cli(["notebook", ID, "--text", "  ", "--append"])).code).toBe(1);
+  });
+});

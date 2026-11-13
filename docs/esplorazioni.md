@@ -61,6 +61,7 @@ Rispetto alla **skill di studio** (PLAN della libreria, §11-bis): l'esplorazion
 - **Sintesi**: un breve testo sull'esito dell'esplorazione.
 - **Note**: le risposte utili diventano note dell'esplorazione, collegate facoltativamente a un libro. Stanno nello stesso file, non nel pacchetto `notes`.
 - **Diario**: una voce per sessione (skill o app) con cosa è emerso e cosa resta da vedere. È il ponte tra le due strade.
+- **Quaderno**: un solo documento Markdown condiviso per tutta l'esplorazione, accanto alle note separate (vedi §12, «Quaderno»).
 
 **Solo in locale (cache, fuori da git):** testo dei capitoli, trascrizioni ed eventuali sottoprodotti futuri (mappe, indici).
 
@@ -149,7 +150,8 @@ L'ID è la data più lo slug del titolo (`2026-11-12-nietzsche-e-la-morale-crist
 - `verdict`: `null` finché non c'è, altrimenti `decision` (`all` = leggere tutto, `parts` = leggere i capitoli in `chapters`, `skip` = non leggere, `undecided` = da decidere), `reason` (una riga), `decidedAt`, `via` (`skill`, `app` o `cli`);
 - `summary`: la sintesi dell'esito, o `null`;
 - `notes[]`: `id`, `body`, `book` facoltativo, date e `via`;
-- `journal[]`: `at`, `via`, `text`.
+- `journal[]`: `at`, `via`, `text`;
+- `notebook` (facoltativo, assente = quaderno vuoto): `{ body, updatedAt, via }`, il Markdown condiviso (vedi «Quaderno»).
 
 Titolo e autori dei libri sono copiati nel file, come fanno le note: `/explore` e i badge funzionano sul sito statico senza caricare il catalogo.
 
@@ -175,6 +177,7 @@ pnpm --silent explore verdict <id> --book <id> --decision all|parts|skip|undecid
 pnpm --silent explore note <id> (--text T | --text-file F|-) [--book <id>] [--via skill]
 pnpm --silent explore journal <id> (--text T | --text-file F|-) [--via skill]
 pnpm --silent explore summary <id> (--text T | --text-file F|- | --clear)
+pnpm --silent explore notebook <id> (--text T | --text-file F|- | --clear) [--append] [--via skill|app|cli]
 pnpm --silent explore close <id> | reopen <id> | validate
 ```
 
@@ -183,9 +186,20 @@ pnpm --silent explore close <id> | reopen <id> | validate
 ### Le due strade sullo stesso file
 
 - **Skill**: avvio o ripresa (`show` per intero, a partire dal diario), `prepare`, lettura dei capitoli dalla cache, citazioni verificate con `grep`, e in chiusura la proposta di verdetti, sintesi e diario che l'utente rivede prima che la CLI li scriva.
-- **App** (`pnpm dev`): `/explore` (elenco, anche sul sito pubblicato), `/explore/<id>` (dettaglio) e, solo in locale, "Nuova esplorazione", la gestione delle fonti, i verdetti a mano, le note e la chat. La chat parte da domanda, sintesi dei capitoli, verdetti, note e diario, e legge il testo con `list_chapters`, `read_chapter` e `search_book` (con l'ID del libro). In chiusura chiama `propose_verdicts`, che **non scrive nulla**: la proposta compare come scheda nella chat, e si salva solo con "Conferma e salva".
+- **App** (`pnpm dev`): `/explore` (elenco, anche sul sito pubblicato), `/explore/<id>` (dettaglio, con il Quaderno in sola lettura anche sul sito) e, solo in locale, "Nuova esplorazione", la gestione delle fonti, i verdetti a mano, le note, il Quaderno (modificabile) e la chat. La chat parte da domanda, sintesi dei capitoli, verdetti, note e diario, e legge il testo con `list_chapters`, `read_chapter` e `search_book` (con l'ID del libro). In chiusura chiama `propose_verdicts`, che **non scrive nulla**: la proposta compare come scheda nella chat, e si salva solo con "Conferma e salva".
 - **Il diario** è ciò che fa continuare dall'altra parte: la skill lo scrive a ogni fine sessione, l'app lo scrive con la conferma della proposta. Le conversazioni restano dove sono (localStorage nell'app, trascrizione di Claude Code).
 - **Badge**: nella pagina di un libro della libreria, "Esplorato in: «titolo» — Leggere i capitoli 2 e 5", con link all'esplorazione. Funziona anche sul sito pubblicato.
+
+### Quaderno (13/11)
+
+Ogni esplorazione ha **un solo documento Markdown condiviso** tra l'utente e Claude: il quaderno, campo `notebook`. È il posto dove stanno appunti lunghi, ragionamenti e risposte che non sono né una nota su un libro né una voce di diario. Le **note separate** restano com'erano: sono brevi, collegabili a un libro, e stanno in `notes[]`.
+
+- **Si scrive da tre parti**: dalla pagina (solo in locale, "Modifica"), dalla chat e dalla skill o dalla CLI.
+- **Dalla chat**: "Salva come nota" diventa "Aggiungi al quaderno", che aggiunge la domanda in grassetto e la risposta in fondo. Il tool `save_note` aggiunge allo stesso modo. Per riscrivere tutto il quaderno, il modello usa `propose_notebook`: compare una scheda, e il testo sostituisce il quaderno solo dopo "Sostituisci il quaderno" (oppure si aggiunge in fondo).
+- **Dalla skill e dalla CLI**: `pnpm --silent explore notebook <id> --append --via skill` aggiunge in fondo; senza `--append` sostituisce; `--clear` svuota.
+- **Pubblicato come il resto**: il quaderno è nel file dell'esplorazione, quindi finisce nel repo e nel sito statico in sola lettura, con la data dell'ultima modifica e chi l'ha scritto (`via`).
+- **Limite**: 100.000 caratteri (`MAX_NOTEBOOK_LENGTH`).
+- Il quaderno si aggiorna in tempo reale nella pagina accanto alla chat. Mentre lo modifichi a mano, una modifica arrivata dalla chat non sovrascrive il tuo testo: ti avvisa, e salvando sostituisci la versione più recente.
 
 ### Prove del 12/11
 

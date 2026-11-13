@@ -11,6 +11,7 @@ import {
   addJournal,
   addLibraryBook,
   addNote,
+  appendNotebook,
   checkExplorations,
   createExploration,
   exploreDataDir,
@@ -18,6 +19,7 @@ import {
   prepareExploration,
   readExploration,
   removeBook,
+  setNotebook,
   setVerdict,
   updateExploration,
 } from "../node/index.ts";
@@ -130,7 +132,7 @@ export function registerCommands(program: Command, ctx: CliContext): void {
 
   program
     .command("show <id>")
-    .description("mostra un'esplorazione: domanda, fonti con verdetto, sintesi, note e diario")
+    .description("mostra un'esplorazione: domanda, fonti con verdetto, sintesi, quaderno, note e diario")
     .option("--json", "stampa JSON")
     .action(async (id: string, options: { json?: boolean }) => {
       const exploration = await readExploration(id);
@@ -328,6 +330,48 @@ export function registerCommands(program: Command, ctx: CliContext): void {
         const summary = await textOption(ctx, options);
         const exploration = await updateExploration(id, { summary });
         reportChange(ctx, exploration, "Sintesi salvata.", options.json);
+      },
+    );
+
+  program
+    .command("notebook <id>")
+    .description("imposta, aggiunge al o svuota il quaderno dell'esplorazione (Markdown condiviso)")
+    .option("--text <testo>", "testo del quaderno")
+    .option("--text-file <file>", "testo da file (- per stdin)")
+    .option("--append", "aggiunge il testo in fondo, dopo una riga vuota (invece di sostituire)")
+    .option("--clear", "svuota il quaderno")
+    .option(...VIA_OPTION)
+    .option("--json", "stampa JSON")
+    .action(
+      async (
+        id: string,
+        options: {
+          text?: string;
+          textFile?: string;
+          append?: boolean;
+          clear?: boolean;
+          via: string;
+          json?: boolean;
+        },
+      ) => {
+        exactlyOne(options, { text: "--text", textFile: "--text-file", clear: "--clear" });
+        if (options.clear && options.append) {
+          throw new UsageError("--clear non si usa con --append");
+        }
+        const via = parseVia(options.via);
+        if (options.clear) {
+          const exploration = await setNotebook(id, "", via);
+          reportChange(ctx, exploration, "Quaderno svuotato.", options.json);
+          return;
+        }
+        const text = await textOption(ctx, options);
+        if (options.append) {
+          const exploration = await appendNotebook(id, text, via);
+          reportChange(ctx, exploration, "Testo aggiunto al quaderno.", options.json);
+          return;
+        }
+        const exploration = await setNotebook(id, text, via);
+        reportChange(ctx, exploration, "Quaderno salvato.", options.json);
       },
     );
 

@@ -12,7 +12,9 @@ import {
   ExplorationStatus,
   JournalEntry,
   MAX_EPUB_BYTES,
+  MAX_NOTEBOOK_LENGTH,
   Note,
+  Notebook,
   Reason,
   Verdict,
   VerdictDecision,
@@ -483,4 +485,65 @@ export async function addJournal(
     "Voce del diario non valida.",
   );
   return mutate(id, (current) => ({ ...current, journal: [...current.journal, entry] }), now);
+}
+
+function notebookTooLong(): ExploreError {
+  return new ExploreError("invalid-input", `Il quaderno supera ${MAX_NOTEBOOK_LENGTH} caratteri.`);
+}
+
+/**
+ * Replaces the notebook with `body` (trimmed). An empty body removes the notebook altogether (it is then empty
+ * again, as if it had never been written).
+ */
+export async function setNotebook(
+  id: string,
+  body: string,
+  via: Via,
+  now = new Date(),
+): Promise<ExplorationT> {
+  const text = body.trim();
+  if (text.length > MAX_NOTEBOOK_LENGTH) throw notebookTooLong();
+  const at = now.toISOString();
+  return mutate(
+    id,
+    (current) => {
+      if (text === "") {
+        const { notebook: _cleared, ...rest } = current;
+        return rest;
+      }
+      const notebook = parseInput(
+        Notebook,
+        { body: text, updatedAt: at, via },
+        "Quaderno non valido.",
+      );
+      return { ...current, notebook };
+    },
+    now,
+  );
+}
+
+/**
+ * Appends `text` (trimmed) to the notebook after a blank line; the first text of an empty notebook is the notebook.
+ */
+export async function appendNotebook(
+  id: string,
+  text: string,
+  via: Via,
+  now = new Date(),
+): Promise<ExplorationT> {
+  const addition = text.trim();
+  if (addition === "") {
+    throw new ExploreError("invalid-input", "Il testo da aggiungere al quaderno è vuoto.");
+  }
+  const at = now.toISOString();
+  return mutate(
+    id,
+    (current) => {
+      const body = current.notebook ? `${current.notebook.body}\n\n${addition}` : addition;
+      if (body.length > MAX_NOTEBOOK_LENGTH) throw notebookTooLong();
+      const notebook = parseInput(Notebook, { body, updatedAt: at, via }, "Quaderno non valido.");
+      return { ...current, notebook };
+    },
+    now,
+  );
 }
