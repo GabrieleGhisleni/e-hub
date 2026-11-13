@@ -17,6 +17,7 @@ import {
   loadLibraryBookText,
   multiBookTools,
   readCachedBookManifest,
+  readExploreBookSummary,
   readLibraryBookSummary,
 } from "@ehub/library/explore";
 import { ExploreError, readExploration } from "../node/repo.ts";
@@ -30,8 +31,10 @@ export type { BookText };
 /** Dependencies, all optional: the defaults read the explorations on disk and the library facade. */
 export type ExplorationChatDeps = {
   readExploration: (id: string) => Promise<Exploration>;
-  /** `summary.json` of a library book, or null. Never called for explore books. */
+  /** `summary.json` of a library book, or null. */
   readLibraryBookSummary: (id: string) => Promise<BookSummary | null>;
+  /** `summary.json` of an explore book, or null (written in the background after the EPUB upload). */
+  readExploreBookSummary: (id: string) => Promise<BookSummary | null>;
   /** The cached manifest of a book, without downloading. */
   readCachedBookManifest: (origin: TextOrigin, id: string) => Promise<TextManifest | undefined>;
   /** The text of a book (library: may download the EPUB; explore: cache only). */
@@ -41,6 +44,7 @@ export type ExplorationChatDeps = {
 export const defaultExplorationChatDeps: ExplorationChatDeps = {
   readExploration,
   readLibraryBookSummary: (id) => readLibraryBookSummary(id),
+  readExploreBookSummary: (id) => readExploreBookSummary(id),
   readCachedBookManifest: (origin, id) => readCachedBookManifest(origin, id),
   loadBookText: (origin, id) =>
     origin === "library" ? loadLibraryBookText(id) : loadExploreBookText(id),
@@ -82,7 +86,9 @@ export function createExplorationChatSource(
     const books = await Promise.all(
       exploration.sources.map(async (source): Promise<PromptBook> => {
         const summary =
-          source.origin === "library" ? await deps.readLibraryBookSummary(source.id) : null;
+          source.origin === "library"
+            ? await deps.readLibraryBookSummary(source.id)
+            : await deps.readExploreBookSummary(source.id);
         const chapters = summary
           ? undefined
           : (await deps.readCachedBookManifest(source.origin, source.id))?.chapters;

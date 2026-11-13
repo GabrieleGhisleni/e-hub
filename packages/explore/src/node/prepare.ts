@@ -16,8 +16,8 @@ export interface PreparedBook {
   chapters: number;
   words: number;
   tokens: number;
-  /** Whether a `summary.json` exists (library books only; `null` for explore books, which have none). */
-  summary: boolean | null;
+  /** Whether a `summary.json` exists (library and explore books alike). */
+  summary: boolean;
   textDir: string;
 }
 
@@ -60,7 +60,7 @@ export async function prepareExploration(
       summary:
         source.origin === "library"
           ? (await library.readLibraryBookSummary(source.id)) !== null
-          : null,
+          : (await library.readExploreBookSummary(source.id)) !== null,
       textDir: prepared.textDir,
     });
   }

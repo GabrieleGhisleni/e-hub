@@ -45,6 +45,21 @@ export interface VerdictInput {
   reason: string;
 }
 
+/** Chapter-summary state of one source (`GET /api/explore/:id/summaries`). */
+export interface BookSummaryStatus {
+  bookId: string;
+  origin: "library" | "explore";
+  state: "none" | "running" | "done" | "failed";
+  /** Chapters done and total while running (total unknown until the chapters are listed). */
+  done?: number;
+  total?: number;
+  error?: string;
+}
+
+export interface SummaryStatusResponse {
+  books: BookSummaryStatus[];
+}
+
 export interface NewExplorationInput {
   title: string;
   question: string;
@@ -84,6 +99,10 @@ export interface ExploreStore {
   addBook(id: string, bookId: string): Promise<Exploration>;
   uploadEpub(id: string, file: File): Promise<Exploration>;
   removeBook(id: string, bookId: string): Promise<Exploration>;
+  /** Chapter-summary state of every source (`GET /api/explore/:id/summaries`). */
+  summaries(id: string): Promise<SummaryStatusResponse>;
+  /** Starts the summary of an explore book again after a failure (`POST /api/explore/:id/books/:bookId/summary`). */
+  retrySummary(id: string, bookId: string): Promise<void>;
   setVerdict(id: string, bookId: string, verdict: VerdictInput): Promise<Exploration>;
   addNote(id: string, input: { body: string; book?: string }): Promise<Exploration>;
   removeNote(id: string, noteId: string): Promise<Exploration>;
@@ -178,6 +197,15 @@ export function createStaticExploreStore(explorations: readonly unknown[]): Expl
     addBook: reject,
     uploadEpub: reject,
     removeBook: reject,
+    // The published site has no summaries in progress: every source reports "none".
+    summaries: async (id) => ({
+      books: (state.get(id)?.sources ?? []).map((source) => ({
+        bookId: source.id,
+        origin: source.origin,
+        state: "none" as const,
+      })),
+    }),
+    retrySummary: reject,
     setVerdict: reject,
     addNote: reject,
     removeNote: reject,
@@ -287,6 +315,25 @@ export function createHttpExploreStore(
         },
       }),
     removeBook: (id, bookId) => send("DELETE", `${at(id)}/books/${encodeURIComponent(bookId)}`),
+    async summaries(id) {
+      const response = await doFetch(`${baseUrl}${at(id)}/summaries`, {
+        headers: { accept: "application/json" },
+      });
+      if (!response.ok) throw await apiError(response);
+      return (await response.json()) as SummaryStatusResponse;
+    },
+    async retrySummary(id, bookId) {
+      // The server only reads the path, but its write rules require a JSON body.
+      const response = await doFetch(
+        `${baseUrl}${at(id)}/books/${encodeURIComponent(bookId)}/summary`,
+        {
+          method: "POST",
+          headers: { accept: "application/json", "content-type": "application/json" },
+          body: "{}",
+        },
+      );
+      if (!response.ok) throw await apiError(response);
+    },
     setVerdict: (id, bookId, verdict) =>
       send("PUT", `${at(id)}/verdicts/${encodeURIComponent(bookId)}`, verdict),
     addNote: (id, input) => send("POST", `${at(id)}/notes`, input),
@@ -309,12 +356,18 @@ function newId(): string {
  */
 export function createMemoryExploreStore(
   initial: readonly Exploration[] = [],
-  options: { libraryBooks?: LibraryBookRef[]; now?: () => Date } = {},
+  options: {
+    libraryBooks?: LibraryBookRef[];
+    now?: () => Date;
+    /** Summary state per book ID; a book not listed reports "none". `retrySummary` sets it to "running". */
+    summaries?: Record<string, Omit<BookSummaryStatus, "bookId" | "origin">>;
+  } = {},
 ): ExploreStore {
   const now = options.now ?? (() => new Date());
   const state = createState(false);
   state.setAll(initial);
   state.setMeta({ status: "ready" });
+  const summaryStates = new Map(Object.entries(options.summaries ?? {}));
 
   const change = (id: string, edit: (current: Exploration, at: string) => Exploration) => {
     const current = state.get(id);
@@ -341,6 +394,27 @@ export function createMemoryExploreStore(
     create: unsupported,
     addBook: unsupported,
     uploadEpub: unsupported,
+    summaries: async (id) => {
+      const current = state.get(id);
+      if (!current) throw new ExploreApiError("Esplorazione non trovata.", 404);
+      return {
+        books: current.sources.map((source) => ({
+          bookId: source.id,
+          origin: source.origin,
+          ...(summaryStates.get(source.id) ?? { state: "none" as const }),
+        })),
+      };
+    },
+    retrySummary: async (id, bookId) => {
+      const current = state.get(id);
+      if (!current) throw new ExploreApiError("Esplorazione non trovata.", 404);
+      const source = current.sources.find((s) => s.id === bookId);
+      if (!source) throw new ExploreApiError("Libro non trovato in questa esplorazione.", 404);
+      if (source.origin !== "explore") {
+        throw new ExploreApiError("Solo i libri esplorati hanno una sintesi da rigenerare.", 400);
+      }
+      summaryStates.set(bookId, { state: "running", done: 0 });
+    },
     update: async (id, patch) =>
       change(id, (e) => ({
         ...e,
@@ -435,6 +509,8 @@ export const exploreStore: ExploreStore = {
   addBook: (id, bookId) => active.addBook(id, bookId),
   uploadEpub: (id, file) => active.uploadEpub(id, file),
   removeBook: (id, bookId) => active.removeBook(id, bookId),
+  summaries: (id) => active.summaries(id),
+  retrySummary: (id, bookId) => active.retrySummary(id, bookId),
   setVerdict: (id, bookId, verdict) => active.setVerdict(id, bookId, verdict),
   addNote: (id, input) => active.addNote(id, input),
   removeNote: (id, noteId) => active.removeNote(id, noteId),

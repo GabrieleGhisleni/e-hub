@@ -8,7 +8,10 @@
  *   PATCH  /api/explore/:id                          { title?, question?, summary?, status? } → Exploration
  *   POST   /api/explore/:id/books                    { bookId } → 201 Exploration
  *   POST   /api/explore/:id/epub                     raw application/epub+zip, header x-file-name → 201 Exploration
+ *                                                   (starts the summary of the new explore book in the background)
  *   DELETE /api/explore/:id/books/:bookId            → Exploration
+ *   GET    /api/explore/:id/summaries                → { books: BookSummaryStatus[] }
+ *   POST   /api/explore/:id/books/:bookId/summary    { } → 202 { state: "running" } (explore books only; restarts)
  *   PUT    /api/explore/:id/verdicts/:bookId         { decision, chapters?, reason } → Exploration
  *   POST   /api/explore/:id/notes                    { id?, body, book? } → 201 Exploration
  *   PATCH  /api/explore/:id/notes/:noteId            { body } → Exploration
@@ -19,6 +22,7 @@
  *
  * Writes come from the app, so they are recorded with `via: "app"`. Error bodies: `{ error, code, details? }`.
  */
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -28,6 +32,7 @@ import {
   ExplorationPatch,
   VerdictInput,
   type LibraryDeps,
+  type SummaryLogger,
   addExploreBook,
   addJournal,
   addLibraryBook,
@@ -40,6 +45,7 @@ import {
   removeNote,
   setNotebook,
   setVerdict,
+  summaryStatuses,
   updateExploration,
   updateNote,
   withLibraryDeps,
@@ -161,6 +167,12 @@ function param(c: Context, name: string, schema: z.ZodType): string {
 
 const explorationId = (c: Context) => param(c, "id", ExplorationId);
 
+/** Summaries run in the dev server: their progress and failures go to the terminal. */
+const summaryLogger: SummaryLogger = {
+  info: (message) => console.info(`[explore] ${message}`),
+  warn: (message) => console.warn(`[explore] ${message}`),
+};
+
 function handleError(error: unknown, c: Context): Response {
   if (error instanceof BadRequest) {
     return c.json({ error: error.message, code: "bad-request", details: error.details }, 400);
@@ -274,7 +286,35 @@ export function createExploreApp(options: ExploreAppOptions = {}): Hono {
     const id = explorationId(c);
     const fileName = uploadFileName(c);
     const bytes = new Uint8Array(await c.req.arrayBuffer());
-    return c.json(await addExploreBook(id, { bytes, fileName }, deps), 201);
+    const exploration = await addExploreBook(id, { bytes, fileName }, deps);
+    // The explore sources with this file (the new one, or the same file re-imported): their summary starts in the
+    // background. The start skips a book whose summary already exists.
+    const md5 = createHash("md5").update(bytes).digest("hex");
+    for (const source of exploration.sources) {
+      if (source.origin === "explore" && source.epub?.md5 === md5) {
+        deps.startExploreSummaryInBackground(source.id, { logger: summaryLogger });
+      }
+    }
+    return c.json(exploration, 201);
+  });
+
+  app.get("/api/explore/:id/summaries", async (c) => {
+    const exploration = await readExploration(explorationId(c));
+    const books = await summaryStatuses(exploration.sources, deps);
+    return c.json({ books });
+  });
+
+  app.post("/api/explore/:id/books/:bookId/summary", async (c) => {
+    const id = explorationId(c);
+    const bookId = param(c, "bookId", BookId);
+    const exploration = await readExploration(id);
+    const source = exploration.sources.find((s) => s.id === bookId);
+    if (!source) throw new ExploreError("not-found", "Libro non trovato in questa esplorazione.");
+    if (source.origin !== "explore") {
+      throw new BadRequest("Solo i libri esplorati hanno una sintesi da rigenerare.");
+    }
+    deps.startExploreSummaryInBackground(bookId, { force: true, logger: summaryLogger });
+    return c.json({ state: "running" }, 202);
   });
 
   app.delete("/api/explore/:id/books/:bookId", async (c) => {

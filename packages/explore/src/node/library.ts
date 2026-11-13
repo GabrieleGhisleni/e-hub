@@ -10,12 +10,15 @@ import {
   type TextManifest,
   bookTextDir,
   ensureBookText,
+  exploreSummaryStatus,
   importExploreEpub,
   listLibraryBookRefs,
   newExploreBookId,
   readCachedBookManifest,
+  readExploreBookSummary,
   readLibraryBookRef,
   readLibraryBookSummary,
+  startExploreSummaryInBackground,
 } from "@ehub/library/explore";
 
 export type { ExploreEpubImport, LibraryBookRef, BookSummary, TextManifest };
@@ -28,6 +31,12 @@ export interface LibraryDeps {
   ensureBookText: typeof ensureBookText;
   readCachedBookManifest: typeof readCachedBookManifest;
   readLibraryBookSummary: typeof readLibraryBookSummary;
+  /** `summary.json` of an explore book, or null. */
+  readExploreBookSummary: typeof readExploreBookSummary;
+  /** Starts the summary of an explore book in the background (never throws, skips an existing summary). */
+  startExploreSummaryInBackground: typeof startExploreSummaryInBackground;
+  /** Progress of the summary of an explore book in this process, else whether it exists. */
+  exploreSummaryStatus: typeof exploreSummaryStatus;
   bookTextDir: typeof bookTextDir;
 }
 
@@ -39,6 +48,9 @@ export const defaultLibraryDeps: LibraryDeps = {
   ensureBookText,
   readCachedBookManifest,
   readLibraryBookSummary,
+  readExploreBookSummary,
+  startExploreSummaryInBackground,
+  exploreSummaryStatus,
   bookTextDir,
 };
 

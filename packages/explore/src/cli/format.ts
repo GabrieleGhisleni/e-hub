@@ -74,7 +74,7 @@ export function formatPrepared(p: PreparedExploration): string[] {
   const lines = [`Preparazione di ${p.id}`];
   for (const book of p.books) {
     const origin = book.origin === "library" ? "libreria" : "esplorato";
-    const summary = book.summary === null ? "" : `, riassunto ${book.summary ? "sì" : "no"}`;
+    const summary = `, riassunto ${book.summary ? "sì" : "no"}`;
     lines.push(
       `  [${origin}] ${book.id}  ${book.title}`,
       `      ${book.chapters} capitoli, ${n(book.words)} parole, ~${n(book.tokens)} token${summary}`,

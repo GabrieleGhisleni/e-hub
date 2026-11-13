@@ -17,7 +17,12 @@ import {
 import { cachedSummaryProgressPath } from "../cache/index.ts";
 import { readBook, writeBookSummary } from "../repo/index.ts";
 import { writeFileAtomic } from "../repo/fs.ts";
-import { type TextContext, type TextManifestChapter, extractBookText } from "../text/index.ts";
+import {
+  type TextContext,
+  type TextManifest,
+  type TextManifestChapter,
+  extractBookText,
+} from "../text/index.ts";
 import { countWords } from "../text/markdown.ts";
 
 /** Chapters shorter than this get `summary: null` and no model call (cover, copyright, index…). */
@@ -130,6 +135,68 @@ export async function summarizeBook(
   id: string,
   options: SummarizeOptions,
 ): Promise<SummarizeResponse> {
+  // A forced run starts from scratch: the chapter summaries saved by an earlier run are dropped.
+  const progressFile = cachedSummaryProgressPath(deps.text.cacheDir, id);
+  if (options.force === true) await rm(progressFile, { force: true });
+  const book = await readBook(deps.dataDir, id);
+  let extracted: Awaited<ReturnType<typeof extractBookText>>;
+  try {
+    extracted = await extractBookText(deps.text, id, {
+      force: options.force === true,
+      ...(deps.repoRoot ? { repoRoot: deps.repoRoot } : {}),
+    });
+  } catch (error) {
+    throw new TextUnavailableError(id, { cause: error });
+  }
+  return summarizeText(
+    deps,
+    {
+      id,
+      title: book.title,
+      authors: book.authors,
+      ...(book.description !== undefined ? { description: book.description } : {}),
+      outputDir: extracted.outputDir,
+      manifest: extracted.manifest,
+      progressFile,
+      write: async (summary) => {
+        await writeBookSummary(deps.dataDir, summary);
+      },
+    },
+    options,
+  );
+}
+
+/** What the summarizer reads and writes for one text: its chapter files, its metadata and where the results go. */
+export interface SummarySource {
+  id: string;
+  title: string;
+  authors: string[];
+  description?: string;
+  /** Folder of the chapter files (`manifest.chapters[i].file`). */
+  outputDir: string;
+  manifest: TextManifest;
+  /** Checkpoint of the chapter summaries: a later run resumes from it; removed once the summary is written. */
+  progressFile: string;
+  /** Stores the finished summary (`summary.json`). */
+  write(summary: BookSummary): Promise<void>;
+}
+
+/** The model side of the summarizer deps (no data dir, no text cache): what `summarizeText` needs. */
+export type SummarizeModelDeps = Pick<
+  SummarizerDeps,
+  "model" | "configuredModel" | "reasoningEffort" | "now" | "sleep" | "retryDelayMs"
+>;
+
+/**
+ * Map/reduce summary of any text (see `SummarySource`): one model call per chapter, then one for the whole text.
+ * The caller reads the text and removes a stale progress file (`force`); this function only reuses the progress file
+ * when `options.force` is not set. Same errors as `summarizeBook`.
+ */
+export async function summarizeText(
+  deps: SummarizeModelDeps,
+  source: SummarySource,
+  options: SummarizeOptions,
+): Promise<SummarizeResponse> {
   const now = deps.now ?? (() => new Date());
   const sleep = deps.sleep ?? defaultSleep;
   const retryDelayMs = deps.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
@@ -137,9 +204,7 @@ export async function summarizeBook(
   const { language, signal } = options;
   const started = now().getTime();
   // Caller's signal, plus the internal stop switch: the first failure stops every model call not yet started.
-  const progressFile = cachedSummaryProgressPath(deps.text.cacheDir, id);
-  // A forced run starts from scratch: the chapter summaries saved by an earlier run are dropped.
-  if (options.force === true) await rm(progressFile, { force: true });
+  const { id, progressFile, outputDir, manifest } = source;
   // Chapter summaries saved by an earlier run, by `${n}:${hash of the chapter text}` (same language only).
   const reusable = options.force === true ? new Map<string, string>() : await readCheckpoint(progressFile, language);
   // Every chapter summary of this run so far (reused or new), written to the progress file after each chapter.
@@ -153,18 +218,6 @@ export async function summarizeBook(
     saving = write.catch(() => {});
     return write;
   };
-
-  const book = await readBook(deps.dataDir, id);
-  let extracted: Awaited<ReturnType<typeof extractBookText>>;
-  try {
-    extracted = await extractBookText(deps.text, id, {
-      force: options.force === true,
-      ...(deps.repoRoot ? { repoRoot: deps.repoRoot } : {}),
-    });
-  } catch (error) {
-    throw new TextUnavailableError(id, { cause: error });
-  }
-  const { outputDir, manifest } = extracted;
 
   const controller = new AbortController();
   const runSignal = controller.signal;
@@ -246,7 +299,7 @@ export async function summarizeBook(
 
   async function summarizeChapter(text: string, chapter: TextManifestChapter): Promise<string> {
     const step = `capitolo ${chapter.n} "${chapter.title}"`;
-    const context = { title: book.title, authors: book.authors.join(", "), chapter };
+    const context = { title: source.title, authors: source.authors.join(", "), chapter };
     const words = countWords(text);
     if (words <= LONG_CHAPTER_WORDS) {
       return modelCall(step, chapterSystem(langName, language), chapterPrompt(context, text));
@@ -324,7 +377,7 @@ export async function summarizeBook(
       "sintesi del libro",
       bookSystem(langName, language),
       bookPrompt(
-        { title: book.title, authors: book.authors.join(", "), description: book.description },
+        { title: source.title, authors: source.authors.join(", "), description: source.description },
         chapters,
       ),
     );
@@ -349,7 +402,7 @@ export async function summarizeBook(
     book: bookText,
     chapters,
   };
-  await writeBookSummary(deps.dataDir, summary);
+  await source.write(summary);
   // summary.json is written: the progress file has nothing left to resume.
   await rm(progressFile, { force: true });
   return {

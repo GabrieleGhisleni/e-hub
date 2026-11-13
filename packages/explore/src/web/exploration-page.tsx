@@ -21,8 +21,15 @@ import {
   libraryBookHref,
 } from "./format.ts";
 import { NotebookView } from "./notebook-view.tsx";
+import { SummaryLine, useSummaryStatus } from "./summary-status.tsx";
 import { ExploreErrorBanner, MessageState } from "./status.tsx";
-import { ExploreApiError, type ExploreStore, exploreStore, useExploration } from "./store.ts";
+import {
+  type BookSummaryStatus,
+  ExploreApiError,
+  type ExploreStore,
+  exploreStore,
+  useExploration,
+} from "./store.ts";
 
 type LoadState =
   | { status: "loading" }
@@ -50,11 +57,16 @@ function SourceRow({
   source,
   store,
   devTools,
+  summary,
+  onRetrySummary,
 }: {
   exploration: Exploration;
   source: BookSource;
   store: ExploreStore;
   devTools: boolean;
+  /** Chapter-summary status (local dev only; undefined elsewhere). */
+  summary?: BookSummaryStatus;
+  onRetrySummary?: (bookId: string) => Promise<void>;
 }) {
   return (
     <li className="flex flex-col gap-2 border-t border-border/80 py-4 first:border-t-0 first:pt-0 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
@@ -73,6 +85,7 @@ function SourceRow({
             Apri la pagina del libro <ExternalLinkIcon aria-hidden className="size-3.5" />
           </Link>
         ) : null}
+        <SummaryLine status={summary} onRetry={onRetrySummary} />
       </div>
       <div className="flex min-w-0 flex-col gap-1 sm:max-w-[60%] sm:items-end sm:text-right">
         <Badge variant={source.verdict ? "secondary" : "outline"}>
@@ -131,6 +144,7 @@ export function ExplorationPage({
   const { id: rawId = "" } = useParams();
   const exploration = useExploration(rawId, store);
   const [load, setLoad] = useState<LoadState>({ status: "loading" });
+  const summaries = useSummaryStatus(rawId, { enabled: devTools, store });
 
   useEffect(() => {
     let current = true;
@@ -232,6 +246,8 @@ export function ExplorationPage({
                   source={source}
                   store={store}
                   devTools={devTools}
+                  summary={summaries.statuses.get(source.id)}
+                  onRetrySummary={summaries.retry}
                 />
               ))}
             </ul>

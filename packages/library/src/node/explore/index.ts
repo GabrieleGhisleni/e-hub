@@ -7,22 +7,28 @@
  * from `loadConfig()`, read only when a default is needed.
  */
 import { createHash } from "node:crypto";
-import { writeFile } from "node:fs/promises";
+import { rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { AiConfigError } from "@ehub/chat/node";
 import { generateBookId, isBookId } from "../../shared/ids.ts";
-import type { Book, BookSummary } from "../../shared/schema.ts";
+import { type Book, type BookSummary, BookSummarySchema } from "../../shared/schema.ts";
 import { bookSlug } from "../../shared/slug.ts";
 import { bookHref } from "../../web/lib/format.ts";
 import { CACHE_TEXT_DIR, cachedTextDir, ensureDir } from "../cache/index.ts";
 import { loadConfig } from "../config/index.ts";
 import { extractEpubMetadata } from "../epub/index.ts";
+import { type SummarizeProgress, TextUnavailableError, summarizeText } from "../summary/index.ts";
+import { type SummaryModel, loadLocalEnv, summaryModelFromEnv } from "../summary/llm.ts";
 import {
   BookNotFoundError,
   assertBookId,
   listBookIds,
   readAllBooks,
   readBook,
+  formatJson,
   readBookSummary,
+  readTextIfExists,
+  writeFileAtomic,
 } from "../repo/index.ts";
 import { bookTextFromDir, readCachedManifest, type BookText } from "../chat/text.ts";
 import {
@@ -245,4 +251,191 @@ export async function readLibraryBookSummary(
 ): Promise<BookSummary | null> {
   if (!isBookId(id)) return null;
   return readBookSummary(dataDirOf(opts.dataDir), id);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Summaries of the explore books: `<cache>/explore/books/<id>/summary.json`
+// ---------------------------------------------------------------------------------------------
+
+/** Name of the summary of an explore book, next to its `text/` folder. */
+const EXPLORE_SUMMARY_FILE = "summary.json";
+/** Checkpoint of an interrupted run (chapter summaries), removed once the summary is written. */
+const EXPLORE_SUMMARY_PROGRESS_FILE = "summary.progress.json";
+
+export type SummarizeExploreOptions = {
+  cacheDir?: string;
+  /** Output language, BCP 47. Default "it". */
+  language?: string;
+  /** Drops the chapter summaries saved by an earlier run. The text is already cached: nothing is re-extracted. */
+  force?: boolean;
+  /** Default: `.env.local` loaded, then `summaryModelFromEnv()` (throws `AiConfigError` when the AI is not configured). */
+  model?: SummaryModel;
+  onProgress?: (event: SummarizeProgress) => void;
+  signal?: AbortSignal;
+  now?: () => Date;
+};
+
+export type ExploreSummaryBackgroundOptions = SummarizeExploreOptions & {
+  logger?: { info(message: string): void; warn(message: string): void };
+};
+
+/** State of the summary of an explore book. `done`/`total` count chapters while a run is in progress. */
+export type ExploreSummaryStatus = {
+  state: "none" | "running" | "done" | "failed";
+  done?: number;
+  total?: number;
+  error?: string;
+};
+
+/** Last in-process run of a book: its progress while running, its error when it failed (cleared on success). */
+type ExploreSummaryRun =
+  | { state: "running"; done: number; total: number }
+  | { state: "failed"; error: string };
+
+/** Books whose summary runs in this process: one run per book at a time. */
+const exploreSummariesRunning = new Set<string>();
+const exploreSummaryRuns = new Map<string, ExploreSummaryRun>();
+
+function errorMessageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** `<cache>/explore/books/<id>/summary.json`. Throws `InvalidBookIdError` for anything that is not a book ID. */
+export function exploreSummaryPath(id: string, opts: { cacheDir?: string } = {}): string {
+  return path.join(exploreBookDir(id, opts), EXPLORE_SUMMARY_FILE);
+}
+
+/** The summary of an explore book, or null when there is none, the file is invalid, or the ID is invalid. */
+export async function readExploreBookSummary(
+  id: string,
+  opts: { cacheDir?: string } = {},
+): Promise<BookSummary | null> {
+  if (!isBookId(id)) return null;
+  const text = await readTextIfExists(exploreSummaryPath(id, opts));
+  if (text === null) return null;
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const parsed = BookSummarySchema.safeParse(json);
+  return parsed.success && parsed.data.bookId === id ? parsed.data : null;
+}
+
+function trackExploreProgress(id: string, event: SummarizeProgress): void {
+  const run = exploreSummaryRuns.get(id);
+  if (!run || run.state !== "running") return;
+  if (event.kind === "chapter") {
+    exploreSummaryRuns.set(id, { state: "running", done: event.done, total: event.total });
+  } else if (event.kind === "book") {
+    exploreSummaryRuns.set(id, { state: "running", done: run.total, total: run.total });
+  }
+}
+
+/**
+ * Summary of an explore book: one model call per chapter, then one for the book, written to `summary.json`.
+ * Reads the chapters cached by `importExploreEpub`. Throws `TextUnavailableError` when the text is not cached,
+ * `AiFailedError` when a model call fails, `AiConfigError` when the AI is not configured. A second call for the same
+ * book while one runs is refused.
+ */
+export async function summarizeExploreBook(
+  id: string,
+  opts: SummarizeExploreOptions = {},
+): Promise<BookSummary> {
+  if (exploreSummariesRunning.has(id)) {
+    throw new Error(`La sintesi del libro esplorato ${id} è già in corso: attendi che finisca.`);
+  }
+  exploreSummariesRunning.add(id);
+  exploreSummaryRuns.set(id, { state: "running", done: 0, total: 0 });
+  try {
+    const summary = await runExploreSummary(id, opts);
+    exploreSummaryRuns.delete(id);
+    return summary;
+  } catch (error) {
+    exploreSummaryRuns.set(id, { state: "failed", error: errorMessageOf(error) });
+    throw error;
+  } finally {
+    exploreSummariesRunning.delete(id);
+  }
+}
+
+async function runExploreSummary(id: string, opts: SummarizeExploreOptions): Promise<BookSummary> {
+  // The explore server never loads .env.local itself (the library server and CLI do): load it here.
+  if (!opts.model) loadLocalEnv();
+  const model = opts.model ?? summaryModelFromEnv();
+  const manifest = await readCachedBookManifest("explore", id, opts);
+  if (!manifest) {
+    throw new TextUnavailableError(id, {
+      cause: new Error(`il testo non è in cache: ricarica l'EPUB con pnpm explore add ${id} --epub <file>`),
+    });
+  }
+  exploreSummaryRuns.set(id, { state: "running", done: 0, total: manifest.chapters.length });
+  const progressFile = path.join(exploreBookDir(id, opts), EXPLORE_SUMMARY_PROGRESS_FILE);
+  const file = exploreSummaryPath(id, opts);
+  if (opts.force === true) await rm(progressFile, { force: true });
+
+  const result = await summarizeText(
+    {
+      model: model.model,
+      configuredModel: model.configuredModel,
+      ...(model.reasoningEffort !== undefined ? { reasoningEffort: model.reasoningEffort } : {}),
+      ...(opts.now ? { now: opts.now } : {}),
+    },
+    {
+      id,
+      title: manifest.title,
+      authors: manifest.authors,
+      outputDir: bookTextDir("explore", id, opts),
+      manifest,
+      progressFile,
+      write: async (summary) => {
+        await writeFileAtomic(file, formatJson(BookSummarySchema.parse(summary)));
+      },
+    },
+    {
+      language: opts.language ?? "it",
+      force: opts.force === true,
+      ...(model.concurrency !== undefined ? { concurrency: model.concurrency } : {}),
+      ...(opts.signal ? { signal: opts.signal } : {}),
+      onProgress: (event) => {
+        trackExploreProgress(id, event);
+        opts.onProgress?.(event);
+      },
+    },
+  );
+  return result.summary;
+}
+
+/** Progress and result of the last in-process summary of an explore book, else whether `summary.json` exists. */
+export async function exploreSummaryStatus(
+  id: string,
+  opts: { cacheDir?: string } = {},
+): Promise<ExploreSummaryStatus> {
+  const run = exploreSummaryRuns.get(id);
+  if (run?.state === "running") return { state: "running", done: run.done, total: run.total };
+  if (run?.state === "failed") return { state: "failed", error: run.error };
+  return { state: (await readExploreBookSummary(id, opts)) !== null ? "done" : "none" };
+}
+
+/**
+ * Summary of an explore book in the background: never awaited and never throws. Skipped when `summary.json` already
+ * exists, unless `force`. Logs one line on success; an info line when the AI is not configured, a warning otherwise.
+ */
+export function startExploreSummaryInBackground(
+  id: string,
+  opts: ExploreSummaryBackgroundOptions = {},
+): void {
+  const { logger, ...summaryOpts } = opts;
+  void (async () => {
+    if (opts.force !== true && (await readExploreBookSummary(id, summaryOpts)) !== null) return;
+    await summarizeExploreBook(id, summaryOpts);
+    logger?.info(`Sintesi del libro esplorato ${id} pronta.`);
+  })().catch((error: unknown) => {
+    if (error instanceof AiConfigError) {
+      logger?.info(`Sintesi del libro esplorato ${id} saltata: ${error.message}`);
+      return;
+    }
+    logger?.warn(`Sintesi del libro esplorato ${id} non riuscita: ${errorMessageOf(error)}`);
+  });
 }

@@ -397,3 +397,38 @@ describe("POST /api/chat with an exploration source", () => {
     expect(missing.status).toBe(404);
   });
 });
+
+describe("createExplorationChatSource: explore books", () => {
+  it("includes the summary of an explore book, read from its own store, like a library one", async () => {
+    const genealogySummary: BookSummary = {
+      version: 1,
+      bookId: GENEALOGY,
+      generatedAt: "2026-11-13T00:00:00.000Z",
+      model: "smart",
+      language: "it",
+      book: "Tre trattati sulla genesi della morale.",
+      chapters: [{ n: 1, title: "Prefazione", words: 800, summary: "Il ressentimento come origine." }],
+    };
+    const libraryRead: string[] = [];
+    const exploreRead: string[] = [];
+    const base = fakeDeps().deps;
+    const system = (
+      await createExplorationChatSource({
+        ...base,
+        readLibraryBookSummary: async (id) => {
+          libraryRead.push(id);
+          return base.readLibraryBookSummary!(id);
+        },
+        readExploreBookSummary: async (id) => {
+          exploreRead.push(id);
+          return id === GENEALOGY ? genealogySummary : null;
+        },
+      })(EXPLORATION_ID)
+    )!.system;
+
+    expect(exploreRead).toEqual([GENEALOGY]);
+    expect(libraryRead).not.toContain(GENEALOGY);
+    expect(system).toContain("Sintesi del libro:\nTre trattati sulla genesi della morale.");
+    expect(system).toContain("1. Prefazione (800 parole)\n   Il ressentimento come origine.");
+  });
+});

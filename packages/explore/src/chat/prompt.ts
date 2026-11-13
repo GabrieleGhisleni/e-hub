@@ -10,7 +10,7 @@ type TextManifestChapter = TextManifest["chapters"][number];
 /** A source with what the prompt shows about its text. */
 export type PromptBook = {
   source: BookSource;
-  /** `summary.json` (library books only), or null. */
+  /** `summary.json` (library and explore books), or null. */
   summary: BookSummary | null;
   /** Chapters from the cached manifest; undefined when the text is not cached. Used only without a summary. */
   chapters?: TextManifestChapter[];

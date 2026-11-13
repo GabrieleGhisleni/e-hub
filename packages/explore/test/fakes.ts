@@ -3,7 +3,9 @@
  * its output. The EPUB "import" only records what it was given; the md5 is the real one of the bytes.
  */
 import { createHash } from "node:crypto";
-import type { LibraryBookRef, LibraryDeps, TextManifest } from "../src/node/index.ts";
+import type { BookSummary, LibraryBookRef, LibraryDeps, TextManifest } from "../src/node/index.ts";
+
+type ExploreSummaryStatus = Awaited<ReturnType<LibraryDeps["exploreSummaryStatus"]>>;
 
 export const LIBRARY_BOOKS: Record<string, { title: string; authors: string[]; language?: string }> = {
   "78w462eb": { title: "The Let Them Theory", authors: ["Mel Robbins"], language: "en" },
@@ -21,15 +23,26 @@ export const EMPTY_MANIFEST = (id: string, title: string): TextManifest => ({
 export interface FakeLibrary extends Partial<LibraryDeps> {
   /** Calls to importExploreEpub, to check that reuse does not import again. */
   imports: string[];
+  /** Calls to startExploreSummaryInBackground, in order. */
+  summaryStarts: { id: string; force: boolean }[];
+  /** Status the fake reports for an explore book's summary (default: none). */
+  summaryStates: Map<string, ExploreSummaryStatus>;
   /** Empties the fake explore text cache (as if ~/.cache were wiped). */
   clearCache(): void;
 }
 
 export function fakeLibrary(
-  options: { books?: Record<string, { title: string; authors: string[]; language?: string }> } = {},
+  options: {
+    books?: Record<string, { title: string; authors: string[]; language?: string }>;
+    /** Library books that already have a summary.json. */
+    librarySummaries?: string[];
+  } = {},
 ): FakeLibrary {
   const books = options.books ?? LIBRARY_BOOKS;
   const imports: string[] = [];
+  const summaryStarts: { id: string; force: boolean }[] = [];
+  const summaryStates = new Map<string, ExploreSummaryStatus>();
+  const librarySummaries = new Set(options.librarySummaries ?? []);
   const cached = new Set<string>();
   const ref = (id: string): LibraryBookRef | undefined => {
     const book = books[id];
@@ -38,6 +51,8 @@ export function fakeLibrary(
   };
   return {
     imports,
+    summaryStarts,
+    summaryStates,
     clearCache: () => cached.clear(),
     readLibraryBookRef: async (id: string) => ref(id),
     listLibraryBookRefs: async () =>
@@ -70,8 +85,27 @@ export function fakeLibrary(
       if (origin === "explore" && !cached.has(id)) throw new Error("Testo non in cache.");
       return { textDir: `/cache/${origin}/${id}/text`, manifest: EMPTY_MANIFEST(id, books[id]?.title ?? "") };
     },
-    readLibraryBookSummary: async () => null,
+    readLibraryBookSummary: async (id) =>
+      librarySummaries.has(id) ? fakeSummary(id) : null,
+    readExploreBookSummary: async () => null,
+    startExploreSummaryInBackground: (id, opts) => {
+      summaryStarts.push({ id, force: opts?.force === true });
+    },
+    exploreSummaryStatus: async (id) => summaryStates.get(id) ?? { state: "none" },
     bookTextDir: (origin, id) => `/cache/${origin}/${id}/text`,
+  };
+}
+
+/** A minimal valid summary of a book. */
+export function fakeSummary(bookId: string): BookSummary {
+  return {
+    version: 1,
+    bookId,
+    generatedAt: "2026-11-12T00:00:00.000Z",
+    model: "smart",
+    language: "it",
+    book: "Un libro.",
+    chapters: [{ n: 1, title: "Uno", words: 1000, summary: "Il primo capitolo." }],
   };
 }
 

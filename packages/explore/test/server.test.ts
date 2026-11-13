@@ -307,3 +307,95 @@ describe("explore API: notebook", () => {
     expect(response.status).toBe(413);
   });
 });
+
+describe("explore API: summaries", () => {
+  async function upload(app: App, id: string, fileName = "Genealogia della morale.epub") {
+    return app.request(`/api/explore/${id}/epub`, {
+      method: "POST",
+      headers: {
+        host: HOST,
+        origin: ORIGIN,
+        "content-type": "application/epub+zip",
+        "x-file-name": encodeURIComponent(fileName),
+      },
+      body: FAKE_EPUB,
+    });
+  }
+
+  it("starts the summary of the new explore book in the background after an EPUB upload", async () => {
+    const deps = fakeLibrary();
+    const app = createExploreApp({ deps });
+    const id = (await create(app)).id;
+    const response = await upload(app, id);
+    expect(response.status).toBe(201);
+    const exploreId = (await body(response)).sources[0].id;
+    expect(deps.summaryStarts).toEqual([{ id: exploreId, force: false }]);
+  });
+
+  it("does not start a summary for a library book added to the exploration", async () => {
+    const deps = fakeLibrary();
+    const app = createExploreApp({ deps });
+    const id = (await create(app)).id;
+    expect((await call(app, "POST", `/api/explore/${id}/books`, { bookId: "78w462eb" })).status).toBe(201);
+    expect(deps.summaryStarts).toEqual([]);
+  });
+
+  it("reports the status of every source: library books done or none, explore books their run", async () => {
+    const deps = fakeLibrary({ librarySummaries: ["78w462eb"] });
+    const app = createExploreApp({ deps });
+    const id = (await create(app, "Prova", ["78w462eb", "eec5cpre"])).id;
+    const exploreId = (await body(await upload(app, id))).sources.find(
+      (s: { origin: string }) => s.origin === "explore",
+    ).id;
+    deps.summaryStates.set(exploreId, { state: "running", done: 2, total: 5 });
+
+    const response = await call(app, "GET", `/api/explore/${id}/summaries`);
+    expect(response.status).toBe(200);
+    expect(await body(response)).toEqual({
+      books: [
+        { bookId: "78w462eb", origin: "library", state: "done" },
+        { bookId: "eec5cpre", origin: "library", state: "none" },
+        { bookId: exploreId, origin: "explore", state: "running", done: 2, total: 5 },
+      ],
+    });
+
+    deps.summaryStates.set(exploreId, { state: "failed", error: "Il modello non risponde." });
+    const failed = await body(await call(app, "GET", `/api/explore/${id}/summaries`));
+    expect(failed.books[2]).toEqual({
+      bookId: exploreId,
+      origin: "explore",
+      state: "failed",
+      error: "Il modello non risponde.",
+    });
+  });
+
+  it("answers 404 for the status of a missing exploration", async () => {
+    const { app } = setup();
+    expect((await call(app, "GET", "/api/explore/2026-11-12-assente/summaries")).status).toBe(404);
+  });
+
+  it("restarts the summary of an explore book with force and answers 202", async () => {
+    const deps = fakeLibrary();
+    const app = createExploreApp({ deps });
+    const id = (await create(app)).id;
+    const exploreId = (await body(await upload(app, id))).sources[0].id;
+    deps.summaryStarts.length = 0;
+
+    const response = await call(app, "POST", `/api/explore/${id}/books/${exploreId}/summary`, {});
+    expect(response.status).toBe(202);
+    expect(await body(response)).toEqual({ state: "running" });
+    expect(deps.summaryStarts).toEqual([{ id: exploreId, force: true }]);
+  });
+
+  it("refuses the retry for a library book (400), a book not in the exploration (404) and a missing exploration", async () => {
+    const deps = fakeLibrary();
+    const app = createExploreApp({ deps });
+    const id = (await create(app, "Prova", ["78w462eb"])).id;
+    const library = await call(app, "POST", `/api/explore/${id}/books/78w462eb/summary`, {});
+    expect(library.status).toBe(400);
+    expect(await body(library)).toMatchObject({ code: "bad-request" });
+    expect((await call(app, "POST", `/api/explore/${id}/books/eec5cpre/summary`, {})).status).toBe(404);
+    expect((await call(app, "POST", "/api/explore/2026-11-12-assente/books/78w462eb/summary", {})).status).toBe(404);
+    expect(deps.summaryStarts).toEqual([]);
+  });
+});
