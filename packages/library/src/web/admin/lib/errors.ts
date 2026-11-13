@@ -18,7 +18,7 @@ export class ApiRequestError extends Error {
     this.details = init.details;
   }
 
-  /** The reconcile report carried by a 502 `drive-failed`, when present. */
+  /** The reconcile report carried by a 502 `kobo-failed`, when present. */
   get report(): ReconcileReport | null {
     const details = this.details as { report?: unknown } | null | undefined;
     if (!details || typeof details !== "object" || details.report === undefined) return null;
@@ -63,7 +63,7 @@ export function friendlyMessage(error: unknown): string {
   return "Errore imprevisto.";
 }
 
-/** Whether repeating the same request may succeed (server/Drive trouble, not a rejected input). */
+/** Whether repeating the same request may succeed (server/Kobo trouble, not a rejected input). */
 export function isRetryable(error: unknown): boolean {
   if (!(error instanceof ApiRequestError)) return false;
   return error.status >= 500 || error.code === "network";

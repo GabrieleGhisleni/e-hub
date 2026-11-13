@@ -48,9 +48,12 @@ export function DeleteBookDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Eliminare «{book.title}»?</AlertDialogTitle>
           <AlertDialogDescription>
-            I file su Drive vanno nel cestino, dove restano recuperabili per 30 giorni. Il libro, la
-            copertina e gli eventuali appunti vengono tolti dal repository (restano nella cronologia
-            di git se li hai già pubblicati).
+            Il libro viene tolto dal Kobo. L’operazione è <strong>irreversibile</strong>: anche i
+            progressi di lettura e le annotazioni di questo libro sul Kobo andranno persi. Il libro,
+            la copertina e la cartella del repository vengono eliminati; il file EPUB resta nella
+            cache sul PC. Se il Kobo è spento o non è sul Wi-Fi, il libro viene comunque tolto dalla
+            libreria e l’allineamento si completa con{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">elib sync</code>.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

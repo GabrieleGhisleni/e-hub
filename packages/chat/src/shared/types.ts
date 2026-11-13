@@ -31,6 +31,13 @@ export type ChatRequestBody = {
   id: string;
   messages: ChatUIMessage[];
   source: ChatSource;
+  /** Notes mode ("Appunti"): every reply is written to go into the user's notes as it is. */
+  notesMode?: boolean;
+  /** "Feel rich": answer with the rich model (`EHUB_AI_RICH_MODEL`, default gpt-6-luna) instead of the default one. */
+  rich?: boolean;
 };
 
 export const CHAT_API_PATH = "/api/chat";
+
+// The save_note tool, shared by the server (tool definition) and the web (handling the call).
+export * from "./save-note";

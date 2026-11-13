@@ -6,12 +6,21 @@ import type { BookCard, BookDetail } from "@shared/schema";
 import { BookAdminActionsSlot } from "@library/admin-slots";
 import { BookCover } from "@library/components/book-cover";
 import {
+  BookHighlightsSection,
+  HIGHLIGHTS_SECTION_ID,
+  HIGHLIGHTS_SECTION_TITLE,
+} from "@library/components/book/book-highlights-section";
+import {
+  BookChaptersSection,
   BookSummarySection,
+  CHAPTERS_SECTION_ID,
+  CHAPTERS_SECTION_TITLE,
   SUMMARY_SECTION_ID,
   SUMMARY_SECTION_TITLE,
+  summarizedChapters,
 } from "@library/components/book/book-summary-section";
 import { isFromLibraryState } from "@library/components/library/book-card";
-import { Container, PageHeader } from "@ehub/ui";
+import { Container, PageHeader, SourceExtras } from "@ehub/ui";
 import { type NoteItemRef, NoteThread, NotesJumpLink } from "@ehub/notes";
 import { ErrorState } from "@library/components/states";
 import { StatusBadge } from "@library/components/status-badge";
@@ -65,10 +74,72 @@ function BackLink() {
 
 function Detail({ term, children }: { term: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-4 border-t border-border/80 py-2.5 sm:grid-cols-[9rem_minmax(0,1fr)]">
-      <dt className="text-sm text-muted-foreground">{term}</dt>
-      <dd className="text-[0.9375rem] break-words">{children}</dd>
+    <div className="border-t border-border/80 py-2.5 first:border-t-0 first:pt-0">
+      <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{term}</dt>
+      <dd className="mt-0.5 text-[0.9375rem] break-words">{children}</dd>
     </div>
+  );
+}
+
+/** Metadata list next to the cover (only the fields the book has). */
+function BookDetails({ book }: { book: BookDetail }) {
+  return (
+    <dl>
+      {book.startedAt ? <Detail term="Iniziato">{formatDate(book.startedAt)}</Detail> : null}
+      {book.finishedAt ? <Detail term="Finito">{formatDate(book.finishedAt)}</Detail> : null}
+      {book.publisher ? <Detail term="Editore">{book.publisher}</Detail> : null}
+      {book.language ? <Detail term="Lingua">{formatLanguage(book.language)}</Detail> : null}
+      {book.isbn ? (
+        <Detail term="ISBN">
+          <span className="tabular-nums">{book.isbn}</span>
+        </Detail>
+      ) : null}
+      {book.subjects && book.subjects.length > 0 ? (
+        <Detail term="Soggetti">
+          <ul className="flex flex-wrap gap-1.5">
+            {book.subjects.map((subject) => (
+              <li key={subject} className="rounded-md bg-muted px-2 py-0.5 text-sm text-muted-foreground">
+                {subject}
+              </li>
+            ))}
+          </ul>
+        </Detail>
+      ) : null}
+    </dl>
+  );
+}
+
+/** The publisher's description: the main text when there is no summary, folded under it otherwise. */
+function Description({ text, folded }: { text: string; folded: boolean }) {
+  const body = (
+    <div className="prose-book">
+      {paragraphs(text).map((p, i) => (
+        <p key={i}>{p}</p>
+      ))}
+    </div>
+  );
+  if (!folded) {
+    return (
+      <section aria-labelledby="descrizione">
+        <h2
+          id="descrizione"
+          className="flex items-center gap-4 text-2xl font-medium tracking-tight sm:text-3xl"
+        >
+          Descrizione
+          <span aria-hidden className="h-px flex-1 bg-border" />
+        </h2>
+        <div className="mt-5">{body}</div>
+      </section>
+    );
+  }
+  return (
+    <details className="group mt-8 rounded-xl border border-border/80 px-4 py-3">
+      <summary className="cursor-pointer list-none text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden">
+        <span className="inline-block transition-transform group-open:rotate-90">›</span> Descrizione
+        dell&apos;editore
+      </summary>
+      <div className="mt-3 [&_.prose-book]:text-base">{body}</div>
+    </details>
   );
 }
 
@@ -139,9 +210,13 @@ export function BookPage() {
   const full = detail.data;
   const topic = book && index.data ? topicLabel(index.data, book.topic) : null;
   const sections = full ? noteSections(full) : [];
-  // In-page navigation: "Sintesi" (when the book has one) comes first, then the notes sections.
+  const highlights = full?.highlights ?? [];
+  const hasChapters = full?.summary ? summarizedChapters(full.summary).length > 0 : false;
+  // In-page navigation, in page order: summary, chapters, highlights, then the notes sections.
   const navSections: { id: string; title: string }[] = [
     ...(full?.summary ? [{ id: SUMMARY_SECTION_ID, title: SUMMARY_SECTION_TITLE }] : []),
+    ...(hasChapters ? [{ id: CHAPTERS_SECTION_ID, title: CHAPTERS_SECTION_TITLE }] : []),
+    ...(highlights.length > 0 ? [{ id: HIGHLIGHTS_SECTION_ID, title: HIGHLIGHTS_SECTION_TITLE }] : []),
     ...sections,
   ];
   const noteItem: NoteItemRef | null = book
@@ -167,202 +242,180 @@ export function BookPage() {
               onRetry={detail.retry}
             />
           ) : (
-            <div
-              className="mt-8 grid gap-10 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)] lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] lg:gap-16"
-              aria-busy
-            >
-              <Skeleton className="mx-auto aspect-[2/3] w-full max-w-[15rem] md:max-w-none" />
-              <div>
-                <Skeleton className="h-3 w-24" />
-                <Skeleton className="mt-4 h-12 w-4/5" />
-                <Skeleton className="mt-4 h-6 w-1/2" />
+            <div className="mt-8" aria-busy>
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="mt-4 h-12 w-3/5" />
+              <Skeleton className="mt-4 h-6 w-1/3" />
+              <div className="mt-10 grid gap-10 lg:grid-cols-2">
+                <div className="grid grid-cols-2 gap-6">
+                  <Skeleton className="aspect-[2/3] w-full" />
+                  <DetailSkeleton />
+                </div>
                 <DetailSkeleton />
               </div>
             </div>
           )
         ) : (
-          <div className="mt-6 grid gap-9 sm:mt-8 md:grid-cols-[minmax(0,16rem)_minmax(0,1fr)] md:gap-12 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] lg:gap-16">
-            <div>
-              <div className="md:sticky md:top-8">
-                <BookCover
-                  book={book}
-                  alt={`Copertina di ${book.title}`}
-                  eager
-                  className="mx-auto w-[min(56vw,14rem)] md:w-full"
-                />
-              </div>
-            </div>
-
-            <div className="min-w-0">
-              <PageHeader
-                className="pt-0 pb-0 sm:pt-0"
-                eyebrow={
-                  topic ? (
-                    <Link
-                      to={libraryPath(libraryQueryString({ ...EMPTY_QUERY, topic: book.topic }))}
-                      className="font-sans text-xs font-semibold tracking-[0.16em] text-brand uppercase underline-offset-4 hover:underline"
-                    >
-                      {topic}
-                    </Link>
-                  ) : undefined
-                }
-                title={book.title}
-                description={
-                  <span className="font-serif text-xl text-foreground/80 italic sm:text-2xl">
-                    {formatAuthors(book.authors)}
-                  </span>
-                }
-                actions={
-                  __ELIB_ADMIN__ && full ? (
-                    <BookAdminActionsSlot book={full} index={index.data} />
-                  ) : undefined
-                }
-              />
-
-              <div className="mt-6 flex flex-wrap items-center gap-2">
-                {noteItem ? <NotesJumpLink item={noteItem} /> : null}
-                <StatusBadge status={book.status} />
-                {book.tags.map((tag) => (
+          <>
+            <PageHeader
+              className="mt-4 pt-0 pb-0 sm:pt-0"
+              eyebrow={
+                topic ? (
                   <Link
-                    key={tag}
-                    to={libraryPath(libraryQueryString({ ...EMPTY_QUERY, tags: [tag] }))}
-                    className="inline-flex h-7 items-center rounded-full px-2.5 text-sm text-muted-foreground transition-colors hover:bg-brand-soft hover:text-brand"
+                    to={libraryPath(libraryQueryString({ ...EMPTY_QUERY, topic: book.topic }))}
+                    className="font-sans text-xs font-semibold tracking-[0.16em] text-brand uppercase underline-offset-4 hover:underline"
                   >
-                    <span aria-hidden className="mr-0.5 text-brand/70">
-                      #
-                    </span>
-                    {tag}
+                    {topic}
                   </Link>
-                ))}
+                ) : undefined
+              }
+              title={book.title}
+              description={
+                <span className="font-serif text-xl text-foreground/80 italic sm:text-2xl">
+                  {formatAuthors(book.authors)}
+                </span>
+              }
+              actions={
+                __ELIB_ADMIN__ && full ? (
+                  <BookAdminActionsSlot book={full} index={index.data} />
+                ) : undefined
+              }
+            />
+
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              {noteItem ? <NotesJumpLink item={noteItem} /> : null}
+              <StatusBadge status={book.status} />
+              <SourceExtras kind="book" id={book.id} />
+              {book.tags.map((tag) => (
+                <Link
+                  key={tag}
+                  to={libraryPath(libraryQueryString({ ...EMPTY_QUERY, tags: [tag] }))}
+                  className="inline-flex h-7 items-center rounded-full px-2.5 text-sm text-muted-foreground transition-colors hover:bg-brand-soft hover:text-brand"
+                >
+                  <span aria-hidden className="mr-0.5 text-brand/70">
+                    #
+                  </span>
+                  {tag}
+                </Link>
+              ))}
+            </div>
+
+            {/* Top: cover + metadata (same width) | summary. Stacked on small screens. */}
+            <div className="mt-8 grid gap-10 lg:grid-cols-2 lg:gap-14">
+              <div className="lg:sticky lg:top-8 lg:self-start">
+                <div className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-5 sm:grid-cols-2 sm:gap-6">
+                  <BookCover book={book} alt={`Copertina di ${book.title}`} eager className="w-full" />
+                  <div className="min-w-0">
+                    {full ? (
+                      <BookDetails book={full} />
+                    ) : detail.state.status === "error" ? null : (
+                      <DetailSkeleton />
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {!full ? (
-                detail.state.status === "error" ? (
-                  <ErrorState
-                    title="Impossibile caricare i dettagli"
-                    error={detail.state.error}
-                    onRetry={detail.retry}
-                    className="items-start py-10 text-left"
-                  />
+              <div className="min-w-0">
+                {!full ? (
+                  detail.state.status === "error" ? (
+                    <ErrorState
+                      title="Impossibile caricare i dettagli"
+                      error={detail.state.error}
+                      onRetry={detail.retry}
+                      className="items-start py-10 text-left"
+                    />
+                  ) : (
+                    <DetailSkeleton />
+                  )
                 ) : (
-                  <DetailSkeleton />
-                )
-              ) : (
-                <>
-                  {full.description ? (
-                    <div className="prose-book mt-8">
-                      {paragraphs(full.description).map((p, i) => (
-                        <p key={i}>{p}</p>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <dl className="mt-9 max-w-[42rem] border-b border-border/80">
-                    {full.startedAt ? (
-                      <Detail term="Iniziato">{formatDate(full.startedAt)}</Detail>
+                  <>
+                    {full.summary ? <BookSummarySection summary={full.summary} /> : null}
+                    {full.description ? (
+                      <Description text={full.description} folded={Boolean(full.summary)} />
                     ) : null}
-                    {full.finishedAt ? (
-                      <Detail term="Finito">{formatDate(full.finishedAt)}</Detail>
-                    ) : null}
-                    {full.publisher ? <Detail term="Editore">{full.publisher}</Detail> : null}
-                    {full.language ? (
-                      <Detail term="Lingua">{formatLanguage(full.language)}</Detail>
-                    ) : null}
-                    {full.isbn ? (
-                      <Detail term="ISBN">
-                        <span className="tabular-nums">{full.isbn}</span>
-                      </Detail>
-                    ) : null}
-                    {full.subjects && full.subjects.length > 0 ? (
-                      <Detail term="Soggetti">
-                        <ul className="flex flex-wrap gap-1.5">
-                          {full.subjects.map((subject) => (
-                            <li
-                              key={subject}
-                              className="rounded-md bg-muted px-2 py-0.5 text-sm text-muted-foreground"
-                            >
-                              {subject}
-                            </li>
-                          ))}
-                        </ul>
-                      </Detail>
-                    ) : null}
-                  </dl>
-
-                  {navSections.length > 1 ? (
-                    <nav
-                      aria-label="In questa pagina"
-                      className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm"
-                    >
-                      <span className="text-muted-foreground">In questa pagina:</span>
-                      {navSections.map((s) => (
-                        <a
-                          key={s.id}
-                          href={`#${s.id}`}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            scrollToSection(s.id);
-                          }}
-                          className="font-medium text-brand underline-offset-4 hover:underline"
-                        >
-                          {s.title}
-                        </a>
-                      ))}
-                    </nav>
-                  ) : null}
-
-                  {full.summary ? <BookSummarySection summary={full.summary} /> : null}
-
-                  {sections.map((section) =>
-                    section.compact ? (
-                      <section
-                        key={section.id}
-                        aria-labelledby={section.id}
-                        className="mt-10 max-w-[44rem] rounded-xl border border-brand/20 bg-brand-soft/70 px-5 py-6 sm:px-8 sm:py-7"
-                      >
-                        <h2
-                          id={section.id}
-                          tabIndex={-1}
-                          className="scroll-mt-6 font-sans text-xs font-semibold tracking-[0.16em] text-brand uppercase outline-none"
-                        >
-                          {section.title}
-                        </h2>
-                        <div
-                          className="prose-book prose-book--compact mt-4"
-                          // Sanitized at build time (raw HTML in the Markdown is escaped).
-                          dangerouslySetInnerHTML={{ __html: demoteHeadings(section.html) }}
-                        />
-                      </section>
-                    ) : (
-                      <section key={section.id} aria-labelledby={section.id} className="mt-14">
-                        <h2
-                          id={section.id}
-                          tabIndex={-1}
-                          className="flex scroll-mt-6 items-center gap-4 text-3xl font-medium tracking-tight outline-none sm:text-[2.125rem]"
-                        >
-                          {section.title}
-                          <span aria-hidden className="h-px flex-1 bg-border" />
-                        </h2>
-                        <div
-                          className="prose-book mt-6"
-                          // Sanitized at build time (raw HTML in the Markdown is escaped).
-                          dangerouslySetInnerHTML={{ __html: demoteHeadings(section.html) }}
-                        />
-                      </section>
-                    ),
-                  )}
-                </>
-              )}
-
-              {noteItem ? (
-                <NoteThread
-                  item={noteItem}
-                  noun="questo libro"
-                  className="mt-14 max-w-[44rem] border-t border-border pt-10"
-                />
-              ) : null}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+
+            {full ? (
+              <>
+                {navSections.length > 1 ? (
+                  <nav
+                    aria-label="In questa pagina"
+                    className="mt-12 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm"
+                  >
+                    <span className="text-muted-foreground">In questa pagina:</span>
+                    {navSections.map((s) => (
+                      <a
+                        key={s.id}
+                        href={`#${s.id}`}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          scrollToSection(s.id);
+                        }}
+                        className="font-medium text-brand underline-offset-4 hover:underline"
+                      >
+                        {s.title}
+                      </a>
+                    ))}
+                  </nav>
+                ) : null}
+
+                <div className="mt-6 flex flex-col gap-6">
+                  {full.summary ? <BookChaptersSection summary={full.summary} /> : null}
+                  <BookHighlightsSection highlights={highlights} />
+                </div>
+
+                {sections.map((section) =>
+                  section.compact ? (
+                    <section
+                      key={section.id}
+                      aria-labelledby={section.id}
+                      className="mt-12 max-w-[52rem] rounded-xl border border-brand/20 bg-brand-soft/70 px-5 py-6 sm:px-8 sm:py-7"
+                    >
+                      <h2
+                        id={section.id}
+                        tabIndex={-1}
+                        className="scroll-mt-6 font-sans text-xs font-semibold tracking-[0.16em] text-brand uppercase outline-none"
+                      >
+                        {section.title}
+                      </h2>
+                      <div
+                        className="prose-book prose-book--compact mt-4"
+                        // Sanitized at build time (raw HTML in the Markdown is escaped).
+                        dangerouslySetInnerHTML={{ __html: demoteHeadings(section.html) }}
+                      />
+                    </section>
+                  ) : (
+                    <section key={section.id} aria-labelledby={section.id} className="mt-14">
+                      <h2
+                        id={section.id}
+                        tabIndex={-1}
+                        className="flex scroll-mt-6 items-center gap-4 text-3xl font-medium tracking-tight outline-none sm:text-[2.125rem]"
+                      >
+                        {section.title}
+                        <span aria-hidden className="h-px flex-1 bg-border" />
+                      </h2>
+                      <div
+                        className="prose-book mt-6"
+                        // Sanitized at build time (raw HTML in the Markdown is escaped).
+                        dangerouslySetInnerHTML={{ __html: demoteHeadings(section.html) }}
+                      />
+                    </section>
+                  ),
+                )}
+              </>
+            ) : null}
+
+            {noteItem ? (
+              <NoteThread
+                item={noteItem}
+                noun="questo libro"
+                className="mt-14 max-w-[52rem] border-t border-border pt-10"
+              />
+            ) : null}
+          </>
         )}
       </article>
     </Container>

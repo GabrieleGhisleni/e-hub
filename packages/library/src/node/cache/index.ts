@@ -2,13 +2,14 @@
  * Local cache layout (PLAN §5). The cache lives outside the repo (`~/.cache/e-library` by default, `cache.dir` in
  * elib.config.json): book text must never sit inside the public repo, and `git clean -fdx` must not wipe it.
  *
- *   <cache>/books/<id>/book.epub         original EPUB (uploaded, or downloaded back from Drive)
+ *   <cache>/books/<id>/book.epub         original EPUB (uploaded: the only copy of the original)
  *   <cache>/books/<id>/book.kepub.epub   KEPUB made by kepubify
  *   <cache>/books/<id>/text/             chapters as Markdown (`elib text`, W4b)
  *   <cache>/uploads/<uploadId>/          staging area of an upload in progress (W3a)
  *   <cache>/highlights/                  raw highlight exports (future, never public)
  *
- * The cache is only a cache: Drive is the durable copy, and a missing file is downloaded again with rclone.
+ * The cache holds the only local copy of the EPUBs and KEPUBs (the Kobo gets the KEPUB over SSH): back it up. A
+ * missing EPUB cannot be fetched again.
  */
 import { randomUUID } from "node:crypto";
 import { mkdir, rm, stat } from "node:fs/promises";

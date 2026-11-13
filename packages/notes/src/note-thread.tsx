@@ -4,6 +4,7 @@ import { Link, useLocation } from "react-router";
 import { SearchField, cn } from "@ehub/ui";
 import { NoteCard, NoteEditor, noteAnchor } from "./note-card";
 import { type NotesStore, notesStore, useItemNotes, useNotesMeta } from "./store";
+import { markdownPreview } from "./markdown";
 import { NotesErrorBanner } from "./status";
 import { matchesTokens, notesCount, searchTokens } from "./text";
 import { type NoteItemRef, itemKey } from "./types";
@@ -132,7 +133,7 @@ export function NoteThread({
                   }}
                   className="line-clamp-2 w-full rounded-md px-2 py-1 text-left text-sm text-foreground/90 outline-none hover:bg-card focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
-                  {note.body}
+                  {markdownPreview(note.body)}
                 </button>
               </li>
             ))}

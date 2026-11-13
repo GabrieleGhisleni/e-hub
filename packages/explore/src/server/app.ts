@@ -1,0 +1,300 @@
+/**
+ * Local write server for explorations, mounted in the Vite dev server only (never in the production build):
+ *
+ *   GET    /api/explore                              → { explorations }
+ *   GET    /api/explore/library-books                → { books: LibraryBookRef[] }
+ *   GET    /api/explore/:id                          → Exploration
+ *   POST   /api/explore                              { title, question, books? } → 201 Exploration
+ *   PATCH  /api/explore/:id                          { title?, question?, summary?, status? } → Exploration
+ *   POST   /api/explore/:id/books                    { bookId } → 201 Exploration
+ *   POST   /api/explore/:id/epub                     raw application/epub+zip, header x-file-name → 201 Exploration
+ *   DELETE /api/explore/:id/books/:bookId            → Exploration
+ *   PUT    /api/explore/:id/verdicts/:bookId         { decision, chapters?, reason } → Exploration
+ *   POST   /api/explore/:id/notes                    { id?, body, book? } → 201 Exploration
+ *   PATCH  /api/explore/:id/notes/:noteId            { body } → Exploration
+ *   DELETE /api/explore/:id/notes/:noteId            → Exploration
+ *   POST   /api/explore/:id/journal                  { text } → 201 Exploration
+ *
+ * Writes come from the app, so they are recorded with `via: "app"`. Error bodies: `{ error, code, details? }`.
+ */
+import path from "node:path";
+import { type Context, Hono, type MiddlewareHandler } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { z, ZodError } from "zod";
+import {
+  ExploreError,
+  ExplorationPatch,
+  VerdictInput,
+  type LibraryDeps,
+  addExploreBook,
+  addJournal,
+  addLibraryBook,
+  addNote,
+  createExploration,
+  listExplorations,
+  readExploration,
+  removeBook,
+  removeNote,
+  setVerdict,
+  updateExploration,
+  updateNote,
+  withLibraryDeps,
+} from "../node/index.ts";
+import {
+  BookId,
+  JournalEntry,
+  MAX_EPUB_BYTES,
+  Exploration,
+  ExplorationId,
+  Note,
+  formatIssues,
+} from "../schema.ts";
+
+const MAX_JSON_BYTES = 256 * 1024;
+
+const CreateBody = z.strictObject({
+  title: Exploration.shape.title,
+  question: Exploration.shape.question,
+  books: z.array(BookId).max(30).optional(),
+});
+const AddBookBody = z.strictObject({ bookId: BookId });
+const NoteBody = z.strictObject({
+  id: z.uuid().optional(),
+  body: Note.shape.body,
+  book: BookId.optional(),
+});
+const NoteEditBody = z.strictObject({ body: Note.shape.body });
+const JournalBody = z.strictObject({ text: JournalEntry.shape.text });
+
+class BadRequest extends Error {
+  constructor(
+    message: string,
+    readonly details: string[] = [],
+  ) {
+    super(message);
+  }
+}
+
+const LOOPBACK_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/i;
+const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const EPUB_ROUTE = /^\/api\/explore\/[^/]+\/epub$/;
+
+/**
+ * The server writes files that end up in a public repo, so every request must come from the app itself: loopback
+ * `Host` (DNS rebinding), and for writes a body type of `application/json` (or the EPUB upload) plus a same-origin
+ * `Origin`.
+ */
+const localOnly: MiddlewareHandler = async (c, next) => {
+  const host = c.req.header("host");
+  if (host === undefined || !LOOPBACK_HOST.test(host)) {
+    return c.json(
+      { error: "Host non consentito: il server accetta solo localhost.", code: "forbidden-host" },
+      403,
+    );
+  }
+  if (WRITE_METHODS.has(c.req.method)) {
+    const upload = c.req.method === "POST" && EPUB_ROUTE.test(c.req.path);
+    if (c.req.method !== "DELETE") {
+      const type = c.req.header("content-type") ?? "";
+      const accepted = upload
+        ? /^application\/epub\+zip\s*(;|$)/i.test(type)
+        : /^application\/json\s*(;|$)/i.test(type);
+      if (!accepted) {
+        return c.json(
+          {
+            error: upload
+              ? "Il caricamento richiede Content-Type: application/epub+zip."
+              : "Le scritture richiedono Content-Type: application/json.",
+            code: "unsupported-media-type",
+          },
+          415,
+        );
+      }
+    }
+    const origin = c.req.header("origin");
+    if (origin === undefined || origin.toLowerCase() !== `http://${host}`.toLowerCase()) {
+      return c.json(
+        { error: "Origin non consentito per le scritture.", code: "forbidden-origin" },
+        403,
+      );
+    }
+  }
+  await next();
+};
+
+async function readJson<T extends z.ZodType>(c: Context, schema: T): Promise<z.output<T>> {
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    throw new BadRequest("Il corpo della richiesta non è JSON valido.");
+  }
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    throw new BadRequest("Richiesta non valida.", formatIssues(result.error));
+  }
+  return result.data;
+}
+
+/** Validated path parameter; anything malformed is a 400 before it reaches the repo. */
+function param(c: Context, name: string, schema: z.ZodType): string {
+  const result = schema.safeParse(c.req.param(name));
+  if (!result.success) {
+    throw new BadRequest(`Parametro «${name}» non valido.`, formatIssues(result.error));
+  }
+  return result.data as string;
+}
+
+const explorationId = (c: Context) => param(c, "id", ExplorationId);
+
+function handleError(error: unknown, c: Context): Response {
+  if (error instanceof BadRequest) {
+    return c.json({ error: error.message, code: "bad-request", details: error.details }, 400);
+  }
+  if (error instanceof ZodError) {
+    return c.json(
+      { error: "Richiesta non valida.", code: "bad-request", details: formatIssues(error) },
+      400,
+    );
+  }
+  if (error instanceof ExploreError) {
+    const status = {
+      "not-found": 404,
+      conflict: 409,
+      "already-exists": 409,
+      "invalid-file": 500,
+      "invalid-input": 422,
+    } as const;
+    return c.json(
+      { error: error.message, code: error.code, details: error.details },
+      status[error.code],
+    );
+  }
+  console.error("[explore] unexpected error:", error instanceof Error ? error.message : error);
+  return c.json({ error: "Errore interno del server.", code: "internal" }, 500);
+}
+
+/** `x-file-name`: URI-encoded, reduced to a plain file name (no folders, no control characters). */
+function uploadFileName(c: Context): string {
+  const raw = c.req.header("x-file-name");
+  if (!raw) throw new BadRequest("Manca l'intestazione x-file-name con il nome del file.");
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    throw new BadRequest("Intestazione x-file-name non valida.");
+  }
+  const name = path.posix.basename(decoded.replace(/\\/g, "/")).replace(/[\u0000-\u001f]/g, "");
+  if (name.length === 0 || name.length > 300) {
+    throw new BadRequest("Nome del file non valido (1-300 caratteri).");
+  }
+  return name;
+}
+
+export interface ExploreAppOptions {
+  /** Library dependencies (tests pass fakes; the default is the library facade). */
+  deps?: Partial<LibraryDeps>;
+}
+
+export function createExploreApp(options: ExploreAppOptions = {}): Hono {
+  const app = new Hono();
+  const deps = withLibraryDeps(options.deps);
+
+  app.onError(handleError);
+  app.notFound((c) => c.json({ error: "Endpoint inesistente.", code: "not-found" }, 404));
+  app.use("/api/explore/*", localOnly);
+  app.use("/api/explore", localOnly);
+
+  // Body limits: 256 KB for JSON writes; the EPUB upload has its own, larger limit (see its route). Only on
+  // requests with a body (the limiter reads the stream, which a bodyless DELETE does not have).
+  const jsonLimit = bodyLimit({
+    maxSize: MAX_JSON_BYTES,
+    onError: (c) => c.json({ error: "Richiesta troppo grande.", code: "too-large" }, 413),
+  });
+  const epubLimit = bodyLimit({
+    maxSize: MAX_EPUB_BYTES,
+    onError: (c) =>
+      c.json({ error: "L'EPUB supera la dimensione massima (100 MB).", code: "too-large" }, 413),
+  });
+  const limitJson: MiddlewareHandler = (c, next) =>
+    EPUB_ROUTE.test(c.req.path) ? next() : jsonLimit(c, next);
+  app.on(["POST", "PATCH"], ["/api/explore", "/api/explore/*"], limitJson);
+
+  // Registered before `/api/explore/:id`, so the word is not taken for an ID.
+  app.get("/api/explore/library-books", async (c) =>
+    c.json({ books: await deps.listLibraryBookRefs() }),
+  );
+
+  app.get("/api/explore", async (c) => c.json({ explorations: await listExplorations() }));
+
+  app.get("/api/explore/:id", async (c) => c.json(await readExploration(explorationId(c))));
+
+  app.post("/api/explore", async (c) => {
+    const input = await readJson(c, CreateBody);
+    const exploration = await createExploration(
+      { title: input.title, question: input.question, books: input.books ?? [] },
+      new Date(),
+      deps,
+    );
+    return c.json(exploration, 201);
+  });
+
+  app.patch("/api/explore/:id", async (c) => {
+    const id = explorationId(c);
+    const patch = await readJson(c, ExplorationPatch);
+    return c.json(await updateExploration(id, patch));
+  });
+
+  app.post("/api/explore/:id/books", async (c) => {
+    const id = explorationId(c);
+    const input = await readJson(c, AddBookBody);
+    return c.json(await addLibraryBook(id, input.bookId, deps), 201);
+  });
+
+  app.post("/api/explore/:id/epub", epubLimit, async (c) => {
+    const id = explorationId(c);
+    const fileName = uploadFileName(c);
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    return c.json(await addExploreBook(id, { bytes, fileName }, deps), 201);
+  });
+
+  app.delete("/api/explore/:id/books/:bookId", async (c) => {
+    const id = explorationId(c);
+    const bookId = param(c, "bookId", BookId);
+    return c.json(await removeBook(id, bookId));
+  });
+
+  app.put("/api/explore/:id/verdicts/:bookId", async (c) => {
+    const id = explorationId(c);
+    const bookId = param(c, "bookId", BookId);
+    const input = await readJson(c, VerdictInput);
+    return c.json(await setVerdict(id, bookId, input, "app"));
+  });
+
+  app.post("/api/explore/:id/notes", async (c) => {
+    const id = explorationId(c);
+    const input = await readJson(c, NoteBody);
+    return c.json(await addNote(id, input, "app"), 201);
+  });
+
+  app.patch("/api/explore/:id/notes/:noteId", async (c) => {
+    const id = explorationId(c);
+    const noteId = param(c, "noteId", z.uuid());
+    const input = await readJson(c, NoteEditBody);
+    return c.json(await updateNote(id, noteId, input.body));
+  });
+
+  app.delete("/api/explore/:id/notes/:noteId", async (c) => {
+    const id = explorationId(c);
+    const noteId = param(c, "noteId", z.uuid());
+    return c.json(await removeNote(id, noteId));
+  });
+
+  app.post("/api/explore/:id/journal", async (c) => {
+    const id = explorationId(c);
+    const input = await readJson(c, JournalBody);
+    return c.json(await addJournal(id, input.text, "app"), 201);
+  });
+
+  return app;
+}

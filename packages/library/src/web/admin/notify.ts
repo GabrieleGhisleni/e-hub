@@ -18,7 +18,7 @@ export function announceWrite(title: string, report: ReconcileReport): void {
   showReport({ title, report });
 }
 
-/** Error toast; a `drive-failed` error also opens the report it carries. */
+/** Error toast; a `kobo-failed` error also opens the report it carries. */
 export function announceError(prefix: string, error: unknown): void {
   toast.error(prefix, { description: friendlyMessage(error), duration: 10_000 });
   if (error instanceof ApiRequestError && error.report) {
@@ -26,7 +26,7 @@ export function announceError(prefix: string, error: unknown): void {
   }
 }
 
-/** Success toast of a generated summary (the summary has no reconcile report: nothing goes to Drive). */
+/** Success toast of a generated summary (the summary has no reconcile report: nothing goes to the Kobo). */
 export function announceSummary(response: SummarizeResponse): void {
   toast.success(summaryDoneText(response));
 }

@@ -166,3 +166,50 @@ describe("book page: Sintesi section", () => {
     expect(html).toContain("Ricordare.");
   });
 });
+
+describe("book page: layout, chapters and highlights", () => {
+  const summary = {
+    language: "it",
+    model: "smart",
+    generatedAt: "2026-11-12T10:00:00.000Z",
+    book: "Sintesi del libro.",
+    chapters: [{ n: 1, title: "Introduzione", summary: "Riassunto." }],
+  };
+  const highlights = [
+    { text: "Primo passo.", chapter: "I", page: 15 },
+    { text: "Secondo passo.", chapter: "I", page: 16, note: "Da rileggere" },
+    { text: "Terzo passo.", chapter: "II", page: 21 },
+  ];
+
+  it("puts chapters and highlights in boxes after the summary, in the navigation order", () => {
+    const html = render(baseBook({ summary, highlights }));
+    const at = (needle: string) => html.indexOf(needle);
+    expect(at('id="sintesi"')).toBeLessThan(at('id="capitoli"'));
+    expect(at('id="capitoli"')).toBeLessThan(at('id="sottolineature"'));
+    const nav = html.slice(at('aria-label="In questa pagina"'));
+    expect(nav.indexOf('href="#capitoli"')).toBeLessThan(nav.indexOf('href="#sottolineature"'));
+    expect(html).toMatch(/aria-expanded="true"[^>]*>.*Capitoli/);
+  });
+
+  it("shows the highlights grouped by chapter, in order, with page and note", () => {
+    const html = render(baseBook({ highlights }));
+    expect(html.indexOf("Primo passo.")).toBeLessThan(html.indexOf("Terzo passo."));
+    expect(html.match(/aria-label="I"/g)).toHaveLength(1);
+    expect(html).toContain('aria-label="II"');
+    expect(html).toContain("p. 16");
+    expect(html).toContain("Da rileggere");
+  });
+
+  it("renders no highlights box when there are none", () => {
+    const html = render(baseBook({ summary }));
+    expect(html).not.toContain('id="sottolineature"');
+  });
+
+  it("folds the publisher description under the summary, and shows it in full without one", () => {
+    const withSummary = render(baseBook({ summary, description: "Testo dell'editore." }));
+    expect(withSummary).toContain("Descrizione dell&#x27;editore");
+    const without = render(baseBook({ description: "Testo dell'editore." }));
+    expect(without).toContain('id="descrizione"');
+    expect(without).not.toContain("Descrizione dell&#x27;editore");
+  });
+});

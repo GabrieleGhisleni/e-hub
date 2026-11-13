@@ -1,8 +1,6 @@
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadConfig } from "../../../src/node/config/index.ts";
-import { createDriveContext } from "../../../src/node/drive/index.ts";
 import { readBookSummary } from "../../../src/node/repo/index.ts";
 import {
   AiFailedError,
@@ -16,7 +14,7 @@ import {
   summarizeBook,
 } from "../../../src/node/summary/index.ts";
 import { BookSummarySchema } from "../../../src/shared/schema.ts";
-import { type TestEnv, createTestEnv, hasBinary } from "../../helpers/index.ts";
+import { type TestEnv, createTestEnv } from "../../helpers/index.ts";
 import { type Reply, type ScriptedModel, prose, scriptedModel, seedBook } from "./helpers.ts";
 
 const ID = "fx000001";
@@ -32,10 +30,9 @@ afterEach(async () => {
 });
 
 function deps(model: ScriptedModel["model"], extra: { retryDelayMs?: number } = {}) {
-  const config = loadConfig({ env: env.env });
   return {
     dataDir: env.dataDir,
-    drive: createDriveContext(config, { env: env.env }),
+    text: { dataDir: env.dataDir, cacheDir: env.cacheDir },
     model,
     configuredModel: "smart",
     now: (() => {
@@ -200,7 +197,7 @@ describe("summarizeBook", () => {
     expect(result.summary.chapters[0]!.summary).toBe(ANSWER);
   });
 
-  it.skipIf(!hasBinary("rclone"))("refuses to run without text: TextUnavailableError when the EPUB is neither cached nor on Drive", async () => {
+  it("refuses to run without text: TextUnavailableError when the EPUB is not in the cache", async () => {
     await seedBook(env, ID, [{ title: "Uno", words: 200 }]);
     await rm(path.join(env.cacheDir, "books", ID, "text"), { recursive: true, force: true });
     const mock = scriptedModel(() => ANSWER);

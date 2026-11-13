@@ -59,11 +59,17 @@ describe("diffToPatch", () => {
     expect(patch.authors).toEqual(["Daniel Kahneman", "Amos Tversky"]);
   });
 
-  it("flags file-moving changes", () => {
+  it("flags changes that rename the file on the Kobo (title or first author)", () => {
     const s = bookToFormState(book);
-    expect(patchMovesFiles(diffToPatch(s, { ...s, topic: "filosofia" }))).toBe(true);
-    expect(patchMovesFiles(diffToPatch(s, { ...s, title: "Altro" }))).toBe(true);
-    expect(patchMovesFiles(diffToPatch(s, { ...s, status: "to-read", tags: ["x"] }))).toBe(false);
+    expect(patchMovesFiles(diffToPatch(s, { ...s, title: "Altro" }), s.authors)).toBe(true);
+    expect(
+      patchMovesFiles(diffToPatch(s, { ...s, authors: ["Altro Autore", ...s.authors] }), s.authors),
+    ).toBe(true);
+    // Topic only rewrites the series in the metadata: no rename.
+    expect(patchMovesFiles(diffToPatch(s, { ...s, topic: "filosofia" }), s.authors)).toBe(false);
+    expect(
+      patchMovesFiles(diffToPatch(s, { ...s, status: "to-read", tags: ["x"] }), s.authors),
+    ).toBe(false);
   });
 
   it("normalizes the ISBN before comparing", () => {

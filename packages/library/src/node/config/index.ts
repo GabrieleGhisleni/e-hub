@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { type ElibConfig, ElibConfigSchema } from "../../shared/config.ts";
+import { type ElibConfig, ElibConfigSchema, KoboConfigSchema } from "../../shared/config.ts";
 
 /** Absolute path of the repository root (this file is `<root>/src/node/config/index.ts`). */
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -35,7 +35,7 @@ export function expandHome(p: string, home: string = homedir()): string {
 }
 
 export interface LoadConfigOptions {
-  /** Defaults to `process.env`. Recognized: `ELIB_CONFIG`, `ELIB_DATA_DIR`, `ELIB_CACHE_DIR`. */
+  /** Defaults to `process.env`. Recognized: `ELIB_CONFIG`, `ELIB_DATA_DIR`, `ELIB_CACHE_DIR`, `ELIB_KOBO_HOST`. */
   env?: NodeJS.ProcessEnv;
   /** Explicit config file; wins over `ELIB_CONFIG`. */
   configPath?: string;
@@ -43,7 +43,8 @@ export interface LoadConfigOptions {
 
 /**
  * Reads and validates `elib.config.json` (synchronous, so the Vite config can call it).
- * Env overrides, mainly for tests: `ELIB_CONFIG` (config file), `ELIB_DATA_DIR`, `ELIB_CACHE_DIR`.
+ * Env overrides, mainly for tests: `ELIB_CONFIG` (config file), `ELIB_DATA_DIR`, `ELIB_CACHE_DIR`, and `ELIB_KOBO_HOST`
+ * (the Kobo's SSH destination, which changes with DHCP). `kobo.identityFile` has `~` expanded.
  * Relative env paths resolve against the current directory; a relative `cache.dir` in the file resolves
  * against the file's directory.
  */
@@ -83,8 +84,20 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
   const envData = nonEmpty(env.ELIB_DATA_DIR);
   const dataDir = envData ? path.resolve(expandHome(envData)) : DEFAULT_DATA_DIR;
 
+  const envKoboHost = nonEmpty(env.ELIB_KOBO_HOST);
+  if (envKoboHost !== undefined && !KoboConfigSchema.shape.host.safeParse(envKoboHost).success) {
+    throw new ConfigError(
+      `invalid ELIB_KOBO_HOST ${JSON.stringify(envKoboHost)}: expected user@host`,
+    );
+  }
+
   return {
     ...config,
+    kobo: {
+      ...config.kobo,
+      ...(envKoboHost ? { host: envKoboHost } : {}),
+      identityFile: path.resolve(expandHome(config.kobo.identityFile)),
+    },
     cache: { ...config.cache, dir: cacheDir },
     configPath,
     repoRoot: REPO_ROOT,

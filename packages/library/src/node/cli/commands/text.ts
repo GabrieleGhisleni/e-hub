@@ -16,14 +16,19 @@ export const textCommand: CliCommand = {
       .option("--force", "regenerate even if the text already exists")
       .action(async (id: string, options: { force?: boolean }) => {
         try {
-          const result = await extractBookText(ctx.services().drive, id, {
-            force: options.force === true,
-          });
+          const config = ctx.config();
+          const result = await extractBookText(
+            { dataDir: config.dataDir, cacheDir: config.cache.dir },
+            id,
+            {
+              force: options.force === true,
+            },
+          );
           const { manifest } = result;
           ctx.out(
             result.skipped
               ? `Text already extracted (use --force to regenerate): ${result.outputDir}`
-              : `Text extracted${result.downloaded ? " (EPUB downloaded from Drive)" : ""}: ${result.outputDir}`,
+              : `Text extracted: ${result.outputDir}`,
           );
           ctx.out(`${manifest.title} (${manifest.authors.join(", ")})`);
           for (const c of manifest.chapters) {

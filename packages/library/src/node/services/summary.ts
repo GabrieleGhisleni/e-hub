@@ -53,12 +53,13 @@ export async function summarizeBookService(
     throw error;
   }
 
+  const concurrency = options.concurrency ?? model.concurrency;
   ctx.summariesInProgress.add(id);
   try {
     return await summarizeBook(
       {
         dataDir: ctx.dataDir,
-        drive: ctx.drive,
+        text: { dataDir: ctx.dataDir, cacheDir: ctx.cacheDir },
         model: model.model,
         configuredModel: model.configuredModel,
         ...(model.reasoningEffort !== undefined ? { reasoningEffort: model.reasoningEffort } : {}),
@@ -70,7 +71,7 @@ export async function summarizeBookService(
         force: req.force,
         ...(options.onProgress ? { onProgress: options.onProgress } : {}),
         ...(options.signal ? { signal: options.signal } : {}),
-        ...(options.concurrency ? { concurrency: options.concurrency } : {}),
+        ...(concurrency !== undefined ? { concurrency } : {}),
       },
     );
   } catch (error) {
@@ -84,4 +85,21 @@ export async function summarizeBookService(
   } finally {
     ctx.summariesInProgress.delete(id);
   }
+}
+
+/**
+ * Summary of a book just created, in the background: never awaited and never throws. With no AI configuration it logs
+ * one info line; any other failure is logged as a warning. The summary language is the default ("it").
+ */
+export function startSummaryInBackground(ctx: ServiceContext, id: string): void {
+  void summarizeBookService(ctx, id, {}).then(
+    () => ctx.logger.info(`Sintesi del libro ${id} pronta.`),
+    (error: unknown) => {
+      if (error instanceof ServiceError && error.code === "ai-not-configured") {
+        ctx.logger.info(`Sintesi del libro ${id} saltata: ${error.message}`);
+        return;
+      }
+      ctx.logger.warn(`Sintesi del libro ${id} non riuscita: ${error instanceof Error ? error.message : String(error)}`);
+    },
+  );
 }

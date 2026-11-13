@@ -1,12 +1,16 @@
 /**
  * Book text for the chat tools: the chapters of `elib text` (local cache). The manifest may be read without
- * touching Drive (`readCachedManifest`); the full text is loaded only by `loadBookText`, which may download the EPUB.
+ * extracting it (`readCachedManifest`); the full text is loaded only by `loadBookText`, which reads the cached EPUB.
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { cachedTextDir } from "../cache/index.ts";
-import type { DriveContext } from "../drive/context.ts";
-import { TEXT_MANIFEST_FILE, extractBookText, type TextManifest } from "../text/index.ts";
+import {
+  TEXT_MANIFEST_FILE,
+  extractBookText,
+  type TextContext,
+  type TextManifest,
+} from "../text/index.ts";
 
 /** A book's text: its manifest and the Markdown of each chapter, by chapter number. */
 export type BookText = {
@@ -27,9 +31,11 @@ export async function readCachedManifest(
   }
 }
 
-/** The book text from the local cache, extracting it first when missing (may download the EPUB from Drive). */
-export async function loadBookText(drive: DriveContext, id: string): Promise<BookText> {
-  const { outputDir, manifest } = await extractBookText(drive, id);
+/**
+ * The book text of an output dir with its manifest: the chapters are read from the files the manifest names, and
+ * each chapter is read at most once. Shared by the library (`loadBookText`) and the explorations (`loadExploreBookText`).
+ */
+export function bookTextFromDir(outputDir: string, manifest: TextManifest): BookText {
   const files = new Map(manifest.chapters.map((chapter) => [chapter.n, chapter.file]));
   const chapters = new Map<number, Promise<string>>();
   return {
@@ -45,4 +51,10 @@ export async function loadBookText(drive: DriveContext, id: string): Promise<Boo
       return text;
     },
   };
+}
+
+/** The book text from the local cache, extracting it first when missing (reads the cached EPUB). */
+export async function loadBookText(ctx: TextContext, id: string): Promise<BookText> {
+  const { outputDir, manifest } = await extractBookText(ctx, id);
+  return bookTextFromDir(outputDir, manifest);
 }

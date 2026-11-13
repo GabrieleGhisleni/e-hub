@@ -248,7 +248,7 @@ function UploadForm({ upload, onCancel }: { upload: UploadResponse; onCancel: ()
         <div className="space-y-2">
           {md5.map((d) => (
             <Notice key={d.path} tone="strong">
-              <p className="font-medium">Questo file è già nell’Archivio su Drive.</p>
+              <p className="font-medium">Questo file è già nella libreria.</p>
               <p className="mt-0.5 break-all text-muted-foreground">
                 <code className="text-xs">{d.path}</code>
                 {d.bookId ? (
@@ -341,7 +341,7 @@ function UploadForm({ upload, onCancel }: { upload: UploadResponse; onCancel: ()
             {busy ? (
               <>
                 <Loader2Icon className="animate-spin" />
-                Conversione e caricamento su Drive…
+                Conversione e invio al Kobo…
               </>
             ) : failure ? (
               <>
@@ -412,7 +412,7 @@ export function UploadPage() {
           <Loader2Icon aria-hidden className="size-8 animate-spin text-brand" />
           <p className="font-serif text-xl">Analisi di {stage.fileName}…</p>
           <p className="text-sm text-muted-foreground">
-            Lettura dei metadati, ricerca della copertina e controllo dei duplicati su Drive.
+            Lettura dei metadati, ricerca della copertina e controllo dei duplicati nella libreria.
           </p>
         </div>
       ) : null}

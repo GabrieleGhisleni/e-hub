@@ -75,7 +75,7 @@ describe("TopicsFileSchema", () => {
   it("rejects duplicate ids", () => {
     expect(TopicsFileSchema.safeParse([unsorted, unsorted]).success).toBe(false);
   });
-  it("rejects labels that map to the same Drive folder", () => {
+  it("rejects labels that look the same", () => {
     const result = TopicsFileSchema.safeParse([
       unsorted,
       { id: "a-b", label: "A/B" },
@@ -92,12 +92,11 @@ describe("TopicsFileSchema", () => {
 
 describe("ElibConfigSchema", () => {
   const config = {
-    drive: {
-      remote: "elib",
-      root: "",
-      koboTree: "Rakuten Kobo",
-      archiveTree: "Archivio",
-      topicSubfolders: { kobo: true, archive: true },
+    kobo: {
+      host: "root@192.168.1.11",
+      port: 2222,
+      identityFile: "~/.ssh/id_ecds_kobo",
+      booksDir: "/mnt/onboard/books",
     },
     cache: { dir: "~/.cache/e-library" },
     server: { port: 8787, allowedOrigins: ["http://127.0.0.1:5173"] },
@@ -107,10 +106,10 @@ describe("ElibConfigSchema", () => {
     expect(ElibConfigSchema.safeParse(config).success).toBe(true);
   });
   it.each([
-    ["absolute root", { ...config, drive: { ...config.drive, root: "/Libri" } }],
-    ["parent root", { ...config, drive: { ...config.drive, root: "Libri/../x" } }],
-    ["remote with colon", { ...config, drive: { ...config.drive, remote: "elib:" } }],
-    ["tree with slash", { ...config, drive: { ...config.drive, koboTree: "Rakuten/Kobo" } }],
+    ["relative booksDir", { ...config, kobo: { ...config.kobo, booksDir: "relative/path" } }],
+    ["booksDir with ..", { ...config, kobo: { ...config.kobo, booksDir: "/mnt/../etc" } }],
+    ["host with a space", { ...config, kobo: { ...config.kobo, host: "a b" } }],
+    ["missing kobo", { ...config, kobo: undefined }],
     [
       "origin with path",
       { ...config, server: { ...config.server, allowedOrigins: ["http://x:1/a"] } },

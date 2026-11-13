@@ -23,13 +23,13 @@ export class ServiceError extends Error {
   }
 }
 
-/** The operation stopped because Drive could not be aligned; the repo is unchanged. `details.report` says why. */
-export class DriveFailedError extends ServiceError {
+/** The operation stopped because the Kobo could not be aligned; the repo is unchanged. `details.report` says why. */
+export class KoboFailedError extends ServiceError {
   readonly report: ReconcileReport;
 
   constructor(message: string, report: ReconcileReport) {
-    super("drive-failed", 502, message, { details: { report } });
-    this.name = "DriveFailedError";
+    super("kobo-failed", 502, message, { details: { report } });
+    this.name = "KoboFailedError";
     this.report = report;
   }
 }

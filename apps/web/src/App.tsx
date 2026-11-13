@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider } from "react-router";
 import { libraryRoutes } from "@ehub/library/web";
 import { podcastsRoutes } from "@ehub/podcasts/web";
+import { exploreRoutes } from "@ehub/explore";
 import { notesRoutes } from "@ehub/notes";
 import { Shell } from "./components/shell";
 import { HomePage } from "./pages/home";
@@ -17,6 +18,7 @@ const router = createBrowserRouter(
         ...libraryRoutes(),
         ...podcastsRoutes(),
         ...notesRoutes(),
+        ...exploreRoutes(),
         { path: "*", element: <NotFoundPage /> },
       ],
     },

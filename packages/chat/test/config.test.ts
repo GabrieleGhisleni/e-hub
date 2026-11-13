@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { AiConfigError, loadAiConfig, loadDotEnvLocal } from "../src/node/index.ts";
+import { AiConfigError, DEFAULT_AI_BASE_URL, loadAiConfig, loadDotEnvLocal } from "../src/node/index.ts";
 
 const base = { EHUB_AI_BASE_URL: "https://llm.example.test/v1", EHUB_AI_API_KEY: "key-123" };
 
@@ -18,9 +18,13 @@ describe("loadAiConfig", () => {
     }
     expect(caught).toBeInstanceOf(AiConfigError);
     const problems = (caught as AiConfigError).problems;
-    expect(problems).toContain("EHUB_AI_BASE_URL is missing");
-    expect(problems).toContain("EHUB_AI_API_KEY is missing");
-    expect((caught as Error).message).toContain("EHUB_AI_BASE_URL");
+    expect(problems).toEqual(["EHUB_AI_API_KEY is missing"]);
+    expect((caught as Error).message).toContain("EHUB_AI_API_KEY");
+  });
+
+  it("defaults the base URL to the freeway router on the Pi", () => {
+    expect(loadAiConfig({ EHUB_AI_API_KEY: "key-123" }).baseUrl).toBe(DEFAULT_AI_BASE_URL);
+    expect(DEFAULT_AI_BASE_URL).toBe("https://freeway.gabrieleghisleni.dev/v1");
   });
 
   it("treats empty values as missing", () => {
@@ -33,15 +37,26 @@ describe("loadAiConfig", () => {
     );
   });
 
-  it("applies the defaults: model smart, summary model fast, reasoning off for summaries, 1_000_000 tokens", () => {
+  it("applies the defaults: model smart, summary model fast, reasoning off, 1_000_000 tokens", () => {
     expect(loadAiConfig(base)).toEqual({
       baseUrl: "https://llm.example.test/v1",
       apiKey: "key-123",
       model: "smart",
+      richModel: "gpt-6-luna",
+      reasoningEffort: "none",
       summaryModel: "fast",
       summaryReasoningEffort: "none",
       maxContextTokens: 1_000_000,
     });
+  });
+
+  it("reads the Feel rich model, gpt-6-luna by default", () => {
+    expect(loadAiConfig({ ...base, EHUB_AI_RICH_MODEL: "gpt-7" }).richModel).toBe("gpt-7");
+  });
+
+  it("reads the chat reasoning effort; 'default' leaves it unset", () => {
+    expect(loadAiConfig({ ...base, EHUB_AI_REASONING_EFFORT: "low" }).reasoningEffort).toBe("low");
+    expect(loadAiConfig({ ...base, EHUB_AI_REASONING_EFFORT: "default" }).reasoningEffort).toBeUndefined();
   });
 
   it("reads an explicit summary reasoning effort", () => {

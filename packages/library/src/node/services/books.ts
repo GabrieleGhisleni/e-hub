@@ -1,7 +1,9 @@
 /**
  * Book write operations (PLAN §7): create from a staged upload, edit, bulk edit, delete. Each one edits the repo and
- * then aligns Drive through the shared reconcile logic (W2b); create and delete are the two exceptions of PLAN §7
- * (book.json written last; explicit trash).
+ * then aligns the Kobo through the reconcile logic of src/node/kobo (docs/kobo-ssh-migration.md). The cache is the
+ * durable local copy, so a Kobo that is off or not on the Wi-Fi never fails a create or an edit: the report says so
+ * (`listing-failed`) and `elib sync` finishes the job later. Delete is the exception: the Kobo has no trash, so a
+ * delete that cannot reach the Kobo is refused and the repo is left unchanged.
  */
 import { copyFile, readFile, rm } from "node:fs/promises";
 import path from "node:path";
@@ -20,7 +22,7 @@ import { generateBookId } from "../../shared/ids.ts";
 import { type Book, BookSchema } from "../../shared/schema.ts";
 import { cachedEpubPath, cachedKepubPath, ensureDir, isNonEmptyFile } from "../cache/index.ts";
 import { placeholderCover, saveCover } from "../covers/index.ts";
-import { reconcile, reconcileBooks, trashBookFiles } from "../drive/index.ts";
+import { reconcile, removeBookFiles } from "../kobo/index.ts";
 import { KepubifyError, convertToKepub } from "../kepub/index.ts";
 import {
   BookNotFoundError,
@@ -31,14 +33,7 @@ import {
   writeBook,
 } from "../repo/index.ts";
 import type { ServiceContext } from "./context.ts";
-import {
-  DriveFailedError,
-  ServiceError,
-  badRequest,
-  conflict,
-  notFound,
-  reportErrorSummary,
-} from "./errors.ts";
+import { KoboFailedError, ServiceError, badRequest, conflict, notFound } from "./errors.ts";
 import {
   assertTopicExists,
   assertValidBookId,
@@ -68,13 +63,13 @@ import {
 
 /**
  * Creates a book from a staged upload, in the order of PLAN §7.1: ID (reserved in the staging dir, so a retry of the
- * same `uploadId` reuses it) → EPUB into the cache + kepubify → `cover.webp` → upload of both files (`reconcileBooks`)
- * → book.json, written last and only when the Drive report has no errors.
+ * same `uploadId` reuses it) → EPUB into the cache + kepubify → `cover.webp` → book.json, written last → Kobo
+ * (`reconcile` of the new book: KEPUB upload and series metadata). The Kobo step never fails the create: its errors
+ * come back in the report (status 201), e.g. `listing-failed` when the Kobo is off.
  *
- * On failure the repo keeps nothing: the book folder (holding only the cover) is removed and the error is thrown
- * (`DriveFailedError` with the report when Drive failed). The staging dir, the reserved ID and the cached EPUB/KEPUB
- * stay, so retrying the same request finishes the job without a second ID or duplicate Drive files (reconcile finds
- * what was already uploaded). A retry after success returns the existing book.
+ * On a failure before book.json the repo keeps nothing: the book folder (holding only the cover) is removed and the
+ * error is thrown. The staging dir, the reserved ID and the cached EPUB/KEPUB stay, so retrying the same request
+ * finishes the job with the same ID. A retry after success returns the existing book and aligns the Kobo again.
  */
 export async function createBook(
   ctx: ServiceContext,
@@ -111,7 +106,7 @@ async function createBookLocked(
       throw error;
     }
     if (state.status !== "created") await finishStaging(dir, state.bookId);
-    return { book, report: await reconcile(ctx.drive, [book.id]) };
+    return { book, report: await reconcile(ctx.kobo, [book.id]) };
   }
 
   const topics = await loadTopics(ctx);
@@ -127,7 +122,6 @@ async function createBookLocked(
     "nuovo libro",
   ) as Book;
 
-  let report;
   try {
     // 1. EPUB into the cache, KEPUB next to it.
     const epub = cachedEpubPath(ctx.cacheDir, id);
@@ -136,7 +130,7 @@ async function createBookLocked(
     const kepub = cachedKepubPath(ctx.cacheDir, id);
     if (!(await isNonEmptyFile(kepub))) {
       try {
-        await convertToKepub(epub, kepub, ctx.drive.kepubify);
+        await convertToKepub(epub, kepub, ctx.kobo.kepubify);
       } catch (error) {
         if (error instanceof KepubifyError) {
           throw new ServiceError(
@@ -155,21 +149,15 @@ async function createBookLocked(
         ? new Uint8Array(await readFile(cover.file))
         : await placeholderCover({ title: book.title, author: book.authors[0] });
     await saveCover(ctx.dataDir, id, webp);
-    // 3. Drive: EPUB in the Archive tree, KEPUB in the Kobo tree.
-    report = await reconcileBooks(ctx.drive, [book]);
-    if (report.errors.length > 0) {
-      throw new DriveFailedError(
-        `Caricamento su Drive non riuscito, il libro non è stato creato (riprova): ${reportErrorSummary(report)}`,
-        report,
-      );
-    }
-    // 4. book.json, last.
+    // 3. book.json, last: from here the book exists (the cache keeps the files even if the Kobo is unreachable).
     await writeBook(ctx.dataDir, book);
   } catch (error) {
     await removeIncompleteBookDir(ctx, id).catch(() => false);
     throw asWriteError(error);
   }
   await finishStaging(dir, id);
+  // 4. Kobo: KEPUB and series metadata. Errors stay in the report; `elib sync` finishes what did not reach the Kobo.
+  const report = await reconcile(ctx.kobo, [id]);
   ctx.logger.info(`book ${id} created: ${book.title}`);
   return { book, report };
 }
@@ -256,7 +244,7 @@ export async function updateBook(
     } catch (error) {
       throw asWriteError(error);
     }
-    return { book: next, report: await reconcile(ctx.drive, [id]) };
+    return { book: next, report: await reconcile(ctx.kobo, [id]) };
   });
 }
 
@@ -292,7 +280,7 @@ export async function bulkUpdate(
       }
       updated.push(next);
     }
-    return { books: updated, report: await reconcile(ctx.drive, ids) };
+    return { books: updated, report: await reconcile(ctx.kobo, ids) };
   });
 }
 
@@ -321,10 +309,10 @@ export function applyBulkPatch(book: Book, patch: BulkUpdateRequest["patch"]): B
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Sends every Drive file of the book to the trash, then removes `data/books/<id>/` (only when the trash step had no
- * errors: otherwise `DriveFailedError` and the repo is unchanged, so the delete can be retried). An incomplete folder
- * (no book.json) can be deleted too. The cache (`<cache>/books/<id>/`) is kept as a last local copy while Drive keeps
- * the trashed files for 30 days.
+ * Removes the book's KEPUB and sidecar folder from the Kobo, then removes `data/books/<id>/` (only when the Kobo step
+ * had no errors: otherwise `KoboFailedError` and the repo is unchanged, so the delete can be retried). The Kobo has no
+ * trash: the removal is final. An incomplete folder (no book.json) can be deleted too. The cache
+ * (`<cache>/books/<id>/`) is kept as the last local copy.
  */
 export async function deleteBook(ctx: ServiceContext, id: string): Promise<DeleteBookResponse> {
   assertValidBookId(id);
@@ -332,10 +320,10 @@ export async function deleteBook(ctx: ServiceContext, id: string): Promise<Delet
     if (!(await bookFolderExists(ctx, id))) {
       throw notFound("book-not-found", `Libro ${id} non trovato.`);
     }
-    const report = await trashBookFiles(ctx.drive, id);
+    const report = await removeBookFiles(ctx.kobo, id);
     if (report.errors.length > 0) {
-      throw new DriveFailedError(
-        `Spostamento nel cestino di Drive non riuscito, il libro non è stato eliminato (riprova): ${reportErrorSummary(report)}`,
+      throw new KoboFailedError(
+        "Il Kobo non è raggiungibile o non ha completato la cancellazione: il libro non è stato eliminato. Accendi il Kobo, collegalo al Wi-Fi e riprova.",
         report,
       );
     }

@@ -38,7 +38,7 @@ function Section({
   );
 }
 
-/** What a write did on Drive: actions done, warnings, errors. Reusable after any write. */
+/** What a write did on the Kobo: actions done, warnings, errors. Reusable after any write. */
 export function ReconcileReportView({ report }: { report: ReconcileReport }) {
   const summary = summarizeReport(report);
   return (
@@ -58,9 +58,9 @@ export function ReconcileReportView({ report }: { report: ReconcileReport }) {
             </li>
           ))}
           <li className="text-muted-foreground">
-            I dati del repository sono stati salvati: esegui{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">pnpm elib sync</code> per
-            completare l&rsquo;allineamento con Drive.
+            I dati della libreria sono stati salvati. Per completare l&rsquo;allineamento accendi il
+            Kobo, collegalo al Wi-Fi ed esegui{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">elib sync</code>.
           </li>
         </Section>
       ) : null}
@@ -82,7 +82,7 @@ export function ReconcileReportView({ report }: { report: ReconcileReport }) {
 
       {report.actions.length > 0 ? (
         <Section
-          title={`Operazioni su Drive (${report.actions.length})`}
+          title={`Operazioni sul Kobo (${report.actions.length})`}
           tone="neutral"
           icon={<CheckCircle2Icon className="size-4 text-status-read" />}
         >
@@ -98,7 +98,6 @@ export function ReconcileReportView({ report }: { report: ReconcileReport }) {
                 {ACTION_STATUS_LABEL[a.status]}
               </span>
               <span className="min-w-0 text-xs break-all text-muted-foreground">
-                {a.tree ? `${a.tree === "kobo" ? "Kobo" : "Archivio"} · ` : ""}
                 {baseName(a.to ?? a.from)}
               </span>
             </li>

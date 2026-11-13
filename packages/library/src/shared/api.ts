@@ -6,10 +6,10 @@
  * - JSON in, JSON out (`application/json`), except the multipart uploads and the cover images (`image/webp`).
  * - Errors: HTTP 4xx/5xx with an `ApiError` body `{error: {code, message, details?}}`. `message` is Italian and can be
  *   shown as is; `code` is stable (see `ApiErrorCode`). Request validation errors carry the Zod issues in `details`.
- * - Every write response carries a `ReconcileReport` (what was done on Drive, warnings, errors).
- *   Rule: when the repo change was made the status is 2xx even if Drive could not be aligned (the report has errors:
- *   `elib sync` finishes the job later). When the operation was aborted and the repo is unchanged (create/delete whose
- *   Drive step failed) the status is 502 with code `drive-failed` and `details: {report}`.
+ * - Every write response carries a `ReconcileReport` (what was done on the Kobo over SSH, warnings, errors).
+ *   Rule: when the repo change was made the status is 2xx even if the Kobo could not be aligned (offline, errors in the
+ *   report: `elib sync` finishes the job later). When the operation was aborted and the repo is unchanged (a delete
+ *   whose Kobo step failed) the status is 502 with code `kobo-failed` and `details: {report}`.
  * - Security: requests must come from the local UI (Host / Origin / Sec-Fetch-Site checks, see the server). Every
  *   non-GET request needs an `Origin` header from `server.allowedOrigins`: browsers add it; with curl pass
  *   `-H 'Origin: http://127.0.0.1:5173'`.
@@ -44,8 +44,9 @@ export const apiPaths = {
   books: "/api/library/books",
   /** PATCH `BookPatch` → `BookWriteResponse`; DELETE → `DeleteBookResponse`. */
   book: (id: string) => `/api/library/books/${encodeURIComponent(id)}`,
-  /** GET → `CoverCandidatesResponse` (may take a few seconds: Drive download, Open Library). */
-  bookCoverCandidates: (id: string) => `/api/library/books/${encodeURIComponent(id)}/cover-candidates`,
+  /** GET → `CoverCandidatesResponse` (may take a few seconds: Open Library). */
+  bookCoverCandidates: (id: string) =>
+    `/api/library/books/${encodeURIComponent(id)}/cover-candidates`,
   /** GET → `image/webp` candidate cover of an existing book. */
   bookCoverCandidate: (id: string, source: CandidateSource) =>
     `/api/library/books/${encodeURIComponent(id)}/cover-candidates/${source}`,
@@ -88,7 +89,7 @@ export const API_LIMITS = {
  *   `cover-changed` (the Open Library candidate is not the one the client saw);
  * - 413 `payload-too-large`; 415 `unsupported-media-type`;
  * - 409 `busy` (another elib process, e.g. the CLI or the server, holds the write lock);
- * - 502 `drive-failed` (`details: {report}`), `kepub-failed`;
+ * - 502 `kobo-failed` (`details: {report}`), `kepub-failed`;
  * - 500 `internal-error`.
  */
 export type ApiErrorCode =
@@ -112,7 +113,7 @@ export type ApiErrorCode =
   | "cover-changed"
   | "payload-too-large"
   | "unsupported-media-type"
-  | "drive-failed"
+  | "kobo-failed"
   | "kepub-failed"
   | "busy"
   | "ai-not-configured"
@@ -134,32 +135,31 @@ export type ApiError = z.infer<typeof ApiErrorSchema>;
 // ---------------------------------------------------------------------------------------------
 
 export const ReconcileActionTypeSchema = z.enum([
-  /** Copy a file from the local cache to its expected Drive path. */
+  /** Copy the cached KEPUB to its expected name on the Kobo. */
   "upload",
-  /** Move a misplaced file (recognized by the ID in its name) to its expected path. */
-  "move",
-  /** Send a file to the Drive trash (delete, or `sync --prune` on orphans). */
-  "trash",
-  /** Remove a now-empty topic folder (after moves or a topic rename). */
-  "rmdir",
+  /** Rename a KEPUB or its `.sdr` sidecar folder (recognized by the ID in its name) to the expected name. */
+  "rename",
+  /** Delete a KEPUB or `.sdr` folder on the Kobo (book deleted, or `sync --prune` on orphans). Irreversible. */
+  "remove",
+  /** (Re)write `<name>.kepub.sdr/custom_metadata.lua` (series = topic label, title, authors…). */
+  "metadata",
 ]);
 export type ReconcileActionType = z.infer<typeof ReconcileActionTypeSchema>;
 
 export const ReconcileActionSchema = z.object({
   type: ReconcileActionTypeSchema,
-  /** `planned` in dry runs (or before execution), `done` once rclone succeeded, `failed` otherwise (see errors). */
+  /** `planned` in dry runs (or before execution), `done` once the SSH command succeeded, `failed` otherwise (see errors). */
   status: z.enum(["planned", "done", "failed"]),
   bookId: BookIdSchema.optional(),
-  tree: z.enum(["kobo", "archive"]).optional(),
-  /** Source: a remote path, or a local cache path for uploads. */
+  /** Source: a name in `kobo.booksDir`, or a local cache path for uploads. */
   from: z.string().optional(),
-  /** Destination remote path (relative to the remote root). */
+  /** Destination, relative to `kobo.booksDir` (e.g. `A - T [id].kepub.sdr/custom_metadata.lua`). */
   to: z.string().optional(),
 });
 export type ReconcileAction = z.infer<typeof ReconcileActionSchema>;
 
 export const ReconcileMessageSchema = z.object({
-  /** Stable machine code, e.g. `orphan-file`, `missing-in-cache`, `duplicate-id`, `rclone-failed`. */
+  /** Stable machine code, e.g. `orphan-file`, `missing-in-cache`, `duplicate-id`, `ssh-failed`. */
   code: z.string(),
   message: z.string(),
   bookId: BookIdSchema.optional(),
@@ -244,7 +244,7 @@ export const CoverCandidateSchema = z.object({
 export type CoverCandidate = z.infer<typeof CoverCandidateSchema>;
 
 export const DuplicateMatchSchema = z.discriminatedUnion("kind", [
-  /** Same MD5 as a file already in the Archivio tree (`rclone md5sum`). */
+  /** Same MD5 as an EPUB already in the local cache (`<cache>/books/<id>/book.epub`); `path` is that cache file. */
   z.object({ kind: z.literal("md5"), path: z.string(), bookId: BookIdSchema.nullable() }),
   /** Same title and an author in common with a book in the repo (case/accent-insensitive; warning only). */
   z.object({
@@ -322,7 +322,7 @@ export const BookPatchSchema = z.strictObject({
 });
 export type BookPatch = z.infer<typeof BookPatchSchema>;
 
-/** GET /api/library/books/:id/cover-candidates (EPUB cover from the cached EPUB, downloaded from Drive when missing). */
+/** GET /api/library/books/:id/cover-candidates (EPUB cover from the cached EPUB). */
 export const CoverCandidatesResponseSchema = z.object({
   candidates: z.array(CoverCandidateSchema),
   /** Why a candidate is missing (no cached EPUB, Open Library down…). */
@@ -362,7 +362,7 @@ export const BulkUpdateResponseSchema = z.object({
 });
 export type BulkUpdateResponse = z.infer<typeof BulkUpdateResponseSchema>;
 
-/** DELETE /api/library/books/:id — Drive files to the trash, then the repo folder is removed (cache kept). */
+/** DELETE /api/library/books/:id — KEPUB and `.sdr` removed from the Kobo (irreversible), then the repo folder is removed (cache kept). */
 export const DeleteBookResponseSchema = z.object({
   id: BookIdSchema,
   report: ReconcileReportSchema,

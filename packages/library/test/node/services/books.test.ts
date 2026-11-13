@@ -9,8 +9,9 @@ import {
   uploadDir,
 } from "../../../src/node/cache/index.ts";
 import { readBook, readBookJsonText, writeBook } from "../../../src/node/repo/index.ts";
+import { reconcile } from "../../../src/node/kobo/index.ts";
 import {
-  DriveFailedError,
+  KoboFailedError,
   ServiceError,
   analyzeUpload,
   bulkUpdate,
@@ -19,18 +20,17 @@ import {
   updateBook,
 } from "../../../src/node/services/index.ts";
 import type { NewBook } from "../../../src/shared/api.ts";
+import { koboFileName } from "../../../src/shared/naming.ts";
 import type { Book } from "../../../src/shared/schema.ts";
 import { hasBinary } from "../../helpers/binaries.ts";
 import { buildEpub } from "../../helpers/epub.ts";
-import { makeTempDir } from "../../helpers/tmp.ts";
 import {
   OL_COVER_ID,
   OL_ISBN,
   type ServicesTestEnv,
-  failingKepubRclone,
+  offlineKoboTransport,
   openLibraryFetch,
   setupServices,
-  whichBinary,
 } from "./setup.ts";
 
 const NEW_BOOK: NewBook = {
@@ -71,7 +71,12 @@ async function createFrom(
   return result.book;
 }
 
-describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("book services", () => {
+/** The two names a book has on the Kobo: the KEPUB and its KOReader sidecar folder. */
+function koboNamesOf(book: Book): string[] {
+  return [koboFileName(book, "kepub"), koboFileName(book, "sidecar")].sort();
+}
+
+describe.skipIf(!hasBinary("kepubify"))("book services", () => {
   let t: ServicesTestEnv;
   let epub: Uint8Array;
   beforeEach(async () => {
@@ -132,21 +137,20 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("book services",
     expect(await readdir(path.join(t.env.cacheDir, "uploads")).catch(() => [])).toEqual([]);
   });
 
-  it("createBook: cache + kepubify → cover.webp → Drive → book.json last; retry returns the same book", async () => {
+  it("createBook: cache + kepubify → cover.webp → book.json → Kobo; retry returns the same book", async () => {
     const analysis = await upload(t, epub);
     const request = { uploadId: analysis.uploadId, book: NEW_BOOK, cover: "epub" as const };
     const { book, report } = await createBook(t.ctx, request);
     expect(report.errors).toEqual([]);
-    expect(report.actions.map((a) => `${a.type}:${a.status}:${a.tree}`).sort()).toEqual([
-      "upload:done:archive",
-      "upload:done:kobo",
+    expect(report.actions.map((a) => `${a.type}:${a.status}`).sort()).toEqual([
+      "metadata:done",
+      "upload:done",
     ]);
-    const exp = await t.expected(book);
-    expect(exp.epub).toBe(
-      `Archivio/Narrativa/Ada Esempio - Il giardino delle prove [${book.id}].epub`,
-    );
-    expect(await t.remoteFiles()).toEqual([exp.kepub, exp.epub].sort());
-    expect(new Uint8Array(await readFile(t.env.remote.localPath(exp.epub)))).toEqual(epub);
+    expect(await t.koboNames()).toEqual(koboNamesOf(book));
+    expect(
+      new Uint8Array(await readFile(path.join(t.env.koboDir, koboFileName(book, "kepub")))),
+    ).toEqual(new Uint8Array(await readFile(cachedKepubPath(t.env.cacheDir, book.id))));
+    expect(await t.koboMetadata(book)).toContain('["series"] = "Narrativa"');
     expect(await readBook(t.env.dataDir, book.id)).toEqual(book);
     expect(book).toMatchObject({ ...NEW_BOOK, id: book.id });
     expect(
@@ -157,12 +161,12 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("book services",
     const staging = uploadDir(t.env.cacheDir, analysis.uploadId);
     expect((await readdir(staging)).sort()).toEqual(["analysis.json", "state.json"]);
 
-    // Retry of the same request (lost response): same book, no second ID, no new Drive file.
+    // Retry of the same request (lost response): same book, no second ID, nothing new on the Kobo.
     const again = await createBook(t.ctx, request);
     expect(again.book).toEqual(book);
     expect(again.report.actions).toEqual([]);
     expect(await readdir(path.join(t.env.dataDir, "books"))).toEqual([book.id]);
-    expect(await t.remoteFiles()).toEqual([exp.kepub, exp.epub].sort());
+    expect(await t.koboNames()).toEqual(koboNamesOf(book));
   });
 
   it("createBook with the Open Library cover stores openLibraryCoverId and the ISBN", async () => {
@@ -233,53 +237,33 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("book services",
     );
   });
 
-  it("a Drive failure half-way leaves no book in the repo; the retry reuses the ID without duplicates", async () => {
-    const tmp = await makeTempDir("elib-fake-rclone-");
-    try {
-      const failing = t.makeCtx({
-        rcloneBinary: await failingKepubRclone(tmp.dir, whichBinary("rclone")),
-      });
-      const analysis = await analyzeUpload(failing, { fileName: "a.epub", bytes: epub });
-      const request = { uploadId: analysis.uploadId, book: NEW_BOOK, cover: "epub" as const };
-      const error = await expectServiceError(createBook(failing, request), 502, "drive-failed");
-      expect(error).toBeInstanceOf(DriveFailedError);
-      const report = (error as DriveFailedError).report;
-      expect(report.errors.map((e) => e.code)).toContain("rclone-failed");
+  it("a Kobo that is off does not fail the create: the book exists, the retry aligns the Kobo", async () => {
+    const offline = t.makeCtx({ transport: offlineKoboTransport(t.env.koboDir) });
+    const analysis = await analyzeUpload(offline, { fileName: "a.epub", bytes: epub });
+    const request = { uploadId: analysis.uploadId, book: NEW_BOOK, cover: "epub" as const };
+    const { book, report } = await createBook(offline, request);
+    expect(report.errors.map((e) => e.code)).toEqual(["listing-failed"]);
+    expect(await readBook(t.env.dataDir, book.id)).toEqual(book);
+    expect(await isNonEmptyFile(cachedEpubPath(t.env.cacheDir, book.id))).toBe(true);
+    expect(await isNonEmptyFile(cachedKepubPath(t.env.cacheDir, book.id))).toBe(true);
+    expect(await t.koboNames()).toEqual([]);
 
-      // Nothing half-written in the repo; the EPUB did reach the Archive.
-      expect(await readdir(path.join(t.env.dataDir, "books"))).toEqual([]);
-      const state = JSON.parse(
-        await readFile(
-          path.join(uploadDir(t.env.cacheDir, analysis.uploadId), "state.json"),
-          "utf8",
-        ),
-      ) as { bookId: string; status: string };
-      expect(state.status).toBe("reserved");
-      const files = await t.remoteFiles();
-      expect(files).toEqual([
-        `Archivio/Narrativa/Ada Esempio - Il giardino delle prove [${state.bookId}].epub`,
-      ]);
-
-      // Retry with a working rclone: same ID, one EPUB and one KEPUB.
-      const { book, report: retryReport } = await createBook(t.ctx, request);
-      expect(book.id).toBe(state.bookId);
-      expect(retryReport.errors).toEqual([]);
-      expect(retryReport.actions.map((a) => `${a.type}:${a.tree}`)).toEqual(["upload:kobo"]);
-      const exp = await t.expected(book);
-      expect(await t.remoteFiles()).toEqual([exp.kepub, exp.epub].sort());
-      expect(await readBookJsonText(t.env.dataDir, book.id)).not.toBeNull();
-    } finally {
-      await tmp.cleanup();
-    }
+    // The Kobo comes back: the retry uploads what is missing, with the same ID.
+    const again = await createBook(t.ctx, request);
+    expect(again.book.id).toBe(book.id);
+    expect(again.report.errors).toEqual([]);
+    expect(again.report.actions.map((a) => a.type)).toContain("upload");
+    expect(await t.koboNames()).toEqual(koboNamesOf(book));
+    expect(await readdir(path.join(t.env.dataDir, "books"))).toEqual([book.id]);
   });
 
-  it("duplicates: same MD5 on the Archive and same title+author in the repo", async () => {
+  it("duplicates: same MD5 as a cached EPUB and same title+author in the repo", async () => {
     const book = await createFrom(t, epub);
     const res = await upload(t, epub);
     expect(res.duplicates).toEqual([
       {
         kind: "md5",
-        path: `Archivio/Narrativa/Ada Esempio - Il giardino delle prove [${book.id}].epub`,
+        path: cachedEpubPath(t.env.cacheDir, book.id),
         bookId: book.id,
       },
       { kind: "title-author", bookId: book.id, title: book.title, authors: book.authors },
@@ -290,10 +274,9 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("book services",
     expect(res2.duplicates.map((d) => d.kind)).toEqual(["title-author"]);
   });
 
-  it("updateBook: null removes, unknown fields kept, files move with topic/title", async () => {
+  it("updateBook: null removes, unknown fields kept, files renamed with title, series rewritten with topic", async () => {
     const book = await createFrom(t, epub, { rating: 4 });
     await writeBook(t.env.dataDir, { ...book, personal: { note: "a mano" } } as Book);
-    const before = await t.expected(book);
 
     const { book: updated, report } = await updateBook(t.ctx, book.id, {
       topic: "filosofia",
@@ -302,7 +285,7 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("book services",
       status: "reading",
     });
     expect(report.errors).toEqual([]);
-    expect(report.actions.filter((a) => a.type === "move").map((a) => a.status)).toEqual([
+    expect(report.actions.filter((a) => a.type === "rename").map((a) => a.status)).toEqual([
       "done",
       "done",
     ]);
@@ -315,12 +298,11 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("book services",
     const onDisk = (await readBook(t.env.dataDir, book.id)) as Book & { personal?: unknown };
     expect(onDisk.personal).toEqual({ note: "a mano" });
     expect(onDisk.rating).toBeUndefined();
-    const after = await t.expected(updated);
-    expect(after.epub).toBe(`Archivio/Filosofia/Ada Esempio - Un titolo nuovo [${book.id}].epub`);
-    const files = await t.remoteFiles();
-    expect(files).toEqual([after.kepub, after.epub].sort());
-    expect(files).not.toContain(before.epub);
-    expect(await t.remoteDirs()).not.toContain("Archivio/Narrativa");
+    expect(await t.koboNames()).toEqual(koboNamesOf(updated));
+    expect(koboFileName(updated, "kepub")).toBe(
+      `Ada Esempio - Un titolo nuovo [${book.id}].kepub.epub`,
+    );
+    expect(await t.koboMetadata(updated)).toContain('["series"] = "Filosofia"');
 
     await expectServiceError(updateBook(t.ctx, book.id, { topic: "nope" }), 400, "unknown-topic");
     await expectServiceError(
@@ -363,9 +345,9 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("book services",
       ["saggistica", "read", ["Storia", "nuovo"]],
       ["saggistica", "read", ["prova", "storia", "nuovo"]],
     ]);
-    const files = await t.remoteFiles();
-    expect(files.every((f) => f.split("/")[1] === "Saggistica")).toBe(true);
-    expect(files).toHaveLength(4);
+    expect(await t.koboNames()).toHaveLength(4);
+    expect(await t.koboMetadata(a)).toContain('["series"] = "Saggistica"');
+    expect(await t.koboMetadata(b)).toContain('["series"] = "Saggistica"');
 
     const { books: cleared } = await bulkUpdate(t.ctx, {
       ids: [b.id],
@@ -379,22 +361,27 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("book services",
     expect(kept).toMatchObject({ topic: "saggistica", status: "read" });
   });
 
-  it("deleteBook: Drive files trashed, repo folder removed, cache kept", async () => {
+  it("deleteBook: KEPUB and sidecar removed from the Kobo, repo folder removed, cache kept", async () => {
     const book = await createFrom(t, epub);
     const { report } = await deleteBook(t.ctx, book.id);
     expect(report.errors).toEqual([]);
-    expect(report.actions.filter((a) => a.type === "trash")).toHaveLength(2);
-    expect(await t.remoteFiles()).toEqual([]);
+    expect(report.actions.filter((a) => a.type === "remove")).toHaveLength(2);
+    expect(await t.koboNames()).toEqual([]);
     expect(await readdir(path.join(t.env.dataDir, "books"))).toEqual([]);
     expect(await isNonEmptyFile(cachedEpubPath(t.env.cacheDir, book.id))).toBe(true);
     await expectServiceError(deleteBook(t.ctx, book.id), 404, "book-not-found");
   });
 
-  it("deleteBook keeps the repo folder when Drive fails", async () => {
+  it("deleteBook keeps the repo folder and the Kobo files when the Kobo is unreachable", async () => {
     const book = await createFrom(t, epub);
-    const broken = t.makeCtx({ rcloneBinary: "/nonexistent/rclone" });
-    await expectServiceError(deleteBook(broken, book.id), 502, "drive-failed");
+    const broken = t.makeCtx({ transport: offlineKoboTransport(t.env.koboDir) });
+    const error = await expectServiceError(deleteBook(broken, book.id), 502, "kobo-failed");
+    expect(error).toBeInstanceOf(KoboFailedError);
+    expect((error as KoboFailedError).report.errors.map((e) => e.code)).toEqual(["listing-failed"]);
     expect(await readBookJsonText(t.env.dataDir, book.id)).not.toBeNull();
+    expect(await t.koboNames()).toEqual(koboNamesOf(book));
+    // A reconcile of the book reaches the same state as before (nothing was half-done).
+    expect((await reconcile(t.ctx.kobo, [book.id])).errors).toEqual([]);
   });
 
   it("serializes concurrent writes", async () => {
@@ -411,7 +398,7 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("book services",
   });
 });
 
-describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("upload staging cleanup", () => {
+describe.skipIf(!hasBinary("kepubify"))("upload staging cleanup", () => {
   let t: ServicesTestEnv;
   beforeEach(async () => {
     t = await setupServices();

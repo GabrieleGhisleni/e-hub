@@ -2,8 +2,6 @@ import { mkdir, readFile, readdir, stat, utimes, writeFile } from "node:fs/promi
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cachedEpubPath } from "../../../src/node/cache/index.ts";
-import { loadConfig } from "../../../src/node/config/index.ts";
-import { createDriveContext } from "../../../src/node/drive/index.ts";
 import {
   EpubNotFoundError,
   UnsafeTextOutputError,
@@ -11,16 +9,9 @@ import {
   extractBookText,
 } from "../../../src/node/text/index.ts";
 import { writeBook } from "../../../src/node/repo/index.ts";
-import {
-  type TestEnv,
-  buildEpub,
-  createTestEnv,
-  hasBinary,
-  makeTempDir,
-} from "../../helpers/index.ts";
+import { type TestEnv, buildEpub, createTestEnv, makeTempDir } from "../../helpers/index.ts";
 
 const ID = "7k2m9q4t";
-const hasRclone = hasBinary("rclone");
 
 describe("extractBookText", () => {
   let env: TestEnv;
@@ -38,7 +29,7 @@ describe("extractBookText", () => {
     await env.cleanup();
   });
 
-  const makeCtx = () => createDriveContext(loadConfig({ env: env.env }), { env: env.env });
+  const makeCtx = () => ({ dataDir: env.dataDir, cacheDir: env.cacheDir });
   const putEpub = async () => {
     const file = cachedEpubPath(env.cacheDir, ID);
     await mkdir(path.dirname(file), { recursive: true });
@@ -51,7 +42,6 @@ describe("extractBookText", () => {
       now: () => new Date("2026-11-10T10:00:00Z"),
     });
     expect(result.skipped).toBe(false);
-    expect(result.downloaded).toBe(false);
     expect(result.outputDir).toBe(path.join(env.cacheDir, "books", ID, "text"));
     expect((await readdir(result.outputDir)).sort()).toEqual([
       "00-index.md",
@@ -123,24 +113,7 @@ describe("extractBookText", () => {
     await expect(extractBookText(makeCtx(), "../evil")).rejects.toThrow(/invalid book ID/);
   });
 
-  it.skipIf(!hasRclone)(
-    "downloads the EPUB from the Drive Archive tree when the cache is empty",
-    async () => {
-      const ctx = makeCtx();
-      const archive = `${env.remote.driveConfig().root ? `${env.remote.driveConfig().root}/` : ""}${env.remote.driveConfig().archiveTree}`;
-      const remotePath = `${archive}/Narrativa/Ada Esempio - Il giardino delle prove [${ID}].epub`;
-      const local = env.remote.localPath(remotePath);
-      await mkdir(path.dirname(local), { recursive: true });
-      await writeFile(local, await buildEpub());
-
-      const result = await extractBookText(ctx, ID);
-      expect(result.downloaded).toBe(true);
-      expect(result.manifest.chapters).toHaveLength(3);
-      expect((await stat(cachedEpubPath(env.cacheDir, ID))).size).toBeGreaterThan(0);
-    },
-  );
-
-  it.skipIf(!hasRclone)("fails clearly when the book is nowhere", async () => {
+  it("rejects with EpubNotFoundError when the EPUB is not in the local cache", async () => {
     await expect(extractBookText(makeCtx(), ID)).rejects.toThrow(EpubNotFoundError);
   });
 });
@@ -164,7 +137,7 @@ describe("repo guard", () => {
   it("refuses to write when the cache sits inside the repo", async () => {
     const env = await createTestEnv();
     try {
-      const ctx = createDriveContext(loadConfig({ env: env.env }), { env: env.env });
+      const ctx = { dataDir: env.dataDir, cacheDir: env.cacheDir };
       await expect(
         extractBookText(ctx, ID, { repoRoot: path.dirname(env.cacheDir) }),
       ).rejects.toThrow(UnsafeTextOutputError);

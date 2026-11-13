@@ -102,7 +102,7 @@ export async function listDirNames(dir: string): Promise<string[]> {
 
 /**
  * IDs that a new book must not take: every folder in data/books (incomplete uploads included), every book folder in
- * the cache (files of a book that may still be on Drive) and the IDs reserved by uploads in progress.
+ * the cache (files of a book that may still be on the Kobo) and the IDs reserved by uploads in progress.
  */
 export async function takenBookIds(
   ctx: ServiceContext,

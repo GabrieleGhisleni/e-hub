@@ -1,6 +1,7 @@
 import type { RouteObject } from "react-router";
 import { NotesPage } from "./notes-page";
 
+export { NoteMarkdown, markdownPreview } from "./markdown";
 export { NoteCard, NoteEditor, noteAnchor } from "./note-card";
 export {
   NOTES_PATH,

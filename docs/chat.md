@@ -14,7 +14,7 @@ Una chat dentro l'app, aperta dalla pagina di una fonte, che parla con un endpoi
 | ------------------ | --------------------------------------------------------------- | -------------------------------------------------------------- |
 | **Libro**          | Metadati, sintesi del libro, **sintesi di ogni capitolo**       | Leggere i capitoli che sceglie, cercare nel testo               |
 | **Episodio**       | Metadati, sintesi, **trascrizione intera** con minuti e speaker | Nessuno nella v1 (tutto è già nel contesto)                    |
-| **Esplorazione**   | La domanda, le sintesi di tutte le fonti                        | Leggere capitoli e tratti di trascrizione, cercare nelle fonti |
+| **Esplorazione**   | La domanda, le sintesi di tutti i libri, verdetti, note e diario | Leggere i capitoli, cercare in uno o in tutti i libri, proporre i verdetti (v1 solo libri) |
 
 ## 2. Decisioni
 
@@ -43,7 +43,7 @@ packages/chat/src/
     sources/
       book.ts        prompt (metadati + sintesi capitoli) + tool: list_chapters, read_chapter, search_book
       episode.ts     prompt (metadati + trascrizione compattata)
-      exploration.ts unione delle fonti + tool multi-fonte (Fase 5)
+      (la sorgente `exploration` vive in `@ehub/explore/chat`, vedi Fase 6)
   server/app.ts      POST /api/chat → UI message stream dell'AI SDK (testo, tool call, risultati)
   web/
     chat-panel.tsx   pannello laterale (Sheet shadcn) con `useChat` di `@ai-sdk/react`, Markdown, chip dei tool
@@ -108,4 +108,31 @@ Il codice lo scrivono subagent (Haiku), una fase alla volta. Il coordinatore fa 
   - Le sintesi aspettano su 429/503 e riprendono dai capitoli salvati in cache.
 - **Limiti dei piani gratuiti**: le prove del 12/11 hanno esaurito le quote giornaliere di OpenRouter, OpenCode e Gemini. Una sintesi di un libro intero costa circa 20–30 chiamate.
 - **Da rivedere**: alcuni test web della libreria stanno in `src/web/` e nessun tsconfig li controlla, e un test importa il mock LLM con un `import` dinamico. Va aggiunta una configurazione TypeScript per i test.
+- **Fase 5 (fatta)**: storico delle conversazioni in localStorage e "Salva come nota" (commit `28b84be`).
+- **Fase 6 (fatta, v1 solo libri)**: la sorgente `exploration`, in `packages/explore/src/chat/` e collegata in `apps/web/server/chat-dev.ts`. Dettagli in [esplorazioni.md](esplorazioni.md) §12.
+  - Prompt: domanda, stato, per ogni libro ID, origine (in libreria / solo da esplorare), verdetto attuale e sintesi dei capitoli (o l'elenco dal manifest in cache), poi sintesi, note e il **diario delle sessioni precedenti**, anche quelle fatte con la skill.
+  - Tool su più libri (`@ehub/library/explore`): `list_chapters({ book })`, `read_chapter({ book, chapter, part? })`, `search_book({ query, book? })`, che senza `book` cerca in tutti i libri. I tool del libro singolo non cambiano.
+  - `propose_verdicts({ verdicts, summary?, journal? })` non scrive nulla. Il pannello ha un nuovo prop `renderToolPart`, con cui la pagina dell'esplorazione sostituisce il chip con una scheda modificabile: si salva solo con "Conferma e salva".
+  - "Salva come nota" salva la risposta come nota dell'esplorazione.
+  - Lo storico locale è per esplorazione (`ehub:chat:exploration:<id>`).
+  - Provata nel browser il 12/11 contro il router: ricerca, lettura di un capitolo, proposta confermata e salvata (vedi [esplorazioni.md](esplorazioni.md) §12, "Prove del 12/11").
+  - **Note e reload (risolto 12/11)**: anche `apps/web/src/notes-data.ts` usa `import.meta.glob` su `packages/notes/data`; ora `packages/notes/data` è escluso dal watch di Vite come le esplorazioni, così salvare una nota non ricarica la pagina né chiude la chat.
+- **Fase 7 (fatta, 12/11)**: rifinitura.
+  - **Pannello**: non è più un foglio modale. Sta agganciato a destra senza bloccare la pagina, si ridimensiona dal bordo sinistro (anche con le frecce; doppio clic per tornare a 480 px; la larghezza resta in localStorage), si ingrandisce in una finestra centrata e si chiude con la X, con Esc o di nuovo con "Chatta". Su telefono occupa lo schermo. Messaggi con avatar, schede per i tool, "Copia" e "Salva come nota" sotto ogni risposta, indicatore "Sta pensando…", pulsante per tornare in fondo.
+  - **Note scritte dall'AI**: tool `save_note` lato client, aggiunto dal server a ogni fonte. Quando l'utente dice "aggiungilo alle note", il modello chiama il tool con un testo autonomo; il browser salva la nota con lo stesso `onSaveNote` del pulsante (libro, episodio o esplorazione), risponde al tool e il modello conferma. La nota compare nella chat come scheda.
+  - **Endpoint**: il default di `EHUB_AI_BASE_URL` è freeway sul Raspberry Pi, `https://freeway.gabrieleghisleni.dev/v1`; il router locale (`127.0.0.1:4100`) si usa solo impostando la variabile. Serve un token valido sul Pi in `EHUB_AI_API_KEY`.
+  - **Sintesi in parallelo**: tutte le chiamate al modello di una sintesi (capitoli, parti dei capitoli lunghi, unione) passano da un unico limitatore, 4 alla volta di default (`EHUB_AI_SUMMARY_CONCURRENCY`, massimo 8). Un libro nuovo nella libreria avvia la sintesi in background dopo la creazione.
 - il modello a volte cita frasi lunghe (circa 25 parole) nonostante il prompt; la metadata del modello arriva solo a fine risposta.
+
+## 9. Stato al 13/11
+
+- **Note in Markdown**: le note si leggono come Markdown (grassetti, elenchi, citazioni, link; `@ehub/notes`, `NoteMarkdown`). "Salva come nota" non appiattisce più la risposta: la domanda va in grassetto in cima, la riga d'origine in corsivo in fondo. Il tool `save_note` chiede testo in Markdown con riga iniziale in grassetto e `(cap. N)`.
+- **Pannello ingrandito**: testo più grande (`textSize="large"` di `MessageList`, contesto `ChatTextSizeContext`). I podcast usano un loro renderer e non lo seguono ancora.
+- **Modalità appunti** (decisa il 13/11): interruttore "Appunti" nel campo di testo, ricordato per fonte (`ehub:chat-notes-mode:<kind>:<id>`).
+  - Il client manda `notesMode: true`; il server aggiunge `NOTES_MODE_INSTRUCTIONS` al prompt: riga in grassetto con l'argomento, uno o due paragrafi brevi di prosa con i concetti in grassetto, `(cap. N)`, al massimo una citazione, niente preamboli.
+  - Sotto ogni risposta "Aggiungi alla bozza" sostituisce "Salva come nota". La bozza (`ehub:chat-draft:<kind>:<id>`, `notes-draft.ts`, `draft-panel.tsx`) sta a lato nel pannello ingrandito e al posto della conversazione in quello agganciato. Si modifica, si riordina, si svuota; "Salva come nota" la salva come una nota sola e la svuota.
+  - Se l'utente dice "salvalo", `save_note` finisce nella bozza: il browser risponde al modello «Aggiunta alla bozza degli appunti.».
+  - I capitoli restano `(cap. N)`, il numero del manifest (scelta dell'utente).
+- **Feel rich**: interruttore accanto ad "Appunti"; il client manda `rich: true` e il server usa `EHUB_AI_RICH_MODEL` (default `gpt-6-luna`). Non è ancora su freeway: finché il router risponde 400/404, la chat dice che il modello non è disponibile. Non viene ricordato tra un caricamento e l'altro.
+- **Sottolineature**: `elib sync` le riporta dal Kobo in `data/books/<id>/highlights.json`. La chat non le vede ancora (proposta C dello schema del 13/11).
+

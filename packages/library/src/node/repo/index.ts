@@ -6,5 +6,6 @@ export * from "./books.ts";
 export * from "./errors.ts";
 export { formatJson, readTextIfExists, writeFileAtomic } from "./fs.ts";
 export * from "./paths.ts";
+export * from "./highlights.ts";
 export * from "./summary.ts";
 export * from "./topics.ts";

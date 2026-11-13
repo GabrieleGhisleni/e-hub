@@ -23,9 +23,10 @@ describe("loadConfig", () => {
   it("reads the versioned elib.config.json with ~ expanded", () => {
     const config = loadConfig({ env: {} });
     expect(config.configPath).toBe(path.join(REPO_ROOT, "elib.config.json"));
-    expect(config.drive.remote).toBe("elib");
-    expect(config.drive.root).toBe("");
-    expect(config.drive.topicSubfolders).toEqual({ kobo: true, archive: true });
+    expect(config.kobo.host).toBe("root@192.168.1.11");
+    expect(config.kobo.port).toBe(2222);
+    expect(config.kobo.booksDir).toBe("/mnt/onboard/books");
+    expect(config.kobo.identityFile).toBe(path.join(os.homedir(), ".ssh/id_ecds_kobo"));
     expect(config.cache.dir).toBe(path.join(os.homedir(), ".cache/e-library"));
     expect(config.dataDir).toBe(DEFAULT_DATA_DIR);
     expect(config.server.port).toBe(8787);
@@ -39,12 +40,12 @@ describe("loadConfig", () => {
       file,
       JSON.stringify({
         ...base,
-        drive: { ...base.drive, remote: "elibtest" },
+        kobo: { ...base.kobo, booksDir: "/mnt/onboard/other" },
         cache: { dir: "cache" },
       }),
     );
     const fromFile = loadConfig({ env: { ELIB_CONFIG: file } });
-    expect(fromFile.drive.remote).toBe("elibtest");
+    expect(fromFile.kobo.booksDir).toBe("/mnt/onboard/other");
     expect(fromFile.cache.dir).toBe(path.join(tmp.dir, "cache")); // relative to the config file
 
     const overridden = loadConfig({
@@ -63,8 +64,26 @@ describe("loadConfig", () => {
       ConfigError,
     );
     const bad = path.join(tmp.dir, "bad.json");
-    await writeFile(bad, JSON.stringify({ drive: { remote: "elib:" } }));
+    await writeFile(bad, JSON.stringify({ kobo: { host: "a b" } }));
     expect(() => loadConfig({ configPath: bad })).toThrow(/invalid config file/);
+  });
+
+  it("ELIB_KOBO_HOST overrides the host of the config file", () => {
+    const config = loadConfig({ env: { ELIB_KOBO_HOST: "root@192.168.1.20" } });
+    expect(config.kobo.host).toBe("root@192.168.1.20");
+    expect(loadConfig({ env: {} }).kobo.host).toBe("root@192.168.1.11");
+  });
+
+  it("an invalid ELIB_KOBO_HOST throws ConfigError", () => {
+    expect(() => loadConfig({ env: { ELIB_KOBO_HOST: "not a host" } })).toThrow(ConfigError);
+  });
+
+  it("expands ~ in kobo.identityFile", async () => {
+    const file = path.join(tmp.dir, "kobo.json");
+    const base = loadConfig({ env: {} });
+    await writeFile(file, JSON.stringify({ ...base, kobo: { ...base.kobo, identityFile: "~/x" } }));
+    const config = loadConfig({ env: { ELIB_CONFIG: file } });
+    expect(config.kobo.identityFile).toBe(path.join(os.homedir(), "x"));
   });
 });
 

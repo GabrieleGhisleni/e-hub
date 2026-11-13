@@ -46,7 +46,7 @@ function EditForm({
   const errors = validateForm(state);
   const patch = diffToPatch(initial, state);
   const unchanged = isEmptyPatch(patch);
-  const moves = patchMovesFiles(patch);
+  const moves = patchMovesFiles(patch, initial.authors);
   const changedOnDisk = bookChangedSince(initial, book);
 
   async function save() {
@@ -116,9 +116,8 @@ function EditForm({
               className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400"
             />
             <p>
-              Cambiando argomento, titolo o autore i file di questo libro verranno{" "}
-              <strong>spostati e rinominati su Drive</strong>, in entrambi gli alberi (Kobo e
-              Archivio).
+              Cambiando titolo o primo autore il file di questo libro sul Kobo verrà{" "}
+              <strong>rinominato</strong>. I progressi di lettura restano.
             </p>
           </div>
         ) : null}
@@ -126,7 +125,7 @@ function EditForm({
           {busy ? (
             <>
               <Loader2Icon className="animate-spin" />
-              {moves ? "Salvataggio e spostamento su Drive…" : "Salvataggio…"}
+              {moves ? "Salvataggio e aggiornamento del Kobo…" : "Salvataggio…"}
             </>
           ) : (
             "Salva modifiche"

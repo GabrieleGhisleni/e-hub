@@ -6,16 +6,8 @@ import { randomBytes } from "node:crypto";
 import { mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { slugify } from "../../shared/slug.ts";
-import {
-  cacheBookDir,
-  cachedEpubPath,
-  cachedTextDir,
-  ensureDir,
-  isNonEmptyFile,
-} from "../cache/index.ts";
+import { cachedEpubPath, cachedTextDir, isNonEmptyFile } from "../cache/index.ts";
 import { REPO_ROOT } from "../config/index.ts";
-import type { DriveContext } from "../drive/context.ts";
-import { listLibraryFiles } from "../drive/remote-index.ts";
 import { extractEpubMetadata } from "../epub/index.ts";
 import { BookNotFoundError, readBook } from "../repo/index.ts";
 import { buildChapters } from "./chapters.ts";
@@ -41,6 +33,12 @@ export interface TextManifest {
   chapters: TextManifestChapter[];
 }
 
+/** What text extraction needs: the repo data dir (book.json for title/authors) and the local cache (the EPUB). */
+export interface TextContext {
+  readonly dataDir: string;
+  readonly cacheDir: string;
+}
+
 export interface ExtractTextOptions {
   /** Regenerate even when the output exists. */
   force?: boolean;
@@ -55,8 +53,6 @@ export interface ExtractTextResult {
   manifest: TextManifest;
   /** True when the existing output was kept (no `force`). */
   skipped: boolean;
-  /** True when the EPUB was downloaded from Drive in this run. */
-  downloaded: boolean;
 }
 
 export class UnsafeTextOutputError extends Error {
@@ -67,11 +63,15 @@ export class UnsafeTextOutputError extends Error {
 }
 
 export class EpubNotFoundError extends Error {
-  constructor(id: string) {
-    super(`no EPUB for book ${id}: not in the cache and not found in the Drive Archive tree`);
+  constructor(id: string, file: string) {
+    super(
+      `no EPUB for book ${id} in the local cache (${file}): upload the book again from the admin`,
+    );
     this.name = "EpubNotFoundError";
   }
 }
+
+export { EpubNotFoundError as NoEpubError };
 
 async function realpathOfExistingAncestor(target: string): Promise<string> {
   let probe = path.resolve(target);
@@ -98,7 +98,8 @@ export async function assertOutsideRepo(dir: string, repoRoot: string = REPO_ROO
   }
 }
 
-async function readManifest(outputDir: string): Promise<TextManifest | undefined> {
+/** The manifest in `outputDir`, or undefined when missing or unreadable. */
+export async function readManifest(outputDir: string): Promise<TextManifest | undefined> {
   try {
     return JSON.parse(
       await readFile(path.join(outputDir, TEXT_MANIFEST_FILE), "utf8"),
@@ -108,26 +109,15 @@ async function readManifest(outputDir: string): Promise<TextManifest | undefined
   }
 }
 
-/** Cached EPUB path, downloading it from the Drive Archive tree first when missing. Returns whether it downloaded. */
-async function ensureEpub(
-  ctx: DriveContext,
-  id: string,
-): Promise<{ file: string; downloaded: boolean }> {
+/** Path of the cached EPUB. Throws `EpubNotFoundError` when it is missing: the EPUB is never downloaded. */
+async function ensureEpub(ctx: TextContext, id: string): Promise<string> {
   const file = cachedEpubPath(ctx.cacheDir, id);
-  if (await isNonEmptyFile(file)) return { file, downloaded: false };
-  const files = await listLibraryFiles(ctx.rclone, ctx.drive);
-  const candidates = files
-    .filter((f) => f.tree === "archive" && f.id === id && f.kind === "epub")
-    .sort((a, b) => (a.modTime < b.modTime ? 1 : a.modTime > b.modTime ? -1 : 0));
-  const remote = candidates[0];
-  if (!remote) throw new EpubNotFoundError(id);
-  await ensureDir(path.dirname(file));
-  await ctx.rclone.download(remote.path, file);
-  return { file, downloaded: true };
+  if (!(await isNonEmptyFile(file))) throw new EpubNotFoundError(id, file);
+  return file;
 }
 
 async function bookMetadata(
-  ctx: DriveContext,
+  ctx: TextContext,
   id: string,
   epub: Uint8Array,
 ): Promise<{ title: string; authors: string[] }> {
@@ -158,36 +148,41 @@ function renderIndex(manifest: TextManifest): string {
   return lines.join("\n");
 }
 
+export interface WriteBookTextOptions {
+  /** Book ID (used in error messages). */
+  id: string;
+  title: string;
+  authors: string[];
+  /** Folder to create (replaced when it exists). Its parent must be writable: the temp dir is made next to it. */
+  outputDir: string;
+  /** Clock for `generatedAt` (tests). */
+  now?: () => Date;
+  /** Message of the error when the EPUB has no readable text (default: English, for `elib`). */
+  noTextMessage?: string;
+}
+
 /**
- * Extracts the book text into `<cache>/books/<id>/text/`. Without `force`, an existing output is kept.
- * Written to a temp dir next to the target and swapped in with renames.
+ * Builds the chapters of an EPUB and writes them into `outputDir`: one Markdown file per chapter, `00-index.md`
+ * and `manifest.json`. Written to a temp dir next to the target and swapped in with renames, so a failure keeps the
+ * previous output. Does not check the output dir against the repo: callers do that (`assertOutsideRepo`).
  */
-export async function extractBookText(
-  ctx: DriveContext,
-  id: string,
-  options: ExtractTextOptions = {},
-): Promise<ExtractTextResult> {
-  const outputDir = cachedTextDir(ctx.cacheDir, id); // validates the ID
-  await assertOutsideRepo(outputDir, options.repoRoot);
-
-  if (!options.force) {
-    const existing = await readManifest(outputDir);
-    if (existing) return { outputDir, manifest: existing, skipped: true, downloaded: false };
-  }
-
-  const { file, downloaded } = await ensureEpub(ctx, id);
-  const bytes = new Uint8Array(await readFile(file));
-  const structure = readEpubStructure(bytes);
+export async function writeBookText(
+  epub: Uint8Array,
+  options: WriteBookTextOptions,
+): Promise<TextManifest> {
+  const { id, outputDir } = options;
+  const structure = readEpubStructure(epub);
   const chapters = buildChapters(structure);
   if (chapters.length === 0)
-    throw new EpubTextError(`book ${id}: no readable text found in the EPUB`);
-  const meta = await bookMetadata(ctx, id, bytes);
+    throw new EpubTextError(
+      options.noTextMessage ?? `book ${id}: no readable text found in the EPUB`,
+    );
 
   const width = Math.max(2, String(chapters.length).length);
   const manifest: TextManifest = {
     id,
-    title: meta.title,
-    authors: meta.authors,
+    title: options.title,
+    authors: options.authors,
     generatedAt: (options.now?.() ?? new Date()).toISOString(),
     chapters: chapters.map((c) => ({
       n: c.n,
@@ -197,10 +192,11 @@ export async function extractBookText(
     })),
   };
 
-  const bookDir = cacheBookDir(ctx.cacheDir, id);
+  // The temp dir sits next to the target (same parent), so the final rename stays on one filesystem.
+  const parentDir = path.dirname(outputDir);
   const suffix = randomBytes(4).toString("hex");
-  const tmpDir = path.join(bookDir, `.text-${suffix}.tmp`);
-  const oldDir = path.join(bookDir, `.text-${suffix}.old`);
+  const tmpDir = path.join(parentDir, `.text-${suffix}.tmp`);
+  const oldDir = path.join(parentDir, `.text-${suffix}.old`);
   await mkdir(tmpDir, { recursive: true });
   try {
     for (const [i, chapter] of chapters.entries()) {
@@ -227,5 +223,35 @@ export async function extractBookText(
     await rm(tmpDir, { recursive: true, force: true });
     throw error;
   }
-  return { outputDir, manifest, skipped: false, downloaded };
+  return manifest;
+}
+
+/**
+ * Extracts the book text into `<cache>/books/<id>/text/`, from the EPUB in the local cache. Without `force`, an
+ * existing output is kept.
+ */
+export async function extractBookText(
+  ctx: TextContext,
+  id: string,
+  options: ExtractTextOptions = {},
+): Promise<ExtractTextResult> {
+  const outputDir = cachedTextDir(ctx.cacheDir, id); // validates the ID
+  await assertOutsideRepo(outputDir, options.repoRoot);
+
+  if (!options.force) {
+    const existing = await readManifest(outputDir);
+    if (existing) return { outputDir, manifest: existing, skipped: true };
+  }
+
+  const file = await ensureEpub(ctx, id);
+  const bytes = new Uint8Array(await readFile(file));
+  const meta = await bookMetadata(ctx, id, bytes);
+  const manifest = await writeBookText(bytes, {
+    id,
+    title: meta.title,
+    authors: meta.authors,
+    outputDir,
+    ...(options.now ? { now: options.now } : {}),
+  });
+  return { outputDir, manifest, skipped: false };
 }

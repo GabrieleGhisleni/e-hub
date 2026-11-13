@@ -45,7 +45,7 @@ export {
   createServiceContext,
   silentLogger,
 } from "./context.ts";
-export { DriveFailedError, ServiceError } from "./errors.ts";
+export { KoboFailedError, ServiceError } from "./errors.ts";
 export { LOCK_FILE_NAME, LockBusyError, Mutex, ProcessLock } from "./mutex.ts";
 export {
   applyBookPatch,
@@ -71,7 +71,11 @@ export {
   importFolder,
   scanImportFolder,
 } from "./import.ts";
-export { type SummarizeServiceOptions, summarizeBookService } from "./summary.ts";
+export {
+  type SummarizeServiceOptions,
+  startSummaryInBackground,
+  summarizeBookService,
+} from "./summary.ts";
 export { addTopic, deleteTopic, listTopics, renameTopic } from "./topics.ts";
 export {
   type AnalyzeUploadOptions,

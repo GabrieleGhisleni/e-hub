@@ -14,17 +14,17 @@ export interface ReportSummary {
 }
 
 const DONE_LABEL: Record<ReconcileAction["type"], [string, string]> = {
-  upload: ["file caricato su Drive", "file caricati su Drive"],
-  move: ["file spostato", "file spostati"],
-  trash: ["file nel cestino", "file nel cestino"],
-  rmdir: ["cartella vuota rimossa", "cartelle vuote rimosse"],
+  upload: ["file inviato al Kobo", "file inviati al Kobo"],
+  rename: ["file rinominato sul Kobo", "file rinominati sul Kobo"],
+  remove: ["elemento rimosso dal Kobo", "elementi rimossi dal Kobo"],
+  metadata: ["scheda aggiornata sul Kobo", "schede aggiornate sul Kobo"],
 };
 
 export const ACTION_TYPE_LABEL: Record<ReconcileAction["type"], string> = {
-  upload: "Caricamento",
-  move: "Spostamento",
-  trash: "Cestino",
-  rmdir: "Rimozione cartella",
+  upload: "Invio",
+  rename: "Rinomina",
+  remove: "Rimozione",
+  metadata: "Metadati",
 };
 
 export const ACTION_STATUS_LABEL: Record<ReconcileAction["status"], string> = {
@@ -51,7 +51,7 @@ export function summarizeReport(report: ReconcileReport): ReportSummary {
   if (report.warnings.length > 0) {
     problems.push(plural(report.warnings.length, "avviso", "avvisi"));
   }
-  let text = parts.length > 0 ? parts.join(", ") : "Nessuna operazione su Drive";
+  let text = parts.length > 0 ? parts.join(", ") : "Nessuna operazione sul Kobo";
   if (problems.length > 0) text += ` · ${problems.join(", ")}`;
   return {
     done: done.length,

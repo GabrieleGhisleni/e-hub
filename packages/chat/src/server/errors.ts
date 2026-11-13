@@ -74,8 +74,12 @@ function retryAfterSeconds(error: APICallError): number | undefined {
   return retry === undefined ? undefined : Math.ceil(Math.max(0, retry));
 }
 
-function describeApiError(error: APICallError): string {
+function describeApiError(error: APICallError, richModel?: string): string {
   const status = error.statusCode;
+  // The router answers 400/404 for a model it does not know: the rich model may not be on it yet.
+  if (richModel !== undefined && (status === 400 || status === 404)) {
+    return `Il modello di «Feel rich» (${richModel}) non è ancora disponibile sul router: disattiva Feel rich per usare quello di sempre.`;
+  }
   if (status === 503 || status === 429) {
     const seconds = retryAfterSeconds(error);
     const wait = seconds === undefined ? "" : ` Riprova tra ${seconds} secondi.`;
@@ -89,13 +93,14 @@ function describeApiError(error: APICallError): string {
 
 /**
  * Describes a failed LLM call for the chat panel, in Italian.
- * `baseUrl` (the model endpoint) is named in the network-error message when given.
+ * `baseUrl` (the model endpoint) is named in the network-error message when given; `richModel` is set when the
+ * request used the "Feel rich" model, so an unknown-model answer says so.
  */
-export function describeLlmError(error: unknown, options: { baseUrl?: string } = {}): string {
+export function describeLlmError(error: unknown, options: { baseUrl?: string; richModel?: string } = {}): string {
   if (isAbort(error)) return "Risposta interrotta.";
 
   const last = unwrapRetry(error);
-  if (APICallError.isInstance(last) && last.statusCode !== undefined) return describeApiError(last);
+  if (APICallError.isInstance(last) && last.statusCode !== undefined) return describeApiError(last, options.richModel);
 
   if (isNetworkError(last)) {
     const where = options.baseUrl ? ` (${options.baseUrl})` : "";

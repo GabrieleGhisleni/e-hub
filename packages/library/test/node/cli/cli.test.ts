@@ -27,7 +27,8 @@ async function elib(t: ServicesTestEnv, ...argv: string[]): Promise<Run> {
     stderr: (s) => {
       stderr += s;
     },
-    env: t.env.env,
+    // The test folders on top of the real env: kepubify still needs PATH.
+    env: { ...process.env, ...t.env.env },
     fetch: offlineFetch,
   };
   const code = await runCli(argv, io);
@@ -41,9 +42,30 @@ const BOOK = {
   topic: "narrativa",
   status: "to-read" as const,
 };
+/** The KEPUB and its KOReader sidecar metadata, as the CLI names them on the Kobo. */
+const BOOK_KEPUB = "Ada Esempio - Il giardino delle prove [7k2m9q4t].kepub.epub";
+const BOOK_METADATA =
+  "Ada Esempio - Il giardino delle prove [7k2m9q4t].kepub.sdr/custom_metadata.lua";
+/** Not in the repo: an orphan (valid ID, no folder in data/books). */
+const ORPHAN = "Ignoto - Altro [zzzz0000].kepub.epub";
+/** Copied by hand onto the Kobo: not ours, never touched. */
+const UNMANAGED = "Clear, James - Atomic habits.kepub.epub";
 
-describe.skipIf(!hasBinary("rclone"))("elib CLI", () => {
+describe("elib CLI", () => {
   let t: ServicesTestEnv;
+  /** Every file under the Kobo folder, sorted, "/"-separated. */
+  const koboFiles = async (): Promise<string[]> => {
+    const out: string[] = [];
+    const walk = async (dir: string, rel: string): Promise<void> => {
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        const name = rel ? `${rel}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) await walk(path.join(dir, entry.name), name);
+        else out.push(name);
+      }
+    };
+    await walk(t.env.koboDir, "");
+    return out.sort();
+  };
   beforeEach(async () => {
     t = await setupServices();
   });
@@ -74,7 +96,7 @@ describe.skipIf(!hasBinary("rclone"))("elib CLI", () => {
     expect(JSON.parse(json.stdout).errors.length).toBeGreaterThan(0);
   });
 
-  it("sync --dry-run plans uploads without writing; sync uploads; --prune notice; exit 1 on errors", async () => {
+  it("sync mirrors the repo onto the Kobo; --prune deletes orphans only; exit 1 on errors", async () => {
     await writeBook(t.env.dataDir, BOOK);
     for (const file of [
       cachedEpubPath(t.env.cacheDir, BOOK.id),
@@ -87,30 +109,43 @@ describe.skipIf(!hasBinary("rclone"))("elib CLI", () => {
     let run = await elib(t, "sync", "--dry-run");
     expect(run.code).toBe(0);
     expect(run.stdout).toContain("Dry run: nothing was changed");
-    expect(run.stdout).toContain("Uploads (2)");
+    expect(run.stdout).toContain("Uploaded to the Kobo (1)");
+    expect(run.stdout).toContain("Series metadata written (1)");
     expect(run.stdout).toContain("[planned]");
     expect(run.stdout).toContain("2 action(s) planned");
-    expect(await t.remoteFiles()).toEqual([]);
+    expect(await koboFiles()).toEqual([]);
 
     run = await elib(t, "sync", "--dry-run", "--json");
     const report = JSON.parse(run.stdout) as ReconcileReport;
     expect(report.dryRun).toBe(true);
-    expect(report.actions.map((a) => a.type)).toEqual(["upload", "upload"]);
+    expect(report.actions.map((a) => a.type)).toEqual(["upload", "metadata"]);
 
     run = await elib(t, "sync");
     expect(run.code).toBe(0);
+    expect(run.stderr).toContain("Kobo: ");
     expect(run.stdout).toContain("2 action(s) done");
-    expect(await t.remoteFiles()).toHaveLength(2);
+    expect(await koboFiles()).toEqual([BOOK_KEPUB, BOOK_METADATA].sort());
+    expect(await elib(t, "sync").then((r) => r.stdout)).toContain("nothing to do");
 
-    // An orphan on Drive: reported, trashed only with --prune.
-    await mkdir(t.env.remote.localPath("Archivio/Varie"), { recursive: true });
-    await writeFile(t.env.remote.localPath("Archivio/Varie/Altro [zzzz0000].epub"), "x");
+    // An orphan on the Kobo: reported, deleted only with --prune.
+    await writeFile(path.join(t.env.koboDir, ORPHAN), "x");
     run = await elib(t, "sync", "--dry-run", "--prune");
     expect(run.stderr).toContain("--prune (dry run)");
-    expect(run.stdout).toContain("To the Drive trash (1)");
+    expect(run.stdout).toContain("Deleted from the Kobo (1)");
+    expect(await koboFiles()).toHaveLength(3);
     run = await elib(t, "sync");
     expect(run.stdout).toContain("orphan-file");
-    expect(await t.remoteFiles()).toHaveLength(3);
+    expect(await koboFiles()).toHaveLength(3);
+    run = await elib(t, "sync", "--prune");
+    expect(run.stderr).toContain("there is no trash");
+    expect(run.stdout).toContain("Deleted from the Kobo (1)");
+    expect(await koboFiles()).toEqual([BOOK_KEPUB, BOOK_METADATA].sort());
+
+    // A file that is not ours is never deleted, not even with --prune --force.
+    await writeFile(path.join(t.env.koboDir, UNMANAGED), "x");
+    run = await elib(t, "sync", "--prune", "--force");
+    expect(run.code).toBe(0);
+    expect(await koboFiles()).toEqual([BOOK_KEPUB, BOOK_METADATA, UNMANAGED].sort());
 
     // A book with nothing to upload: error, exit 1.
     await writeBook(t.env.dataDir, { ...BOOK, id: "a1b2c3d4" });
@@ -154,7 +189,7 @@ describe.skipIf(!hasBinary("rclone"))("elib CLI", () => {
       expect(run.stdout).toMatch(/Missing among 3 readable: author 1, ISBN 1, cover 1/);
       expect((await readAllBooks(t.env.dataDir)).books).toEqual([]);
       expect(await readdir(t.env.cacheDir)).toEqual([]);
-      expect(await t.remoteFiles()).toEqual([]);
+      expect(await koboFiles()).toEqual([]);
 
       const json = JSON.parse(
         (await elib(t, "import", src.dir, "--dry-run", "--json")).stdout,
@@ -185,8 +220,12 @@ describe.skipIf(!hasBinary("rclone"))("elib CLI", () => {
           ["Il giardino delle prove", ["Ada Esempio", "Bruno Campione"], "unsorted", "to-read"],
           ["Senza copertina", ["Autore sconosciuto"], "unsorted", "to-read"],
         ]);
-        expect(await t.remoteFiles()).toHaveLength(4);
-        expect((await t.remoteFiles()).every((f) => f.split("/")[1] === "Da smistare")).toBe(true);
+        // Two KEPUBs and two sidecar metadata files, flat on the Kobo.
+        const files = await koboFiles();
+        expect(files).toHaveLength(4);
+        expect(
+          files.every((f) => /\[[0-9a-z]{8}\]\.kepub\.(epub|sdr\/custom_metadata\.lua)$/.test(f)),
+        ).toBe(true);
 
         run = await elib(t, "import", src.dir);
         expect(run.stdout).toContain("Imported 0, 3 duplicate(s) skipped");

@@ -141,9 +141,15 @@ export function isEmptyPatch(patch: BookPatch): boolean {
   return Object.values(patch).every((v) => v === undefined);
 }
 
-/** True when the patch moves files on Drive (topic, title or authors changed). */
-export function patchMovesFiles(patch: BookPatch): boolean {
-  return patch.topic !== undefined || patch.title !== undefined || patch.authors !== undefined;
+/**
+ * True when the patch changes the file name of the book on the Kobo: the title changed, or the first author did
+ * (the file is renamed, reading progress is kept). A topic change only rewrites the series in the metadata, so it
+ * is not reported here. `initialAuthors` is the author list before the edit.
+ */
+export function patchMovesFiles(patch: BookPatch, initialAuthors: readonly string[]): boolean {
+  if (patch.title !== undefined) return true;
+  if (patch.authors === undefined) return false;
+  return (patch.authors[0] ?? "") !== (cleanList(initialAuthors)[0] ?? "");
 }
 
 export type FormErrors = Partial<Record<keyof BookFormState, string>>;

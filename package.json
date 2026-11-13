@@ -8,6 +8,7 @@
     "dev": "pnpm --parallel --filter @ehub/web --filter @ehub/library run dev",
     "build": "pnpm --filter @ehub/web build",
     "preview": "pnpm --filter @ehub/web preview",
+    "explore": "pnpm --silent --dir packages/explore run explore",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"
   },

@@ -5,6 +5,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { loadConfig } from "@ehub/library/config";
 import { elibData } from "@ehub/library/vite";
+import { exploreData } from "@ehub/explore/vite";
 import { notesData } from "@ehub/notes/vite";
 import { staticPages } from "@ehub/podcasts/vite";
 
@@ -24,6 +25,8 @@ export default defineConfig(({ command }) => {
       staticPages({ dataDir: repo("podcasts/data"), urlPrefix: "podcasts" }),
       // Notes build guard: every packages/notes/data file must be valid, or the build fails.
       notesData(),
+      // Explorations build guard: every packages/explore/data file must be valid, or the build fails.
+      exploreData(),
       // Podcasts local write server (Hono): dev only, never part of the production build.
       // Hono handles only /api/podcasts/*; everything else is served by Vite.
       ...(command === "serve"
@@ -37,6 +40,12 @@ export default defineConfig(({ command }) => {
             devServer({
               entry: "./server/notes-dev.ts",
               exclude: [/^(?!\/api\/notes(\/|\?|$)).*/],
+              injectClientScript: false,
+            }),
+            // Explorations local write server (Hono): /api/explore and /api/explore/* only.
+            devServer({
+              entry: "./server/explore-dev.ts",
+              exclude: [/^(?!\/api\/explore(\/|\?|$)).*/],
               injectClientScript: false,
             }),
             // Chat local server (Hono): /api/chat only, streams the LLM reply. LLM config from .env.local.
@@ -64,6 +73,12 @@ export default defineConfig(({ command }) => {
       host: "127.0.0.1",
       port: 5173,
       strictPort: true,
+      watch: {
+        // In dev explorations and notes go through /api/explore and /api/notes; the globs in src/explore-data.ts and
+        // src/notes-data.ts are for the build only. Watching the files would reload the page on every write (e.g.
+        // halfway through saving a proposal, or when the chat saves a note), closing the chat.
+        ignored: ["**/packages/explore/data/**", "**/packages/notes/data/**"],
+      },
       proxy: {
         // The library node server runs separately (`pnpm dev` starts it alongside Vite).
         "/api/library": { target: `http://127.0.0.1:${libraryConfig.server.port}`, changeOrigin: false },

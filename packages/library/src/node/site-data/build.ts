@@ -16,6 +16,7 @@ import {
   coverPath,
   readAllBooks,
   readBookMarkdown,
+  readBookHighlights,
   readBookSummary,
   readTopics,
 } from "../repo/index.ts";
@@ -76,6 +77,28 @@ async function publicSummary(
   }
 }
 
+/** The public part of `highlights.json` (no positions or dates). Undefined when the book has none. */
+async function publicHighlights(
+  dataDir: string,
+  id: string,
+  problems: SiteDataProblem[],
+): Promise<BookDetail["highlights"]> {
+  try {
+    const file = await readBookHighlights(dataDir, id);
+    if (!file || file.highlights.length === 0) return undefined;
+    return file.highlights.map((h) => ({
+      text: h.text,
+      ...(h.note ? { note: h.note } : {}),
+      ...(h.chapter ? { chapter: h.chapter } : {}),
+      ...(h.page ? { page: h.page } : {}),
+    }));
+  } catch (error) {
+    if (!(error instanceof InvalidDataError)) throw error;
+    problems.push({ id, message: `highlights.json non valido, pubblicato senza sottolineature: ${error.message}` });
+    return undefined;
+  }
+}
+
 /** Only the schema's known optional fields, and only when present (unknown keys never get published). */
 function optional<K extends keyof Book>(book: Book, ...keys: K[]): Partial<Pick<Book, K>> {
   const out: Partial<Pick<Book, K>> = {};
@@ -133,6 +156,7 @@ export async function buildSiteData(
       readBookMarkdown(dataDir, book.id, "study"),
     ]);
     const summary = await publicSummary(dataDir, book.id, problems);
+    const highlights = await publicHighlights(dataDir, book.id, problems);
     const detail = BookDetailSchema.parse({
       ...card,
       ...optional(
@@ -148,6 +172,7 @@ export async function buildSiteData(
       recallHtml: renderMarkdown(recall),
       studyHtml: renderMarkdown(study),
       summary,
+      ...(highlights ? { highlights } : {}),
     });
     cards.push(card);
     details.set(book.id, detail);

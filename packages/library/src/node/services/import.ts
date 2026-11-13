@@ -6,14 +6,15 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { CoverSource, DuplicateMatch, ReconcileReport } from "../../shared/api.ts";
+import { isBookId } from "../../shared/ids.ts";
 import { UNSORTED_TOPIC_ID } from "../../shared/labels.ts";
-import { parseDriveFileName } from "../../shared/naming.ts";
-import { driveTreeDir } from "../../shared/paths.ts";
-import { md5File } from "../drive/index.ts";
+import { cacheBooksDir, cachedEpubPath, isNonEmptyFile } from "../cache/index.ts";
+import { md5File } from "../kobo/index.ts";
 import { EpubError, extractEpubMetadata } from "../epub/index.ts";
 import { createBook } from "./books.ts";
 import type { ServiceContext } from "./context.ts";
 import { ServiceError } from "./errors.ts";
+import { listDirNames } from "./internal.ts";
 import {
   analyzeUpload,
   dropOrphanMd5Matches,
@@ -52,15 +53,15 @@ export async function scanImportFolder(folder: string): Promise<ImportScan> {
   return { epubs: epubs.sort(byPath), skippedKepubs: skippedKepubs.sort(byPath) };
 }
 
-/** A duplicate found by the import: same MD5 as an Archive file, as an earlier file of the batch, or same title+author. */
+/** A duplicate found by the import: same MD5 as a cached EPUB, as an earlier file of the batch, or same title+author. */
 export type ImportDuplicate = DuplicateMatch | { kind: "batch"; file: string };
 
 export interface ImportItem {
   /** Absolute path. */
   file: string;
   /**
-   * `ready` (dry run: would be imported), `imported`, `duplicate` (skipped: same file already on Drive or earlier in
-   * the batch), `invalid` (not a readable EPUB), `failed` (error while creating it).
+   * `ready` (dry run: would be imported), `imported`, `duplicate` (skipped: same file already in the library or earlier
+   * in the batch), `invalid` (not a readable EPUB), `failed` (error while creating it).
    */
   status: "ready" | "imported" | "duplicate" | "invalid" | "failed";
   title?: string;
@@ -99,7 +100,7 @@ export interface ImportResult {
   skippedKepubs: string[];
   /** Files beyond `limit`. */
   notProcessed: number;
-  /** Batch-level problems (e.g. the Archive MD5 listing failed). */
+  /** Batch-level problems (e.g. the EPUB cache could not be read: duplicates are then not checked). */
   warnings: string[];
   errors: string[];
 }
@@ -123,27 +124,14 @@ export async function importFolder(
     errors: [],
   };
 
-  // One MD5 listing of the Archive tree for the whole batch (not one per file).
-  const archive = new Map<string, string[]>();
-  try {
-    const entries = await ctx.drive.rclone.md5sum(driveTreeDir(ctx.drive.drive, "archive"), {
-      missingOk: true,
-    });
-    for (const e of entries) archive.set(e.md5, [...(archive.get(e.md5) ?? []), e.path].sort());
-  } catch (error) {
-    const message = `cannot list the Archive MD5s: ${(error as Error).message.split("\n")[0]}`;
-    if (!dryRun) {
-      result.errors.push(`${message} (nothing imported: duplicates could not be checked)`);
-      return result;
-    }
-    result.warnings.push(`${message} (Drive duplicates not checked)`);
-  }
+  // One MD5 index of the cached EPUBs for the whole batch (not one hash pass per file).
+  const cached = await indexCachedEpubs(ctx, result);
 
   const seen = new Map<string, string>(); // md5 → first file of the batch
   for (const [index, file] of files.entries()) {
     const item = await importOne(ctx, file, {
       dryRun,
-      archive,
+      cached,
       seen,
       openLibrary: options.openLibrary ?? false,
     });
@@ -153,12 +141,38 @@ export async function importFolder(
   return result;
 }
 
+/**
+ * MD5 → cached EPUB paths of every book in the local cache (`<cache>/books/<id>/book.epub`), sorted. Entries whose
+ * folder name is not a book ID are skipped. A cache that cannot be read is a batch warning: duplicates are then not
+ * checked, the import goes on.
+ */
+async function indexCachedEpubs(
+  ctx: ServiceContext,
+  result: ImportResult,
+): Promise<Map<string, string[]>> {
+  const index = new Map<string, string[]>();
+  try {
+    for (const name of await listDirNames(cacheBooksDir(ctx.cacheDir))) {
+      if (!isBookId(name)) continue;
+      const epub = cachedEpubPath(ctx.cacheDir, name);
+      if (!(await isNonEmptyFile(epub))) continue;
+      const md5 = await md5File(epub);
+      index.set(md5, [...(index.get(md5) ?? []), epub].sort());
+    }
+  } catch (error) {
+    result.warnings.push(
+      `cannot index the EPUB cache: ${(error as Error).message.split("\n")[0]} (duplicates in the library not checked)`,
+    );
+  }
+  return index;
+}
+
 async function importOne(
   ctx: ServiceContext,
   file: string,
   opts: {
     dryRun: boolean;
-    archive: Map<string, string[]>;
+    cached: Map<string, string[]>;
     seen: Map<string, string>;
     openLibrary: boolean;
   },
@@ -202,12 +216,12 @@ async function importOne(
   if (!metadata.title.trim()) item.warnings.push("title taken from the file name");
   if (metadata.authors.length === 0) item.warnings.push(`no author: "${UNKNOWN_AUTHOR}" is used`);
 
-  // Duplicates: same file already in the Archive, or earlier in this batch (skipped); same title+author (warning).
+  // Duplicates: same file already in the cache, or earlier in this batch (skipped); same title+author (warning).
   const md5 = await md5File(file);
-  const md5Matches: DuplicateMatch[] = (opts.archive.get(md5) ?? []).map((remotePath) => ({
+  const md5Matches: DuplicateMatch[] = (opts.cached.get(md5) ?? []).map((cachePath) => ({
     kind: "md5",
-    path: remotePath,
-    bookId: parseDriveFileName(remotePath)?.id ?? null,
+    path: cachePath,
+    bookId: path.basename(path.dirname(cachePath)),
   }));
   // Orphan copies (no book in the repo: a failed earlier import) are not duplicates (R1-03).
   const split = await dropOrphanMd5Matches(ctx, md5Matches);
@@ -246,7 +260,7 @@ async function importOne(
   let uploadId: string | undefined;
   try {
     // A staging kept by a failed earlier run of the same file is reused: same upload, same reserved book ID, so
-    // `createBook` finds what already reached Drive (R1-03).
+    // `createBook` picks up where the earlier run stopped (R1-03).
     const reused = await findReusableStaging(ctx, md5);
     if (reused) item.warnings.push(`resuming an earlier failed import (book ${reused.bookId})`);
     const analysis =

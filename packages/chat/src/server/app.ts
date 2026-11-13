@@ -15,7 +15,35 @@ import {
   type ChatSource,
   type ChatUIMessage,
 } from "../shared/types.ts";
+import { SAVE_NOTE_TOOL, saveNoteTool } from "../shared/save-note.ts";
 import { describeLlmError } from "./errors.ts";
+
+/** Appended to the system prompt of every source: when to call `save_note`. */
+export const SAVE_NOTE_INSTRUCTIONS = [
+  "Se l'utente chiede di salvare o aggiungere qualcosa alle note (ad esempio «aggiungilo alle note», «salvalo», «segnatelo»), chiama lo strumento save_note.",
+  "Il testo della nota è in Markdown e deve essere autosufficiente: una riga iniziale in grassetto con l'argomento, i concetti chiave in grassetto, elenchi puntati per più punti, il capitolo (cap. N) o la pagina quando li conosci, senza preamboli.",
+  "Non salvare note se l'utente non te lo chiede. Non dire mai che una nota è stata salvata, se l'esito dello strumento non lo conferma.",
+].join(" ");
+
+/** Estimated tokens of SAVE_NOTE_INSTRUCTIONS and the tool definition, added to each source's `tokens`. */
+export const SAVE_NOTE_TOKENS = 250;
+
+/**
+ * Appended when the panel is in notes mode ("Appunti"): the user picks replies into a draft of notes, so each reply
+ * must read as a note on its own. `save_note` then adds to that draft (the browser decides), it does not save.
+ */
+export const NOTES_MODE_INSTRUCTIONS = [
+  "## Modalità appunti",
+  "L'utente sta prendendo appunti: sceglierà quali risposte aggiungere alla sua bozza di appunti, così come sono. Ogni risposta deve quindi reggersi da sola:",
+  "- Apri con una riga in grassetto che dice l'argomento (non la domanda).",
+  "- Poi uno o due paragrafi brevi di prosa, non elenchi, con i concetti chiave in **grassetto**.",
+  "- Indica sempre il capitolo così: (cap. N). Al massimo una citazione breve tra «».",
+  "- Niente preamboli, saluti, riassunti della domanda o domande finali.",
+  "- Se l'utente chiede di salvare o aggiungere qualcosa, usa save_note: il testo va nella bozza, che l'utente rivede prima di salvarla.",
+].join("\n");
+
+/** Estimated tokens of NOTES_MODE_INSTRUCTIONS. */
+export const NOTES_MODE_TOKENS = 180;
 
 /** What the chat knows about its source: the system prompt, its size, and optional tools. */
 export type ChatSourceContext = {
@@ -44,6 +72,8 @@ const BodySchema = z.object({
     kind: z.enum(["episode", "book", "exploration"]),
     id: z.string().min(1).max(ID_MAX_LENGTH),
   }),
+  notesMode: z.boolean().optional(),
+  rich: z.boolean().optional(),
   messages: z.array(
     z.looseObject({
       role: z.enum(["system", "user", "assistant"]),
@@ -131,36 +161,48 @@ export function createChatApp({ getLlm, resolveSource }: ChatAppOptions) {
         throw error;
       }
 
-      if (!fitsBudget(context.tokens, llm.config)) {
+      // The save_note tool and its instructions go with every source; the source's own tools win on a name clash.
+      const notesMode = body.notesMode === true;
+      const tokens = context.tokens + SAVE_NOTE_TOKENS + (notesMode ? NOTES_MODE_TOKENS : 0);
+      const tools: ToolSet = { [SAVE_NOTE_TOOL]: saveNoteTool, ...context.tools };
+      const system = [context.system, SAVE_NOTE_INSTRUCTIONS, ...(notesMode ? [NOTES_MODE_INSTRUCTIONS] : [])].join(
+        "\n\n",
+      );
+
+      if (!fitsBudget(tokens, llm.config)) {
         const budget = Math.floor(llm.config.maxContextTokens * 0.8);
         return c.json(
           {
-            error: `Il contenuto è troppo lungo per il contesto del modello (circa ${context.tokens} token, budget ${budget}). Il ripiego con i tool non è ancora disponibile.`,
+            error: `Il contenuto è troppo lungo per il contesto del modello (circa ${tokens} token, budget ${budget}). Il ripiego con i tool non è ancora disponibile.`,
           },
           413,
         );
       }
 
       const routerInfo: RouterInfo = {};
-      const { chatModel } = createLlm(llm.config, {
+      // "Feel rich": the same request on the rich model.
+      const rich = body.rich === true;
+      const { chatModel } = createLlm(rich ? { ...llm.config, model: llm.config.richModel } : llm.config, {
         headers: { "x-router-session": body.id },
         fetch: captureRouterHeaders(routerInfo),
       });
 
       let modelMessages;
       try {
-        modelMessages = await convertToModelMessages(messages, { tools: context.tools });
+        modelMessages = await convertToModelMessages(messages, { tools });
       } catch (error) {
         return c.json({ error: "Messaggi non convertibili.", details: [String(error)] }, 400);
       }
 
       const result = runAgent({
         model: chatModel,
-        system: context.system,
+        system,
         messages: modelMessages,
-        tools: context.tools,
+        tools,
         // The router already retries across providers; one more retry here only adds waiting.
         maxRetries: 1,
+        // Reasoning off by default (EHUB_AI_REASONING_EFFORT=none): replies start sooner.
+        ...(llm.config.reasoningEffort !== undefined ? { reasoningEffort: llm.config.reasoningEffort } : {}),
         abortSignal: c.req.raw.signal,
       });
 
@@ -169,7 +211,10 @@ export function createChatApp({ getLlm, resolveSource }: ChatAppOptions) {
         messageMetadata: ({ part }) => metadataFor(part, routerInfo),
         onError: (error) => {
           console.error("[chat] LLM call failed", error);
-          return describeLlmError(error, { baseUrl: llm.config.baseUrl });
+          return describeLlmError(error, {
+            baseUrl: llm.config.baseUrl,
+            ...(rich ? { richModel: llm.config.richModel } : {}),
+          });
         },
       });
     },

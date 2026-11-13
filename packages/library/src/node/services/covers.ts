@@ -1,8 +1,8 @@
 /**
  * Cover change for an existing book (PLAN §7.3, §8). Candidates live in `<cache>/books/<id>/cover-candidates/`:
- *   epub.webp            the EPUB's cover (from the cached EPUB, downloaded from Drive into the cache when missing)
+ *   epub.webp            the EPUB's cover (from the cached EPUB; the cache is the only copy of the EPUB)
  *   openlibrary.webp     the Open Library cover, with openlibrary.json (the match)
- * Only the chosen image is copied into the repo as `cover.webp`. Changing the cover never touches Drive.
+ * Only the chosen image is copied into the repo as `cover.webp`. Changing the cover never touches the Kobo.
  */
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -16,17 +16,15 @@ import {
   apiPaths,
   emptyReconcileReport,
 } from "../../shared/api.ts";
-import { expectedDrivePaths } from "../../shared/paths.ts";
 import type { Book } from "../../shared/schema.ts";
 import { cacheBookDir, cachedEpubPath, isNonEmptyFile } from "../cache/index.ts";
 import { placeholderCover, saveCover, toCoverWebp } from "../covers/index.ts";
-import { listLibraryFiles } from "../drive/index.ts";
 import { extractEpubMetadata } from "../epub/index.ts";
 import type { OpenLibraryMatch } from "../openlibrary/index.ts";
 import { writeBook } from "../repo/index.ts";
 import type { ServiceContext } from "./context.ts";
 import { badRequest, conflict, notFound, tooLarge } from "./errors.ts";
-import { assertValidBookId, asWriteError, loadBook, loadTopics, parseInput } from "./internal.ts";
+import { assertValidBookId, asWriteError, loadBook, parseInput } from "./internal.ts";
 import { fetchOpenLibraryCover, imageSize, openLibraryCandidate } from "./uploads.ts";
 
 const CANDIDATES_DIR = "cover-candidates";
@@ -52,7 +50,7 @@ export async function coverCandidates(
   const warnings: string[] = [];
   const candidates: CoverCandidate[] = [];
 
-  const epub = await ensureEpubCandidate(ctx, book, warnings, false);
+  const epub = await ensureEpubCandidate(ctx, book, warnings);
   if (epub) {
     candidates.push({
       source: "epub",
@@ -141,7 +139,7 @@ export async function setBookCover(
         await placeholderCover({ title: book.title, author: book.authors[0] }),
       );
     } else if (req.source === "epub") {
-      const webp = await ensureEpubCandidate(ctx, book, warnings, true);
+      const webp = await ensureEpubCandidate(ctx, book, warnings);
       if (!webp) {
         throw badRequest(
           "cover-unavailable",
@@ -180,24 +178,21 @@ export async function setBookCover(
 }
 
 /**
- * The EPUB cover as WebP (cached in cover-candidates/epub.webp). Needs the EPUB in the cache: when missing it is
- * downloaded from Drive (the book's `.epub`, expected path first) under the write lock (`locked`: the caller already
- * holds it; the mutex is not reentrant). Null + warning otherwise.
+ * The EPUB cover as WebP (cached in cover-candidates/epub.webp). Needs the EPUB in the local cache: when it is missing
+ * there is no EPUB cover (a warning, null) and nothing is downloaded.
  */
 async function ensureEpubCandidate(
   ctx: ServiceContext,
   book: Book,
   warnings: string[],
-  locked: boolean,
 ): Promise<Uint8Array | null> {
   const file = candidateFile(ctx, book.id, "epub");
   if (await isNonEmptyFile(file)) return new Uint8Array(await readFile(file));
 
   const epub = cachedEpubPath(ctx.cacheDir, book.id);
   if (!(await isNonEmptyFile(epub))) {
-    const download = () => downloadEpub(ctx, book, epub, warnings);
-    const downloaded = locked ? await download() : await ctx.lock.runExclusive(download);
-    if (!downloaded) return null;
+    warnings.push("L'EPUB non è nella cache locale: copertina dell'EPUB non disponibile.");
+    return null;
   }
   try {
     const metadata = await extractEpubMetadata(epub);
@@ -212,39 +207,6 @@ async function ensureEpubCandidate(
   } catch (error) {
     warnings.push(`Copertina dell'EPUB illeggibile: ${(error as Error).message.split("\n")[0]}`);
     return null;
-  }
-}
-
-/** Downloads the book's EPUB from Drive into the cache. Runs under the lock (reconcile may also write there). */
-async function downloadEpub(
-  ctx: ServiceContext,
-  book: Book,
-  target: string,
-  warnings: string[],
-): Promise<boolean> {
-  if (await isNonEmptyFile(target)) return true;
-  try {
-    const files = (await listLibraryFiles(ctx.drive.rclone, ctx.drive.drive)).filter(
-      (f) => f.id === book.id && f.kind === "epub",
-    );
-    if (files.length === 0) {
-      warnings.push("L'EPUB non è né nella cache né su Drive.");
-      return false;
-    }
-    let expected: string | undefined;
-    try {
-      expected = expectedDrivePaths(book, await loadTopics(ctx), ctx.drive.drive).epub;
-    } catch {
-      expected = undefined;
-    }
-    const source = files.find((f) => f.path === expected) ?? files[0]!;
-    await ctx.drive.rclone.download(source.path, target);
-    return true;
-  } catch (error) {
-    warnings.push(
-      `Download dell'EPUB da Drive non riuscito: ${(error as Error).message.split("\n")[0]}`,
-    );
-    return false;
   }
 }
 

@@ -1,8 +1,9 @@
 /**
- * Drive file and folder names (PLAN §6, rules fixed in Fase 1).
+ * File names on the Kobo (PLAN §6, rules fixed in Fase 1; Drive was replaced by the Kobo over SSH, see
+ * docs/kobo-ssh-migration.md). Flat folder (`kobo.booksDir`), one KEPUB per book plus KOReader's sidecar folder:
  *
- *   <first author> - <title> [<id>].epub          (Archivio)
- *   <first author> - <title> [<id>].kepub.epub    (Rakuten Kobo)
+ *   <first author> - <title> [<id>].kepub.epub    the book
+ *   <first author> - <title> [<id>].kepub.sdr/    KOReader sidecar (custom_metadata.lua, reading progress)
  *
  * Sanitizing (`sanitizeNameSegment`), applied to the author, the title and topic labels:
  *  1. Unicode NFC; every whitespace run (tabs, newlines, NBSP…) becomes one space.
@@ -20,22 +21,27 @@
  * FAT32 limit (255 UTF-16 units), ext4's 255 bytes, and short enough for Windows' 260-character paths
  * when copying to the Kobo over USB. The Kobo shows the title from the metadata, so the cut is invisible there.
  *
- * The whole name never starts with a dot (hidden on the Kobo). Topic folders: same sanitizer, max 60
- * characters / 120 bytes, no trailing dots or spaces, DOS device names (CON, NUL…) get a "_" suffix.
+ * The whole name never starts with a dot (hidden on the Kobo). `topicFolderName` (topic labels: same sanitizer, max 60
+ * characters / 120 bytes, no trailing dots or spaces, DOS device names get a "_" suffix) is kept to refuse two labels
+ * that would look the same.
  */
 import type { Book } from "./schema.ts";
 import { graphemes, utf8Length } from "./text.ts";
 
-export type DriveFileKind = "epub" | "kepub";
+/** What a name on the Kobo is: the KEPUB file, or its KOReader sidecar folder. */
+export type KoboEntryKind = "kepub" | "sidecar";
 
-export const DRIVE_FILE_EXTENSIONS: Readonly<Record<DriveFileKind, string>> = {
-  epub: ".epub",
+export const KOBO_ENTRY_SUFFIXES: Readonly<Record<KoboEntryKind, string>> = {
   kepub: ".kepub.epub",
+  sidecar: ".kepub.sdr",
 };
 
-export const DRIVE_AUTHOR_MAX_CHARS = 60;
-export const DRIVE_BASE_MAX_CHARS = 120;
-export const DRIVE_BASE_MAX_BYTES = 200;
+/** The metadata file KOReader reads inside the sidecar folder (`custom_props.series` = topic label). */
+export const KOBO_SIDECAR_METADATA_FILE = "custom_metadata.lua";
+
+export const KOBO_AUTHOR_MAX_CHARS = 60;
+export const KOBO_BASE_MAX_CHARS = 120;
+export const KOBO_BASE_MAX_BYTES = 200;
 export const TOPIC_FOLDER_MAX_CHARS = 60;
 export const TOPIC_FOLDER_MAX_BYTES = 120;
 
@@ -46,7 +52,7 @@ const SPACED_SEPARATOR = /\s*[:|/\\]\s+|\s+[:|/\\]\s*/g;
 const BARE_SEPARATOR = /[:|/\\]/g;
 const REMOVED = /[?*<>]/g;
 
-/** Makes one piece of a Drive name FAT32-safe (see the module comment). May return "". */
+/** Makes one piece of a Kobo file name FAT32-safe (see the module comment). May return "". */
 export function sanitizeNameSegment(input: string): string {
   return input
     .normalize("NFC")
@@ -93,28 +99,31 @@ export function truncateName(
 }
 
 /** `<first author> - <title>`, sanitized and truncated, without ID and extension. */
-export function driveBaseName(book: Pick<Book, "title" | "authors">): string {
-  const author = truncateName(sanitizeNameSegment(book.authors[0] ?? ""), DRIVE_AUTHOR_MAX_CHARS);
+export function koboBaseName(book: Pick<Book, "title" | "authors">): string {
+  const author = truncateName(sanitizeNameSegment(book.authors[0] ?? ""), KOBO_AUTHOR_MAX_CHARS);
   const title = sanitizeNameSegment(book.title);
   const joined = author && title ? `${author} - ${title}` : author || title;
-  const base = truncateName(joined, DRIVE_BASE_MAX_CHARS, DRIVE_BASE_MAX_BYTES).replace(
+  const base = truncateName(joined, KOBO_BASE_MAX_CHARS, KOBO_BASE_MAX_BYTES).replace(
     /^[.\s]+/,
     "",
   );
   return base || UNTITLED;
 }
 
-/** Drive file name, e.g. `Yuval Noah Harari - Sapiens - Da animali a dèi [7k2m9q4t].kepub.epub`. */
-export function driveFileName(
+/**
+ * Name on the Kobo: `kepub` → `Yuval Noah Harari - Sapiens - Da animali a dèi [7k2m9q4t].kepub.epub`, `sidecar` → the
+ * same with `.kepub.sdr` (KOReader's folder for that file).
+ */
+export function koboFileName(
   book: Pick<Book, "id" | "title" | "authors">,
-  kind: DriveFileKind,
+  kind: KoboEntryKind = "kepub",
 ): string {
-  return `${driveBaseName(book)} [${book.id}]${DRIVE_FILE_EXTENSIONS[kind]}`;
+  return `${koboBaseName(book)} [${book.id}]${KOBO_ENTRY_SUFFIXES[kind]}`;
 }
 
 const DOS_DEVICE = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\..*)?$/i;
 
-/** Drive folder name for a topic label (same sanitizer as files; never empty, never hidden). */
+/** Folder-safe form of a topic label (same sanitizer as files; never empty, never hidden): used to refuse look-alike labels. */
 export function topicFolderName(label: string): string {
   let name = truncateName(
     sanitizeNameSegment(label),
@@ -128,19 +137,23 @@ export function topicFolderName(label: string): string {
   return name;
 }
 
-const DRIVE_NAME_PATTERN = /\[([0-9abcdefghjkmnpqrstvwxyz]{8})\](\.kepub)?\.epub$/i;
+const KOBO_NAME_PATTERN = /\[([0-9abcdefghjkmnpqrstvwxyz]{8})\]\.kepub\.(epub|sdr)$/i;
 
 /**
- * Reads the book ID and the kind back from a Drive file name or path (`… [<id>].kepub.epub` → kepub).
- * Only the bracket group right before the extension counts. Returns null for names we did not produce.
+ * Reads the book ID and the kind back from a name or path on the Kobo (`… [<id>].kepub.epub` → kepub,
+ * `… [<id>].kepub.sdr` → sidecar). Only the bracket group right before the suffix counts. Returns null for names we
+ * did not produce (e.g. `Clear, James - Atomic habits.kepub.epub`, copied by hand: never touched).
  */
-export function parseDriveFileName(name: string): { id: string; kind: DriveFileKind } | null {
-  const base = name.slice(name.lastIndexOf("/") + 1);
-  const match = DRIVE_NAME_PATTERN.exec(base);
-  if (!match?.[1]) return null;
-  return { id: match[1].toLowerCase(), kind: match[2] ? "kepub" : "epub" };
+export function parseKoboFileName(name: string): { id: string; kind: KoboEntryKind } | null {
+  const base = name.replace(/\/+$/, "").slice(name.replace(/\/+$/, "").lastIndexOf("/") + 1);
+  const match = KOBO_NAME_PATTERN.exec(base);
+  if (!match?.[1] || !match[2]) return null;
+  return {
+    id: match[1].toLowerCase(),
+    kind: match[2].toLowerCase() === "sdr" ? "sidecar" : "kepub",
+  };
 }
 
-export function parseIdFromDriveName(name: string): string | null {
-  return parseDriveFileName(name)?.id ?? null;
+export function parseIdFromKoboName(name: string): string | null {
+  return parseKoboFileName(name)?.id ?? null;
 }

@@ -1,10 +1,11 @@
 /**
- * Service context: everything the services need, injected so tests can run against temp dirs, the local rclone
- * remote and a fake `fetch`. The server and the CLI build exactly one per process.
+ * Service context: everything the services need, injected so tests can run against temp dirs, a local Kobo folder
+ * (`localTransport`) and a fake `fetch`. The server and the CLI build exactly one per process. The Kobo is reached
+ * through `ctx.kobo` (docs/kobo-ssh-migration.md); the cache is the durable local copy of every book.
  */
 import { API_LIMITS } from "../../shared/api.ts";
 import type { LoadedConfig } from "../config/index.ts";
-import { type DriveContext, type DriveContextOptions, createDriveContext } from "../drive/index.ts";
+import { type KoboContext, type KoboContextOptions, createKoboContext } from "../kobo/index.ts";
 import { RateLimiter } from "../openlibrary/index.ts";
 import { type SummaryModel, summaryModelFromEnv } from "../summary/llm.ts";
 import { LOCK_FILE_NAME, Mutex, ProcessLock } from "./mutex.ts";
@@ -39,7 +40,8 @@ export interface ServiceContext {
   readonly dataDir: string;
   /** Absolute cache dir. */
   readonly cacheDir: string;
-  readonly drive: DriveContext;
+  /** The Kobo (SSH, or a local folder in tests): every book file write goes through `kobo`. */
+  readonly kobo: KoboContext;
   /** Used for Open Library only (tests inject a fake: no network in tests). */
   readonly fetch: typeof fetch;
   readonly now: () => Date;
@@ -57,9 +59,9 @@ export interface ServiceContext {
   readonly summariesInProgress: Set<string>;
 }
 
-export interface ServiceContextOptions extends DriveContextOptions {
-  /** Prebuilt Drive context (otherwise built from `config` with the Drive options above). */
-  drive?: DriveContext;
+export interface ServiceContextOptions extends KoboContextOptions {
+  /** Prebuilt Kobo context (otherwise built from `config` with the Kobo options above). */
+  kobo?: KoboContext;
   fetch?: typeof fetch;
   now?: () => Date;
   logger?: Logger;
@@ -74,22 +76,22 @@ export function createServiceContext(
   options: ServiceContextOptions = {},
 ): ServiceContext {
   const {
-    drive,
+    kobo,
     fetch: fetchImpl,
     now,
     logger,
     openLibraryLimiter,
     limits,
     summaryModel,
-    ...driveOptions
+    ...koboOptions
   } = options;
-  const driveCtx = drive ?? createDriveContext(config, driveOptions);
-  const processLock = new ProcessLock(path.join(driveCtx.cacheDir, LOCK_FILE_NAME));
+  const koboCtx = kobo ?? createKoboContext(config, koboOptions);
+  const processLock = new ProcessLock(path.join(koboCtx.cacheDir, LOCK_FILE_NAME));
   return {
     config,
-    dataDir: driveCtx.dataDir,
-    cacheDir: driveCtx.cacheDir,
-    drive: driveCtx,
+    dataDir: koboCtx.dataDir,
+    cacheDir: koboCtx.cacheDir,
+    kobo: koboCtx,
     fetch: fetchImpl ?? globalThis.fetch.bind(globalThis),
     now: now ?? (() => new Date()),
     logger: logger ?? consoleLogger,

@@ -1,5 +1,6 @@
 import {
   BookOpenIcon,
+  ChevronDownIcon,
   HeadphonesIcon,
   PencilIcon,
   PinIcon,
@@ -11,7 +12,8 @@ import { Link } from "react-router";
 import { cn } from "@ehub/ui";
 import { Button } from "@ehub/ui/components/button";
 import { type NotesStore, notesStore } from "./store";
-import { NoteText, formatNoteDate } from "./text";
+import { NoteMarkdown } from "./markdown";
+import { formatNoteDate } from "./text";
 import { type Note, type NoteModule, MODULE_LABELS } from "./types";
 
 export const MODULE_ICONS: Readonly<Record<NoteModule, typeof BookOpenIcon>> = {
@@ -24,6 +26,9 @@ export const noteAnchor = (id: string) => `nota-${id}`;
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 export const SUBMIT_HINT = isMac ? "⌘ Invio" : "Ctrl+Invio";
+
+/** Notes longer than this (characters) start folded, with "Mostra tutta la nota". */
+export const LONG_NOTE_CHARS = 900;
 
 /**
  * Multiline note input: grows with its content, Ctrl/⌘+Enter submits, Escape cancels (when `onCancel` is given).
@@ -120,6 +125,48 @@ export function NoteEditor({
         </div>
       </div>
     </form>
+  );
+}
+
+/** The rendered note; long notes start folded (unfolded while searching or after a jump to them). */
+function NoteBody({
+  body,
+  tokens = [],
+  forceOpen = false,
+}: {
+  body: string;
+  tokens?: readonly string[];
+  forceOpen?: boolean;
+}) {
+  const long = body.length > LONG_NOTE_CHARS;
+  const [open, setOpen] = useState(false);
+  const folded = long && !open && !forceOpen && tokens.length === 0;
+  const id = useId();
+  return (
+    <div>
+      <div
+        id={id}
+        className={cn(
+          "relative",
+          folded &&
+            "max-h-[16rem] overflow-hidden [mask-image:linear-gradient(to_bottom,black_65%,transparent)]",
+        )}
+      >
+        <NoteMarkdown text={body} tokens={tokens} />
+      </div>
+      {long && tokens.length === 0 ? (
+        <button
+          type="button"
+          aria-expanded={!folded}
+          aria-controls={id}
+          onClick={() => setOpen((value) => !value)}
+          className="mt-1 inline-flex items-center gap-1 rounded-sm text-sm font-medium text-brand underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/40"
+        >
+          {folded ? "Mostra tutta la nota" : "Riduci"}
+          <ChevronDownIcon aria-hidden className={cn("size-4 transition-transform", !folded && "rotate-180")} />
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -226,9 +273,7 @@ export function NoteCard({
           />
         </div>
       ) : (
-        <div className="text-[0.9375rem] leading-relaxed break-words whitespace-pre-wrap text-foreground">
-          <NoteText text={note.body} tokens={tokens} />
-        </div>
+        <NoteBody body={note.body} tokens={tokens} forceOpen={flash} />
       )}
 
       <footer className="mt-1.5 flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-1">

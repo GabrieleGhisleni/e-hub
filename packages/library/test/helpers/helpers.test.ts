@@ -1,13 +1,11 @@
-import { readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile } from "node:fs/promises";
 import { strFromU8, unzipSync } from "fflate";
 import sharp from "sharp";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { loadConfig } from "../../src/node/config/index.ts";
 import { readTopics } from "../../src/node/repo/index.ts";
 import { hasBinary } from "./binaries.ts";
 import { buildEpub, makeEpub } from "./epub.ts";
-import { type LocalRemote, createLocalRemote } from "./rclone.ts";
 import { createTestEnv } from "./test-env.ts";
 
 function u16(bytes: Uint8Array, offset: number): number {
@@ -100,53 +98,13 @@ describe("createTestEnv", () => {
     const env = await createTestEnv();
     try {
       const config = loadConfig({ env: env.env });
-      expect(config.drive.remote).toBe("elibtest");
+      expect(config.kobo.booksDir).toBe("/mnt/onboard/books");
+      expect(config.kobo.host).toBe("root@127.0.0.1");
       expect(config.dataDir).toBe(env.dataDir);
       expect(config.cache.dir).toBe(env.cacheDir);
       expect((await readTopics(env.dataDir))[0]?.id).toBe("unsorted");
     } finally {
       await env.cleanup();
     }
-  });
-});
-
-describe.skipIf(!hasBinary("rclone"))("local rclone remote", () => {
-  let remote: LocalRemote;
-  afterEach(async () => {
-    await remote.cleanup();
-  });
-
-  it("supports copyto, lsjson, md5sum, moveto, deletefile without the user's rclone.conf", async () => {
-    remote = await createLocalRemote();
-    const src = path.join(path.dirname(remote.configPath), "src.epub");
-    await writeFile(src, "contenuto di prova");
-
-    await remote.rclone("copyto", src, remote.spec("Archivio/Da smistare/A - B [7k2m9q4t].epub"));
-    const listing = JSON.parse(
-      await remote.rclone("lsjson", "-R", "--files-only", remote.spec("Archivio")),
-    );
-    expect(listing.map((e: { Path: string }) => e.Path)).toEqual([
-      "Da smistare/A - B [7k2m9q4t].epub",
-    ]);
-
-    const md5 = await remote.rclone("md5sum", remote.spec("Archivio"));
-    expect(md5).toMatch(/^[0-9a-f]{32} {2}Da smistare\/A - B \[7k2m9q4t\]\.epub\n$/);
-
-    await remote.rclone(
-      "moveto",
-      remote.spec("Archivio/Da smistare/A - B [7k2m9q4t].epub"),
-      remote.spec("Archivio/Saggistica/A - B [7k2m9q4t].epub"),
-    );
-    expect(
-      await readFile(remote.localPath("Archivio/Saggistica/A - B [7k2m9q4t].epub"), "utf8"),
-    ).toBe("contenuto di prova");
-
-    await remote.rclone("deletefile", remote.spec("Archivio/Saggistica/A - B [7k2m9q4t].epub"));
-    expect(
-      JSON.parse(await remote.rclone("lsjson", "-R", "--files-only", remote.spec(""))),
-    ).toEqual([]);
-
-    // Only the test remote exists for this process: the real `gdrive:` / `elib:` are not even defined.
-    expect(await remote.rclone("listremotes")).toBe("elibtest:\n");
   });
 });

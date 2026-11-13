@@ -81,8 +81,37 @@ describe("POST /api/chat", () => {
     await (await post(appFor(mock.baseURL), body({ id: "conv-42" }))).text();
 
     expect(mock.requestHeaders[0]!["x-router-session"]).toBe("conv-42");
-    expect(mock.requests[0].messages[0]).toMatchObject({ role: "system", content: "Sei un assistente di test." });
+    expect(mock.requests[0].messages[0]).toMatchObject({ role: "system" });
+    expect(mock.requests[0].messages[0].content).toMatch(/^Sei un assistente di test\.\n\n/);
     expect(mock.requests[0].messages.at(-1)).toMatchObject({ role: "user", content: "Di cosa parla?" });
+    // Reasoning is off by default for the chat.
+    expect(mock.requests[0].reasoning_effort).toBe("none");
+  });
+
+  it("adds the notes-mode instructions only when notesMode is on", async () => {
+    mock = await startMockLlm([{ text: "ok" }, { text: "ok" }]);
+    await (await post(appFor(mock.baseURL), body())).text();
+    await (await post(appFor(mock.baseURL), body({ notesMode: true }))).text();
+    expect(mock.requests[0].messages[0].content).not.toContain("Modalità appunti");
+    expect(mock.requests[1].messages[0].content).toContain("## Modalità appunti");
+    expect(mock.requests[1].messages[0].content).toContain("(cap. N)");
+  });
+
+  it("uses the rich model with rich: true, the default one otherwise", async () => {
+    mock = await startMockLlm([{ text: "ok" }, { text: "ok" }]);
+    await (await post(appFor(mock.baseURL), body())).text();
+    await (await post(appFor(mock.baseURL), body({ rich: true }))).text();
+    expect(mock.requests[0].model).toBe("smart");
+    expect(mock.requests[1].model).toBe("gpt-6-luna");
+  });
+
+  it("says the rich model is not on the router yet when the router does not know it", async () => {
+    mock = await startMockLlm([{ status: 404, body: { error: { message: "unknown model gpt-6-luna" } } }]);
+    const response = await post(appFor(mock.baseURL), body({ rich: true }));
+    const chunks = parseChunks(await response.text());
+    expect(chunks.find((c) => c.type === "error")?.errorText).toBe(
+      "Il modello di «Feel rich» (gpt-6-luna) non è ancora disponibile sul router: disattiva Feel rich per usare quello di sempre.",
+    );
   });
 
   it("returns 400 for a body that does not match the contract", async () => {
@@ -151,7 +180,7 @@ describe("POST /api/chat", () => {
     expect(response.status).toBe(503);
     const { error } = await response.json();
     expect(error).toContain("Chat non configurata");
-    expect(error).toContain("EHUB_AI_BASE_URL is missing");
+    expect(error).toContain("EHUB_AI_API_KEY is missing");
     expect(error).toContain(".env.example");
   });
 });

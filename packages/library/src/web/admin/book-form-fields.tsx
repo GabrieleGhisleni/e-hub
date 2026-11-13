@@ -191,7 +191,7 @@ export function BookFormFields({
         label="Autori"
         htmlFor={id("authors")}
         error={errors.authors}
-        hint="Invio per aggiungerne un altro. Il primo dà il nome al file su Drive."
+        hint="Invio per aggiungerne un altro. Il primo dà il nome al file sul Kobo."
         className="sm:col-span-2"
       >
         <TokenInput

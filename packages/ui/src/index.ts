@@ -10,6 +10,11 @@ export {
   type ThemePreference,
 } from "./theme";
 export { ThemeToggle } from "./theme-toggle";
+export {
+  SourceExtras,
+  SourceExtrasProvider,
+  type SourceExtraRef,
+} from "./source-extras";
 export { Container, Logo, PageHeader } from "./layout";
 export {
   SIDE_PANEL_SHORTCUT,

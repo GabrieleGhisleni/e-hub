@@ -1,0 +1,188 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { DATA_DIR_ENV } from "../src/node/index.ts";
+import { explorationIdFor } from "../src/schema.ts";
+import { runCli } from "../src/cli/program.ts";
+import { FAKE_EPUB, captureIo, fakeLibrary } from "./fakes.ts";
+
+let dir: string;
+let work: string;
+beforeEach(async () => {
+  dir = await mkdtemp(path.join(tmpdir(), "ehub-explore-cli-"));
+  work = await mkdtemp(path.join(tmpdir(), "ehub-explore-work-"));
+  process.env[DATA_DIR_ENV] = dir;
+});
+afterEach(async () => {
+  delete process.env[DATA_DIR_ENV];
+  await rm(dir, { recursive: true, force: true });
+  await rm(work, { recursive: true, force: true });
+});
+
+/** Runs the CLI in-process; `cwd` is the user's working directory (relative paths resolve there). */
+async function cli(argv: string[], options: { stdin?: string; cwd?: string } = {}) {
+  const captured = captureIo(options.cwd ?? work, options.stdin ?? "");
+  const code = await runCli(argv, captured.io, fakeLibrary());
+  return { code, out: captured.stdout(), err: captured.stderr() };
+}
+
+/** Today's exploration ID for the title "Prova" (the CLI stamps the date of the run). */
+const ID = explorationIdFor("Prova", new Date());
+
+describe("explore CLI", () => {
+  it("runs the whole loop: new, show, verdict, note, journal, summary, close, validate", async () => {
+    const created = await cli(["new", "--title", "Prova", "--question", "Domanda?", "--book", "78w462eb"]);
+    expect(created.code).toBe(0);
+    expect(created.out.split("\n")[0]).toBe(ID);
+    expect(created.out).toContain("Esplorazione creata");
+
+    const shown = await cli(["show", ID]);
+    expect(shown.code).toBe(0);
+    expect(shown.out).toContain("Domanda: Domanda?");
+    expect(shown.out).toContain("The Let Them Theory");
+    expect(shown.out).toContain("Da decidere");
+
+    const verdict = await cli([
+      "verdict", ID, "--book", "78w462eb", "--decision", "parts", "--chapters", "5,2",
+      "--reason", "Il capitolo sul metodo.", "--via", "skill",
+    ]);
+    expect(verdict.code).toBe(0);
+    expect(verdict.out).toContain("Leggere i capitoli 2 e 5");
+
+    expect((await cli(["note", ID, "--text", "Appunto", "--book", "78w462eb"])).code).toBe(0);
+    expect((await cli(["journal", ID, "--text", "Emerso il tema."])).code).toBe(0);
+    expect((await cli(["summary", ID, "--text", "Sintesi."])).code).toBe(0);
+    expect((await cli(["close", ID])).out).toContain("Esplorazione chiusa.");
+
+    const shownAgain = await cli(["show", ID]);
+    expect(shownAgain.out).toContain("Leggere i capitoli 2 e 5");
+    expect(shownAgain.out).toContain("Appunto");
+    expect(shownAgain.out).toContain("Emerso il tema.");
+    expect(shownAgain.out).toContain("Sintesi.");
+
+    const validated = await cli(["validate"]);
+    expect(validated.code).toBe(0);
+    expect(validated.out).toContain("1 esplorazione/i valide");
+  });
+
+  it("prints the whole exploration as JSON with --json", async () => {
+    await cli(["new", "--title", "Prova", "--question", "Q"]);
+    const shown = await cli(["show", ID, "--json"]);
+    expect(shown.code).toBe(0);
+    expect(JSON.parse(shown.out)).toMatchObject({ id: ID, title: "Prova", sources: [] });
+    const journal = await cli(["journal", ID, "--text", "Voce", "--json"]);
+    expect(JSON.parse(journal.out)).toMatchObject({ id: ID, journal: [{ via: "cli", text: "Voce" }] });
+    const list = await cli(["list", "--json"]);
+    expect(JSON.parse(list.out)).toHaveLength(1);
+  });
+
+  it("lists explorations in a table, and says so when there are none", async () => {
+    expect((await cli(["list"])).out).toBe("Nessuna esplorazione.\n");
+    await cli(["new", "--title", "Prova", "--question", "Q"]);
+    const listed = await cli(["list"]);
+    expect(listed.out).toContain("ID");
+    expect(listed.out).toContain(ID);
+  });
+
+  it("reads note and journal text from stdin with --text-file -", async () => {
+    await cli(["new", "--title", "Prova", "--question", "Q"]);
+    await cli(["note", ID, "--text-file", "-"], { stdin: "Da stdin\n" });
+    const shown = await cli(["show", ID, "--json"]);
+    expect(JSON.parse(shown.out).notes[0].body).toBe("Da stdin");
+  });
+
+  it("resolves text files and EPUBs against the user's working directory", async () => {
+    await cli(["new", "--title", "Prova", "--question", "Q"]);
+    await writeFile(path.join(work, "testo.md"), "Da file");
+    expect((await cli(["journal", ID, "--text-file", "testo.md"])).code).toBe(0);
+    await writeFile(path.join(work, "genealogia.epub"), FAKE_EPUB);
+    const added = await cli(["add", ID, "--epub", "genealogia.epub"]);
+    expect(added.code).toBe(0);
+    expect(added.out).toContain("Fonte aggiunta: «Genealogia della morale».");
+    const shown = JSON.parse((await cli(["show", ID, "--json"])).out);
+    expect(shown.journal[0].text).toBe("Da file");
+    expect(shown.sources[0]).toMatchObject({ origin: "explore", epub: { fileName: "genealogia.epub" } });
+  });
+
+  it("creates an exploration with an EPUB upload", async () => {
+    await writeFile(path.join(work, "g.epub"), FAKE_EPUB);
+    const created = await cli(["new", "--title", "Con EPUB", "--question", "Q", "--epub", "g.epub"]);
+    expect(created.code).toBe(0);
+    const id = created.out.split("\n")[0];
+    expect(JSON.parse((await cli(["show", id!, "--json"])).out).sources).toHaveLength(1);
+  });
+
+  it("writes the summary and clears it", async () => {
+    await cli(["new", "--title", "Prova", "--question", "Q"]);
+    await cli(["summary", ID, "--text", "Sintesi"]);
+    expect(JSON.parse((await cli(["show", ID, "--json"])).out).summary).toBe("Sintesi");
+    expect((await cli(["summary", ID, "--clear"])).out).toContain("Sintesi rimossa.");
+    expect(JSON.parse((await cli(["show", ID, "--json"])).out).summary).toBeNull();
+  });
+
+  it("removes a source", async () => {
+    await cli(["new", "--title", "Prova", "--question", "Q", "--book", "78w462eb"]);
+    const removed = await cli(["remove", ID, "--book", "78w462eb"]);
+    expect(removed.code).toBe(0);
+    expect(JSON.parse((await cli(["show", ID, "--json"])).out).sources).toEqual([]);
+  });
+
+  it("prepares the sources: sizes, tokens, strategy", async () => {
+    await cli(["new", "--title", "Prova", "--question", "Q", "--book", "78w462eb"]);
+    const prepared = await cli(["prepare", ID]);
+    expect(prepared.code).toBe(0);
+    // Italian grouping starts at five digits: 1000 stays "1000".
+    expect(prepared.out).toContain("1 capitoli, 1000 parole, ~1400 token");
+    expect(prepared.out).toContain("Strategia: intero");
+    const tight = await cli(["prepare", ID, "--budget", "100", "--json"]);
+    expect(JSON.parse(tight.out)).toMatchObject({ strategy: "per capitoli", budget: 100 });
+  });
+
+  it("exits 1 when validate finds an invalid file, and names it", async () => {
+    await writeFile(path.join(dir, "2026-01-01-rotta.json"), "{}");
+    const validated = await cli(["validate"]);
+    expect(validated.code).toBe(1);
+    expect(validated.err).toContain("2026-01-01-rotta.json");
+    expect(validated.out).toContain("1 file non valido/i");
+  });
+
+  it("exits 1 with Italian messages for domain errors", async () => {
+    const missing = await cli(["show", "2026-11-12-assente"]);
+    expect(missing.code).toBe(1);
+    expect(missing.err).toContain("errore: Esplorazione non trovata.");
+    await cli(["new", "--title", "Prova", "--question", "Q"]);
+    const unknownBook = await cli(["add", ID, "--book", "zzzzzzzz"]);
+    expect(unknownBook.code).toBe(1);
+    expect(unknownBook.err).toContain("Libro «zzzzzzzz» non trovato in libreria.");
+    const missingFile = await cli(["add", ID, "--epub", "non-esiste.epub"]);
+    expect(missingFile.code).toBe(1);
+    expect(missingFile.err).toContain("File non trovato");
+  });
+
+  it("exits 2 on wrong usage", async () => {
+    const cases: string[][] = [
+      ["unknown-command"],
+      ["verdict", ID, "--book", "78w462eb", "--decision", "all"],
+      ["verdict", ID, "--book", "78w462eb", "--decision", "maybe", "--reason", "x"],
+      ["verdict", ID, "--book", "78w462eb", "--decision", "parts", "--chapters", "a,2", "--reason", "x"],
+      ["add", ID, "--book", "78w462eb", "--epub", "x.epub"],
+      ["add", ID],
+      ["note", ID, "--text", "a", "--text-file", "b"],
+      ["note", ID],
+      ["summary", ID, "--clear", "--text", "x"],
+      ["prepare", ID, "--budget", "0"],
+      ["new", "--title", "Solo titolo"],
+    ];
+    for (const argv of cases) {
+      const result = await cli(argv);
+      expect(result.code, argv.join(" ")).toBe(2);
+    }
+  });
+
+  it("exits 0 for --help", async () => {
+    const help = await cli(["--help"]);
+    expect(help.code).toBe(0);
+    expect(help.out).toContain("verdict");
+  });
+});

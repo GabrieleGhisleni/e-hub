@@ -57,7 +57,7 @@ describe("Salva come nota", () => {
     expect(screen.getAllByRole("button", { name: /Salva come nota/ })).toHaveLength(1);
   });
 
-  it("calls onSaveNote with the question, the plain answer and the model, then shows Salvata", () => {
+  it("calls onSaveNote with the question, the Markdown answer and the model, then shows Salvata", () => {
     const onSaveNote = vi.fn();
     render(<MessageList messages={conversation()} onSaveNote={onSaveNote} />);
 
@@ -66,7 +66,8 @@ describe("Salva come nota", () => {
     expect(onSaveNote).toHaveBeenCalledTimes(1);
     expect(onSaveNote).toHaveBeenCalledWith({
       question: "Qual è la tesi?",
-      answer: "La tesi è esposta al [12:34].\n\n- punto uno\n- punto due (cap. 2)",
+      // The note keeps the Markdown: the notes render it.
+      answer: "**La tesi** è esposta al [12:34].\n\n- punto uno\n- punto due (cap. 2)",
       model: "gemini-3.6-flash",
     });
     const saved = screen.getByRole("button", { name: "Salvata" });
@@ -111,15 +112,32 @@ describe("Salva come nota", () => {
 });
 
 describe("chatNoteBody", () => {
-  it("puts question, answer and origin in separate paragraphs", () => {
+  it("puts the question in bold, the answer, and the origin in italics, in separate paragraphs", () => {
     expect(chatNoteBody({ question: " Domanda? ", answer: "Risposta.", model: "smart-model" })).toBe(
-      "Domanda?\n\nRisposta.\n\n— Dalla chat con l'AI (smart-model)",
+      "**Domanda?**\n\nRisposta.\n\n*— Dalla chat con l'AI (smart-model)*",
     );
   });
 
   it("omits the model in parentheses when unknown", () => {
     expect(chatNoteBody({ question: "Domanda?", answer: "Risposta." })).toBe(
-      "Domanda?\n\nRisposta.\n\n— Dalla chat con l'AI",
+      "**Domanda?**\n\nRisposta.\n\n*— Dalla chat con l'AI*",
     );
+  });
+
+  it("keeps a multi-line question on one bold line", () => {
+    expect(chatNoteBody({ question: "Prima riga\nseconda", answer: "R." })).toBe(
+      "**Prima riga seconda**\n\nR.\n\n*— Dalla chat con l'AI*",
+    );
+  });
+});
+
+describe("expanded panel text size", () => {
+  it("renders replies and questions larger with textSize large", () => {
+    const { container, rerender } = render(<MessageList messages={conversation()} />);
+    const reply = () => container.querySelector(".group\\/reply div.leading-relaxed, .group\\/reply div[class*='text-[1.0625rem]']");
+    expect(reply()?.className).toContain("text-sm");
+    rerender(<MessageList messages={conversation()} textSize="large" />);
+    expect(reply()?.className).toContain("text-[1.0625rem]");
+    expect(screen.getByText("Qual è la tesi?").className).toContain("text-[1.0625rem]");
   });
 });

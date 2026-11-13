@@ -87,7 +87,7 @@ function duplicateText(item: ImportItem, rel: (file: string) => string): string 
     .filter((d) => d.kind === "md5" || d.kind === "batch")
     .map((d) =>
       d.kind === "md5"
-        ? `same file already on Drive: ${d.path}`
+        ? `same file already in the library (cache): ${d.path}`
         : d.kind === "batch"
           ? `same file as ${rel(d.file)}`
           : "",
@@ -141,7 +141,7 @@ function printResult(ctx: CliContext, result: ImportResult, rel: (file: string) 
       }
       for (const w of item.warnings) lines.push(`note: ${w}`);
       if (item.report && item.report.errors.length > 0) {
-        for (const e of item.report.errors) lines.push(`drive error: ${e.code}: ${e.message}`);
+        for (const e of item.report.errors) lines.push(`kobo error: ${e.code}: ${e.message}`);
       }
       if (lines.length === 0) continue;
       ctx.out(`  ${rel(item.file)}`);

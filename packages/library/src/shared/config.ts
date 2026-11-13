@@ -1,45 +1,35 @@
 import { z } from "zod";
 
-/** One Drive path segment: no FAT32-forbidden characters, no slashes, not "." or "..". */
-const PathSegmentSchema = z
-  .string()
-  .min(1)
-  .regex(/^[^/\\:*?"<>|\p{Cc}]+$/u, 'must be a single folder name without / \\ : * ? " < > |')
-  .refine(
-    (s) => s.trim() === s && s !== "." && s !== "..",
-    "no leading/trailing spaces, not . or ..",
-  );
-
-/** Path inside the rclone remote: "" (remote root) or segments joined by "/", no leading/trailing slash. */
-const RemoteRootSchema = z
-  .string()
-  .refine(
-    (s) => s === "" || s.split("/").every((seg) => PathSegmentSchema.safeParse(seg).success),
-    'must be "" or a relative path like "Libri" or "Libri-test/e-library" (no leading or trailing "/")',
-  );
-
 /** An origin such as `http://127.0.0.1:5173` (scheme + host + optional port, nothing else). */
 const OriginSchema = z
   .string()
   .regex(/^https?:\/\/[^/\s?#]+$/, "must be an origin like http://127.0.0.1:5173 (no path)");
 
-export const DriveConfigSchema = z.object({
-  /** rclone remote name without the colon. The real one is `elib` (root_folder_id = Drive `Libri/`). */
-  remote: z.string().regex(/^[\w][\w.+@ -]*$/, "must be an rclone remote name (no colon)"),
-  /** Folder inside the remote that holds the two trees; "" = the remote root. */
-  root: RemoteRootSchema,
-  /** KEPUB tree, the folder the Kobo syncs. */
-  koboTree: PathSegmentSchema,
-  /** Original EPUB tree. */
-  archiveTree: PathSegmentSchema,
-  /** Whether each tree has a `<topic label>/` subfolder level. */
-  topicSubfolders: z.object({ kobo: z.boolean(), archive: z.boolean() }),
+export const KoboConfigSchema = z.object({
+  /** SSH destination `user@host` (or a Host alias of ~/.ssh/config). Env `ELIB_KOBO_HOST` overrides it. */
+  host: z.string().regex(/^[\w.@:-]+$/, "must be an SSH destination like root@192.168.1.11"),
+  port: z.number().int().min(1).max(65535),
+  /** Private key; `~` is expanded by the Node loader. Never inside the repo. */
+  identityFile: z.string().min(1),
+  /**
+   * Optional name the host key is checked under (ssh `HostKeyAlias`): keeps `StrictHostKeyChecking` working when the
+   * Kobo gets a new DHCP address.
+   */
+  hostKeyAlias: z
+    .string()
+    .regex(/^[\w.:[\]-]+$/)
+    .optional(),
+  /** Absolute folder on the Kobo holding the KEPUBs and their KOReader `.sdr` sidecar folders (flat). */
+  booksDir: z
+    .string()
+    .regex(/^\/(?:[^/\s'][^/']*\/?)+$/, 'must be an absolute path like "/mnt/onboard/books"')
+    .refine((s) => !s.split("/").some((seg) => seg === ".." || seg === "."), "no . or .. segments"),
 });
-export type DriveConfig = z.infer<typeof DriveConfigSchema>;
+export type KoboConfig = z.infer<typeof KoboConfigSchema>;
 
-/** Shape of `elib.config.json` (versioned, no secrets: the rclone token stays in rclone.conf). */
+/** Shape of `elib.config.json` (versioned, no secrets: the SSH key stays in ~/.ssh). */
 export const ElibConfigSchema = z.object({
-  drive: DriveConfigSchema,
+  kobo: KoboConfigSchema,
   cache: z.object({
     /** Local cache outside the repo; `~` is expanded by the Node loader. */
     dir: z.string().min(1),

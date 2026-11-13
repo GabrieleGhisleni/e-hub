@@ -5,6 +5,7 @@ const NAV_ITEMS = [
   { to: "/library", label: "Libreria" },
   { to: "/podcasts", label: "Podcast" },
   { to: "/notes", label: "Note" },
+  { to: "/explore", label: "Esplorazioni" },
 ] as const;
 
 export function SiteHeader() {

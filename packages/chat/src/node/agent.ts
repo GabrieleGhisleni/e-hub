@@ -19,6 +19,11 @@ export type RunAgentOptions = {
   maxSteps?: number;
   /** Retries of failed model calls. Omitted: the AI SDK default (2). */
   maxRetries?: number;
+  /**
+   * `reasoning_effort` of every call (`providerOptions.ehub.reasoningEffort`, the OpenAI-compatible provider named
+   * "ehub" in llm.ts). Omitted: not sent.
+   */
+  reasoningEffort?: string;
   abortSignal?: AbortSignal;
 };
 
@@ -26,7 +31,16 @@ export type RunAgentOptions = {
  * Streams a reply from `model`, letting it call `tools` for up to `maxSteps` steps.
  * Returns the AI SDK stream result (textStream, fullStream, toUIMessageStreamResponse, ...).
  */
-export function runAgent({ model, system, messages, tools = {}, maxSteps = 8, maxRetries, abortSignal }: RunAgentOptions) {
+export function runAgent({
+  model,
+  system,
+  messages,
+  tools = {},
+  maxSteps = 8,
+  maxRetries,
+  reasoningEffort,
+  abortSignal,
+}: RunAgentOptions) {
   return streamText({
     model,
     system,
@@ -35,6 +49,7 @@ export function runAgent({ model, system, messages, tools = {}, maxSteps = 8, ma
     stopWhen: stepCountIs(maxSteps),
     maxRetries,
     abortSignal,
+    ...(reasoningEffort !== undefined ? { providerOptions: { ehub: { reasoningEffort } } } : {}),
   });
 }
 

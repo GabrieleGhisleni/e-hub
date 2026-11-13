@@ -13,7 +13,7 @@ describe("summarizeReport", () => {
   it("is calm for an empty report", () => {
     const s = summarizeReport(empty);
     expect(s.needsAttention).toBe(false);
-    expect(s.text).toBe("Nessuna operazione su Drive");
+    expect(s.text).toBe("Nessuna operazione sul Kobo");
   });
   it("counts done actions with plural forms and flags problems", () => {
     const s = summarizeReport({
@@ -21,18 +21,18 @@ describe("summarizeReport", () => {
       actions: [
         { type: "upload", status: "done" },
         { type: "upload", status: "done" },
-        { type: "move", status: "done" },
-        { type: "move", status: "failed" },
+        { type: "rename", status: "done" },
+        { type: "rename", status: "failed" },
       ],
       warnings: [{ code: "orphan-file", message: "x" }],
-      errors: [{ code: "rclone-failed", message: "y" }],
+      errors: [{ code: "ssh-failed", message: "y" }],
     });
     expect(s).toMatchObject({ done: 3, failed: 1, warnings: 1, errors: 1, needsAttention: true });
-    expect(s.text).toBe("2 file caricati su Drive, 1 file spostato · 1 errore, 1 avviso");
+    expect(s.text).toBe("2 file inviati al Kobo, 1 file rinominato sul Kobo · 1 errore, 1 avviso");
   });
   it("flags a failed action even without messages", () => {
     expect(
-      summarizeReport({ ...empty, actions: [{ type: "trash", status: "failed" }] }).needsAttention,
+      summarizeReport({ ...empty, actions: [{ type: "remove", status: "failed" }] }).needsAttention,
     ).toBe(true);
   });
   it("baseName", () => {
@@ -55,11 +55,11 @@ describe("errors", () => {
     ).toBe("Non è un EPUB.");
     expect(friendlyMessage(new Error("boom"))).toContain("boom");
   });
-  it("extracts the report of a drive-failed error", () => {
+  it("extracts the report of a kobo-failed error", () => {
     const e = new ApiRequestError({
       status: 502,
-      code: "drive-failed",
-      message: "Drive",
+      code: "kobo-failed",
+      message: "Kobo",
       details: { report: empty },
     });
     expect(e.report).toEqual(empty);

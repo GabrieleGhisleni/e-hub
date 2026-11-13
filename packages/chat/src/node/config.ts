@@ -11,6 +11,13 @@ export type AiConfig = {
   apiKey: string;
   /** Model for chat and tool calls. */
   model: string;
+  /** Model of the "Feel rich" button in the chat (EHUB_AI_RICH_MODEL, default `gpt-6-luna`). */
+  richModel: string;
+  /**
+   * Reasoning effort sent with the chat calls (`reasoning_effort`). Defaults to `none` (reasoning off: faster replies,
+   * no thinking tokens). `undefined` when the variable is `default`: the field is not sent and the router decides.
+   */
+  reasoningEffort: string | undefined;
   /** Model for chapter and book summaries. Defaults to `fast`. */
   summaryModel: string;
   /**
@@ -32,10 +39,21 @@ export class AiConfigError extends Error {
   }
 }
 
+/**
+ * The user's LLM router (freeway, OpenAI-compatible) as published on the Raspberry Pi through a Cloudflare Tunnel.
+ * Override with EHUB_AI_BASE_URL (e.g. `http://127.0.0.1:4100/v1` for a router started locally).
+ */
+export const DEFAULT_AI_BASE_URL = "https://freeway.gabrieleghisleni.dev/v1";
+
+/** Model of the chat's "Feel rich" button: the most capable one on the router (not on freeway yet, coming soon). */
+export const DEFAULT_RICH_MODEL = "gpt-6-luna";
+
 const envSchema = z.object({
-  EHUB_AI_BASE_URL: z.url({ error: "must be an absolute URL" }),
+  EHUB_AI_BASE_URL: z.url({ error: "must be an absolute URL" }).default(DEFAULT_AI_BASE_URL),
   EHUB_AI_API_KEY: z.string(),
   EHUB_AI_MODEL: z.string().default("smart"),
+  EHUB_AI_RICH_MODEL: z.string().default(DEFAULT_RICH_MODEL),
+  EHUB_AI_REASONING_EFFORT: z.string().optional(),
   EHUB_AI_SUMMARY_MODEL: z.string().optional(),
   EHUB_AI_SUMMARY_REASONING_EFFORT: z.string().optional(),
   EHUB_AI_MAX_CONTEXT_TOKENS: z
@@ -66,11 +84,17 @@ export function loadAiConfig(env: Record<string, string | undefined> = process.e
   }
 
   const data = parsed.data;
+  const effort = (value: string | undefined) => {
+    const resolved = value ?? "none";
+    return resolved === "default" ? undefined : resolved;
+  };
   const reasoningEffort = data.EHUB_AI_SUMMARY_REASONING_EFFORT ?? "none";
   return {
     baseUrl: data.EHUB_AI_BASE_URL,
     apiKey: data.EHUB_AI_API_KEY,
     model: data.EHUB_AI_MODEL,
+    richModel: data.EHUB_AI_RICH_MODEL,
+    reasoningEffort: effort(data.EHUB_AI_REASONING_EFFORT),
     summaryModel: data.EHUB_AI_SUMMARY_MODEL ?? "fast",
     summaryReasoningEffort: reasoningEffort === "default" ? undefined : reasoningEffort,
     maxContextTokens: data.EHUB_AI_MAX_CONTEXT_TOKENS ?? 1_000_000,

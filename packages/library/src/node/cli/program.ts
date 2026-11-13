@@ -19,7 +19,7 @@ export interface CliIO {
   /** Raw writes (include the newline). */
   stdout(text: string): void;
   stderr(text: string): void;
-  /** Env for config loading (`ELIB_CONFIG`…) and for rclone/kepubify (`RCLONE_CONFIG`). */
+  /** Env for config loading (`ELIB_CONFIG`…) and for ssh/kepubify (`ELIB_KOBO_HOST`, `ELIB_KOBO_LOCAL_DIR`). */
   env: NodeJS.ProcessEnv;
   /** Open Library fetch (default global fetch). */
   fetch?: typeof fetch;
@@ -32,7 +32,7 @@ export interface CliContext {
   err(line?: string): void;
   /** Loaded once, on first use. */
   config(): LoadedConfig;
-  /** Service context (Drive context included), built once on first use. */
+  /** Service context (Kobo context included), built once on first use. */
   services(): ServiceContext;
   /** Raises the process exit code (the highest value wins). */
   fail(code?: number): void;
@@ -81,7 +81,7 @@ export function createCliContext(io: CliIO, onFail: (code: number) => void): Cli
 export function createProgram(ctx: CliContext): Command {
   const program = new Command()
     .name("elib")
-    .description("e-library: gestione locale della libreria EPUB (repo → Drive)")
+    .description("e-library: gestione locale della libreria EPUB (repo → Kobo)")
     .exitOverride()
     .configureOutput({
       writeOut: (text) => ctx.io.stdout(text),

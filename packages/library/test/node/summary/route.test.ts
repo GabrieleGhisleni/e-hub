@@ -12,7 +12,7 @@ const HEADERS = { host: "127.0.0.1:5173", origin: UI, "sec-fetch-site": "same-or
 const ID = "fx000002";
 const url = (id: string) => `/api/library/books/${id}/summary`;
 
-describe.skipIf(!hasBinary("rclone"))("POST /api/library/books/:id/summary", () => {
+describe.skipIf(!hasBinary("kepubify"))("POST /api/library/books/:id/summary", () => {
   let t: ServicesTestEnv;
   let app: ReturnType<typeof createApp>;
   let gate: { open(): void; promise: Promise<void> };
@@ -100,7 +100,7 @@ describe.skipIf(!hasBinary("rclone"))("POST /api/library/books/:id/summary", () 
     expect((await first).status).toBe(200);
   });
 
-  it("422 text-unavailable when the EPUB is neither cached nor on Drive", async () => {
+  it("422 text-unavailable when the EPUB is not in the cache", async () => {
     await configure();
     gate.open();
     await seedBook(t.env, ID, [{ title: "Uno", words: 200 }]);

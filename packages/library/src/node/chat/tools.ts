@@ -1,14 +1,15 @@
 /**
  * Tools of the book chat: list_chapters, read_chapter, search_book. Their names and input shapes are a contract with
  * the chat panel: keep them. Every tool returns a string; failures to load the text become "Testo del libro non
- * disponibile: ..." so the model can tell the user.
+ * disponibile: ..." so the model can tell the user. The formatting is shared with the multi-book tools
+ * (`src/node/explore/multi-tools.ts`), so both answer in the same words.
  */
 import { defineTool, type ToolSet } from "@ehub/chat/node";
 import { z } from "zod";
 import type { BookSummary } from "../../shared/schema.ts";
 import { splitIntoParts } from "../summary/index.ts";
 import type { TextManifestChapter } from "../text/index.ts";
-import { searchBook } from "./search.ts";
+import { searchBook, type SearchHit, type SearchResult } from "./search.ts";
 import type { BookText } from "./text.ts";
 
 /** Words per part returned by read_chapter. */
@@ -27,6 +28,9 @@ export type BookToolsOptions = {
   loadText: () => Promise<BookText>;
 };
 
+/** One row of the chapter list: what list_chapters shows. */
+export type ChapterListItem = { n: number; title: string; words: number; hasSummary: boolean };
+
 export function bookTools({ language, summary, loadText }: BookToolsOptions): ToolSet {
   return {
     list_chapters: defineTool({
@@ -34,26 +38,20 @@ export function bookTools({ language, summary, loadText }: BookToolsOptions): To
       inputSchema: z.object({}),
       execute: () =>
         guarded(async () => {
-          const chapters: { n: number; title: string; words: number; hasSummary: boolean }[] =
-            summary
-              ? summary.chapters.map((c) => ({
-                  n: c.n,
-                  title: c.title,
-                  words: c.words,
-                  hasSummary: c.summary !== null,
-                }))
-              : (await loadText()).manifest.chapters.map((c) => ({
-                  n: c.n,
-                  title: c.title,
-                  words: c.words,
-                  hasSummary: false,
-                }));
-          if (chapters.length === 0) return "Il libro non ha capitoli.";
-          const status = (hasSummary: boolean) =>
-            hasSummary ? "con sintesi" : summary ? "senza sintesi" : "sintesi non disponibile";
-          return chapters
-            .map((c) => `${c.n}. ${c.title} (${c.words} parole) — ${status(c.hasSummary)}`)
-            .join("\n");
+          const chapters: ChapterListItem[] = summary
+            ? summary.chapters.map((c) => ({
+                n: c.n,
+                title: c.title,
+                words: c.words,
+                hasSummary: c.summary !== null,
+              }))
+            : (await loadText()).manifest.chapters.map((c) => ({
+                n: c.n,
+                title: c.title,
+                words: c.words,
+                hasSummary: false,
+              }));
+          return formatChapterList(chapters, summary !== null);
         }),
     }),
 
@@ -70,25 +68,12 @@ export function bookTools({ language, summary, loadText }: BookToolsOptions): To
           const entries = text.manifest.chapters;
           const entry = entries.find((c) => c.n === chapter);
           if (!entry) return unknownChapter(chapter, entries);
-
-          const parts = splitIntoParts(await text.readChapter(chapter), PART_WORDS);
-          const total = Math.max(1, parts.length);
-          const wanted = part ?? 1;
-          if (wanted > total)
-            return `Il capitolo ${chapter} ha ${total} parti: part va da 1 a ${total}.`;
-
-          const lines = [
-            `Capitolo ${chapter} «${entry.title}» — parte ${wanted} di ${total}`,
-            "",
-            parts[wanted - 1] ?? "(capitolo vuoto)",
-          ];
-          if (wanted < total) {
-            lines.push(
-              "",
-              `[Il capitolo continua. Per leggere il seguito chiama read_chapter con chapter=${chapter} e part=${wanted + 1}.]`,
-            );
-          }
-          return lines.join("\n");
+          return formatChapterPart({
+            chapter,
+            title: entry.title,
+            body: await text.readChapter(chapter),
+            part,
+          });
         }),
     }),
 
@@ -99,28 +84,80 @@ export function bookTools({ language, summary, loadText }: BookToolsOptions): To
         query: z.string().min(1).max(MAX_QUERY_CHARS).describe("Parole o frase da cercare"),
       }),
       execute: ({ query }) =>
-        guarded(async () => {
-          const result = await searchBook(await loadText(), query);
-          if (result.total === 0) {
-            const lang = language ? ` (lingua del libro: ${language})` : "";
-            return `Nessun risultato per «${query}» nel libro. Prova sinonimi o la traduzione del termine: il libro può essere in un'altra lingua${lang}.`;
-          }
-          const shown = result.hits.slice(0, MAX_HITS);
-          const heading =
-            result.mode === "all-words"
-              ? `Nessuna frase esatta. Ci sono ${result.total} righe che contengono tutte le parole di «${query}»`
-              : `Trovati ${result.total} passaggi per «${query}»`;
-          const more = result.total > shown.length ? ` (mostro i primi ${shown.length})` : "";
-          return [
-            `${heading}${more}:`,
-            ...shown.map((hit) => `- cap. ${hit.chapter} «${hit.title}»: ${hit.snippet}`),
-          ].join("\n");
-        }),
+        guarded(async () =>
+          formatSearchReply(await searchBook(await loadText(), query), query, { language }),
+        ),
     }),
   };
 }
 
-function unknownChapter(chapter: number, entries: TextManifestChapter[]): string {
+/** The chapter list, one line per chapter. `hasSummaryFile` tells whether summary.json exists (for the status). */
+export function formatChapterList(chapters: ChapterListItem[], hasSummaryFile: boolean): string {
+  if (chapters.length === 0) return "Il libro non ha capitoli.";
+  const status = (hasSummary: boolean) =>
+    hasSummary ? "con sintesi" : hasSummaryFile ? "senza sintesi" : "sintesi non disponibile";
+  return chapters
+    .map((c) => `${c.n}. ${c.title} (${c.words} parole) — ${status(c.hasSummary)}`)
+    .join("\n");
+}
+
+/** One part of a chapter, with the header and the note about the next part. `part` defaults to 1. */
+export function formatChapterPart({
+  chapter,
+  title,
+  body,
+  part,
+}: {
+  chapter: number;
+  title: string;
+  body: string;
+  part: number | undefined;
+}): string {
+  const parts = splitIntoParts(body, PART_WORDS);
+  const total = Math.max(1, parts.length);
+  const wanted = part ?? 1;
+  if (wanted > total) return `Il capitolo ${chapter} ha ${total} parti: part va da 1 a ${total}.`;
+
+  const lines = [
+    `Capitolo ${chapter} «${title}» — parte ${wanted} di ${total}`,
+    "",
+    parts[wanted - 1] ?? "(capitolo vuoto)",
+  ];
+  if (wanted < total) {
+    lines.push(
+      "",
+      `[Il capitolo continua. Per leggere il seguito chiama read_chapter con chapter=${chapter} e part=${wanted + 1}.]`,
+    );
+  }
+  return lines.join("\n");
+}
+
+/**
+ * The search answer: the heading (exact phrase or all-words), up to `MAX_HITS` hits, or the "no hits" note.
+ * `label` prefixes each hit (the book title on the multi-book search); the default names the chapter.
+ */
+export function formatSearchReply<T extends SearchHit>(
+  result: Pick<SearchResult, "mode" | "total"> & { hits: T[] },
+  query: string,
+  options: { language?: string; label?: (hit: T) => string } = {},
+): string {
+  if (result.total === 0) {
+    const lang = options.language ? ` (lingua del libro: ${options.language})` : "";
+    return `Nessun risultato per «${query}» nel libro. Prova sinonimi o la traduzione del termine: il libro può essere in un'altra lingua${lang}.`;
+  }
+  const shown = result.hits.slice(0, MAX_HITS);
+  const heading =
+    result.mode === "all-words"
+      ? `Nessuna frase esatta. Ci sono ${result.total} righe che contengono tutte le parole di «${query}»`
+      : `Trovati ${result.total} passaggi per «${query}»`;
+  const more = result.total > shown.length ? ` (mostro i primi ${shown.length})` : "";
+  const label = options.label ?? ((hit: T) => `cap. ${hit.chapter} «${hit.title}»`);
+  return [`${heading}${more}:`, ...shown.map((hit) => `- ${label(hit)}: ${hit.snippet}`)].join(
+    "\n",
+  );
+}
+
+export function unknownChapter(chapter: number, entries: TextManifestChapter[]): string {
   if (entries.length === 0) return "Il libro non ha capitoli.";
   const first = entries[0]!.n;
   const last = entries[entries.length - 1]!.n;
@@ -128,10 +165,20 @@ function unknownChapter(chapter: number, entries: TextManifestChapter[]): string
 }
 
 /** Runs a tool body; a failure to load or read the text becomes the Italian message the model can relay. */
-async function guarded(run: () => Promise<string>): Promise<string> {
+export async function guarded(run: () => Promise<string>): Promise<string> {
   try {
     return await run();
   } catch (error) {
-    return `Testo del libro non disponibile: ${error instanceof Error ? error.message : String(error)}`;
+    return unavailableText(error);
   }
+}
+
+/** The message for a text that could not be loaded or read. */
+export function unavailableText(error: unknown): string {
+  return `Testo del libro non disponibile: ${errorMessage(error)}`;
+}
+
+/** The message of an error of any shape. */
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

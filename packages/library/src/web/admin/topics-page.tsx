@@ -211,7 +211,7 @@ export function TopicsPage() {
   return (
     <AdminPage
       title="Argomenti"
-      intro="L’argomento di un libro decide la cartella su Drive. Rinominare un argomento rinomina le cartelle su Drive (Kobo e Archivio); i libri non cambiano."
+      intro="L’argomento di un libro diventa la serie del libro sul Kobo. Rinominare un argomento aggiorna la serie dei suoi libri sul Kobo; i libri non cambiano."
     >
       {loadError ? (
         <ErrorState
@@ -271,7 +271,7 @@ export function TopicsPage() {
             <AlertDialogTitle>Eliminare «{toDelete?.label}»?</AlertDialogTitle>
             <AlertDialogDescription>
               {toDelete && toDelete.bookCount > 0
-                ? `${bookCountText(toDelete.bookCount)} ${toDelete.bookCount === 1 ? "verrà spostato" : "verranno spostati"} in «${unsortedLabel}», e i file cambieranno cartella su Drive.`
+                ? `${bookCountText(toDelete.bookCount)} ${toDelete.bookCount === 1 ? "verrà spostato" : "verranno spostati"} in «${unsortedLabel}», e la loro serie cambierà sul Kobo.`
                 : "Nessun libro usa questo argomento."}
             </AlertDialogDescription>
           </AlertDialogHeader>

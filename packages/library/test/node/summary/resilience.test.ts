@@ -1,8 +1,6 @@
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadConfig } from "../../../src/node/config/index.ts";
-import { createDriveContext } from "../../../src/node/drive/index.ts";
 import { progressLine } from "../../../src/node/cli/commands/summarize.ts";
 import {
   AiFailedError,
@@ -28,10 +26,9 @@ afterEach(async () => {
 type Sleep = (ms: number, signal?: AbortSignal) => Promise<void>;
 
 function deps(model: ScriptedModel["model"], sleep?: Sleep) {
-  const config = loadConfig({ env: env.env });
   return {
     dataDir: env.dataDir,
-    drive: createDriveContext(config, { env: env.env }),
+    text: { dataDir: env.dataDir, cacheDir: env.cacheDir },
     model,
     configuredModel: "smart",
     now: () => new Date(1_000_000),
@@ -208,8 +205,9 @@ describe("checkpoint and resume", () => {
     expect(mock.calls.filter(isChapter(3, "Tre"))).toHaveLength(1);
     expect(mock.calls.filter(isChapter(4, "Quattro"))).toHaveLength(1);
     expect(mock.calls).toHaveLength(3); // two chapters and the book
+    // Events come in completion order (chapters run in parallel): compare the multiset of statuses.
     const statuses = events.flatMap((e) => (e.kind === "chapter" ? [e.status] : []));
-    expect(statuses).toEqual(["reused", "reused", "summarized", "summarized"]);
+    expect([...statuses].sort()).toEqual(["reused", "reused", "summarized", "summarized"]);
     expect(result.summary.chapters.every((c) => c.summary !== null)).toBe(true);
     expect(result.summary.chapters[0]!.summary).toBe(ANSWER);
   });

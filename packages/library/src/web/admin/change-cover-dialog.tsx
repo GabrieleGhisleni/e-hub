@@ -125,7 +125,7 @@ function Picker({ book, onDone }: { book: BookDetail; onDone: () => void }) {
       {load.status === "loading" ? (
         <p role="status" className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
           <Loader2Icon className="size-4 animate-spin" />
-          Ricerca delle copertine (può servire scaricare l’EPUB da Drive)…
+          Ricerca delle copertine (legge l’EPUB dalla cache sul PC)…
         </p>
       ) : null}
       {load.status === "error" ? (
@@ -198,7 +198,7 @@ export function ChangeCoverDialog({
         <DialogHeader>
           <DialogTitle>Cambia copertina</DialogTitle>
           <DialogDescription>
-            La copertina vive solo nel repository (cover.webp): Drive non viene toccato.
+            La copertina vive solo nel repository (cover.webp): il Kobo non viene toccato.
           </DialogDescription>
         </DialogHeader>
         {open ? <Picker book={book} onDone={() => onOpenChange(false)} /> : null}

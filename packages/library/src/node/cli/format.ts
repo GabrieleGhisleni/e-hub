@@ -6,23 +6,26 @@ import type {
   ReconcileReport,
 } from "../../shared/api.ts";
 
+const ACTION_ORDER: readonly ReconcileActionType[] = ["rename", "upload", "metadata", "remove"];
+
 const ACTION_TITLES: Record<ReconcileActionType, string> = {
-  upload: "Uploads",
-  move: "Moves",
-  trash: "To the Drive trash",
-  rmdir: "Empty folders removed",
+  rename: "Renamed on the Kobo",
+  upload: "Uploaded to the Kobo",
+  metadata: "Series metadata written",
+  remove: "Deleted from the Kobo",
 };
 
 function actionLine(a: ReconcileAction): string {
-  const tree = a.tree ? `${a.tree.padEnd(7)} ` : "";
   const id = a.bookId ? `  [${a.bookId}]` : "";
   const what =
-    a.type === "move"
+    a.type === "rename"
       ? `${a.from ?? "?"} → ${a.to ?? "?"}`
       : a.type === "upload"
         ? `${a.to ?? "?"}  (from ${a.from ?? "cache"})`
-        : (a.from ?? a.to ?? "?");
-  return `  ${`[${a.status}]`.padEnd(9)} ${tree}${what}${id}`;
+        : a.type === "metadata"
+          ? (a.to ?? "?")
+          : (a.from ?? a.to ?? "?");
+  return `  ${`[${a.status}]`.padEnd(9)} ${what}${id}`;
 }
 
 function messageLine(m: ReconcileMessage): string {
@@ -34,7 +37,7 @@ function messageLine(m: ReconcileMessage): string {
 export function formatReport(report: ReconcileReport): string[] {
   const lines: string[] = [];
   if (report.dryRun) lines.push("Dry run: nothing was changed. Planned actions:");
-  for (const type of ["upload", "move", "trash", "rmdir"] as const) {
+  for (const type of ACTION_ORDER) {
     const actions = report.actions.filter((a) => a.type === type);
     if (actions.length === 0) continue;
     lines.push(`${ACTION_TITLES[type]} (${actions.length})`);

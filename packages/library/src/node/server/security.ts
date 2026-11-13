@@ -1,6 +1,6 @@
 /**
  * Request checks of the local server (PLAN §3, §14): any site open in the browser can send requests to 127.0.0.1,
- * and this server can move Drive files to the trash. Only the local UI may talk to it.
+ * and this server can delete books from the Kobo over SSH. Only the local UI may talk to it.
  *
  * - `Host` must be one of ours (DNS rebinding: a foreign name resolving to 127.0.0.1 carries its own Host). Allowed:
  *   `127.0.0.1:<port>`, `localhost:<port>` (direct calls, curl) and the host of every allowed UI origin, because the

@@ -1,5 +1,5 @@
 /**
- * Small isomorphic text helpers shared by slugs, IDs and Drive names.
+ * Small isomorphic text helpers shared by slugs, IDs and Kobo file names.
  * No Node APIs: this runs in the browser too.
  */
 

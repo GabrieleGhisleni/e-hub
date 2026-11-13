@@ -1,7 +1,13 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { isBookId } from "../../shared/ids.ts";
-import { InvalidDataError, readAllBooks, readBookSummary, readTopics } from "../repo/index.ts";
+import {
+  InvalidDataError,
+  readAllBooks,
+  readBookHighlights,
+  readBookSummary,
+  readTopics,
+} from "../repo/index.ts";
 
 export interface DataIssue {
   /** Path relative to the data dir, when the issue concerns a file or folder. */
@@ -22,6 +28,7 @@ export const ALLOWED_BOOK_FILES: ReadonlySet<string> = new Set([
   "recall.md",
   "study.md",
   "summary.json",
+  "highlights.json",
 ]);
 
 /**
@@ -146,7 +153,7 @@ export async function validateData(dataDir: string): Promise<ValidationResult> {
     for (const finding of suspiciousFindings(rawTopics)) {
       result.errors.push({
         path: "topics.json",
-        message: `${finding} (Drive IDs, paths and hashes must never be stored)`,
+        message: `${finding} (file IDs, paths and hashes must never be stored)`,
       });
     }
   } catch {
@@ -161,6 +168,15 @@ export async function validateData(dataDir: string): Promise<ValidationResult> {
       result.errors.push({ path: `books/${id}/summary.json`, message: error.message });
     }
   }
+  // highlights.json: schema and bookId, like summary.json.
+  for (const id of [...books.map((b) => b.id), ...invalid.map((b) => b.id)].filter(isBookId)) {
+    try {
+      await readBookHighlights(dataDir, id);
+    } catch (error) {
+      if (!(error instanceof InvalidDataError)) throw error;
+      result.errors.push({ path: `books/${id}/highlights.json`, message: error.message });
+    }
+  }
   // Suspicious keys and values: also in books that failed schema validation, as long as the JSON parses.
   const allIds = [...books.map((b) => b.id), ...invalid.map((b) => b.id)].filter(isBookId);
   for (const id of allIds) {
@@ -173,7 +189,7 @@ export async function validateData(dataDir: string): Promise<ValidationResult> {
     for (const finding of suspiciousFindings(raw)) {
       result.errors.push({
         path: `books/${id}/book.json`,
-        message: `${finding} (Drive IDs, paths and hashes must never be stored)`,
+        message: `${finding} (file IDs, paths and hashes must never be stored)`,
       });
     }
   }

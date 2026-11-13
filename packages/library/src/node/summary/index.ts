@@ -15,10 +15,9 @@ import {
   type ChapterSummary,
 } from "../../shared/schema.ts";
 import { cachedSummaryProgressPath } from "../cache/index.ts";
-import type { DriveContext } from "../drive/context.ts";
 import { readBook, writeBookSummary } from "../repo/index.ts";
 import { writeFileAtomic } from "../repo/fs.ts";
-import { type TextManifestChapter, extractBookText } from "../text/index.ts";
+import { type TextContext, type TextManifestChapter, extractBookText } from "../text/index.ts";
 import { countWords } from "../text/markdown.ts";
 
 /** Chapters shorter than this get `summary: null` and no model call (cover, copyright, index…). */
@@ -27,7 +26,7 @@ export const SHORT_CHAPTER_WORDS = 150;
 export const LONG_CHAPTER_WORDS = 25_000;
 /** Target size of one part of a long chapter. */
 export const PART_WORDS = 12_000;
-export const DEFAULT_CONCURRENCY = 2;
+export const DEFAULT_CONCURRENCY = 4;
 export const DEFAULT_RETRY_DELAY_MS = 2_000;
 /** Attempts of one model call that is rate limited (HTTP 429 or 503). Other errors get 2 attempts. */
 export const RATE_LIMIT_ATTEMPTS = 4;
@@ -58,7 +57,7 @@ export class AiFailedError extends Error {
   }
 }
 
-/** The text of the book could not be extracted (no EPUB in the cache or on Drive, unreadable EPUB…). */
+/** The text of the book could not be extracted (no EPUB in the cache, unreadable EPUB…). */
 export class TextUnavailableError extends Error {
   readonly bookId: string;
 
@@ -72,8 +71,8 @@ export class TextUnavailableError extends Error {
 export interface SummarizerDeps {
   /** Absolute `data/` dir. */
   dataDir: string;
-  /** Drive context of the text extraction (cache dir, and rclone when the EPUB must be downloaded). */
-  drive: DriveContext;
+  /** Data and cache dirs of the text extraction. */
+  text: TextContext;
   /** Model for the chapter and book calls (the summary model of the configuration). */
   model: LanguageModel;
   /** Model id from the configuration: the fallback for `summary.model` when the router reports none. */
@@ -137,24 +136,28 @@ export async function summarizeBook(
   const concurrency = Math.max(1, Math.floor(options.concurrency ?? DEFAULT_CONCURRENCY));
   const { language, signal } = options;
   const started = now().getTime();
-  const progressFile = cachedSummaryProgressPath(deps.drive.cacheDir, id);
+  // Caller's signal, plus the internal stop switch: the first failure stops every model call not yet started.
+  const progressFile = cachedSummaryProgressPath(deps.text.cacheDir, id);
   // A forced run starts from scratch: the chapter summaries saved by an earlier run are dropped.
   if (options.force === true) await rm(progressFile, { force: true });
   // Chapter summaries saved by an earlier run, by `${n}:${hash of the chapter text}` (same language only).
   const reusable = options.force === true ? new Map<string, string>() : await readCheckpoint(progressFile, language);
   // Every chapter summary of this run so far (reused or new), written to the progress file after each chapter.
   const checkpoint: CheckpointChapter[] = [];
+  // Writes run one after the other (chapters finish in parallel): the file is never written by two writes at once.
   let saving: Promise<void> = Promise.resolve();
   const saveCheckpoint = (): Promise<void> => {
     const snapshot = `${JSON.stringify({ version: 1, bookId: id, language, chapters: checkpoint }, null, 2)}\n`;
-    saving = saving.then(() => writeFileAtomic(progressFile, snapshot));
-    return saving;
+    const write = saving.then(() => writeFileAtomic(progressFile, snapshot));
+    // A failed write does not block the next ones; its caller still gets the error.
+    saving = write.catch(() => {});
+    return write;
   };
 
   const book = await readBook(deps.dataDir, id);
   let extracted: Awaited<ReturnType<typeof extractBookText>>;
   try {
-    extracted = await extractBookText(deps.drive, id, {
+    extracted = await extractBookText(deps.text, id, {
       force: options.force === true,
       ...(deps.repoRoot ? { repoRoot: deps.repoRoot } : {}),
     });
@@ -162,6 +165,19 @@ export async function summarizeBook(
     throw new TextUnavailableError(id, { cause: error });
   }
   const { outputDir, manifest } = extracted;
+
+  const controller = new AbortController();
+  const runSignal = controller.signal;
+  const onCallerAbort = () => controller.abort(signal?.reason);
+  if (signal?.aborted) onCallerAbort();
+  signal?.addEventListener("abort", onCallerAbort, { once: true });
+  const limit = createLimiter(concurrency);
+  const failures: unknown[] = [];
+  const fail = (error: unknown): void => {
+    if (failures.length > 0) return;
+    failures.push(error);
+    controller.abort(error);
+  };
 
   // Model that answered last (router header of the last successful call that reported one); else the configured id.
   let routerModel: string | undefined;
@@ -172,7 +188,7 @@ export async function summarizeBook(
    */
   async function callModel(step: string, system: string, prompt: string): Promise<string> {
     for (let attempt = 1; ; attempt++) {
-      signal?.throwIfAborted();
+      runSignal.throwIfAborted();
       let text: string;
       try {
         const result = await generateText({
@@ -180,7 +196,7 @@ export async function summarizeBook(
           system,
           prompt: `${prompt}\n\n${languageInstruction(language)}`,
           maxRetries: 0, // one retry here, not the SDK's
-          ...(signal ? { abortSignal: signal } : {}),
+          abortSignal: runSignal,
           ...(deps.reasoningEffort !== undefined
             ? { providerOptions: { ehub: { reasoningEffort: deps.reasoningEffort } } }
             : {}),
@@ -190,16 +206,16 @@ export async function summarizeBook(
         const reported = headerValue(result.response?.headers, "x-router-model");
         if (reported) routerModel = reported;
       } catch (error) {
-        if (signal?.aborted) throw error;
+        if (runSignal.aborted) throw error;
         const waitSeconds = rateLimitWaitSeconds(error);
         if (waitSeconds !== undefined) {
           if (attempt >= RATE_LIMIT_ATTEMPTS) throw new AiFailedError(step, { cause: error });
           options.onProgress?.({ kind: "waiting", seconds: waitSeconds, chapter: step });
-          await sleep(waitSeconds * 1000, signal);
+          await sleep(waitSeconds * 1000, runSignal);
           continue;
         }
         if (attempt >= 2) throw new AiFailedError(step, { cause: error });
-        await sleep(retryDelayMs, signal);
+        await sleep(retryDelayMs, runSignal);
         continue;
       }
       if (looksLikeLanguage(text, language)) return text;
@@ -218,25 +234,35 @@ export async function summarizeBook(
   const chapters: ChapterSummary[] = new Array(manifest.chapters.length);
   let done = 0;
 
+  /** Every model call (chapter, part, merge, book) takes a limiter slot: at most `concurrency` run at once. */
+  // A failed call stops the run before its slot is released, so the next queued call never starts.
+  const modelCall = (step: string, system: string, prompt: string): Promise<string> =>
+    limit(() =>
+      callModel(step, system, prompt).catch((error: unknown) => {
+        fail(error);
+        throw error;
+      }),
+    );
+
   async function summarizeChapter(text: string, chapter: TextManifestChapter): Promise<string> {
     const step = `capitolo ${chapter.n} "${chapter.title}"`;
     const context = { title: book.title, authors: book.authors.join(", "), chapter };
     const words = countWords(text);
     if (words <= LONG_CHAPTER_WORDS) {
-      return callModel(step, chapterSystem(langName, language), chapterPrompt(context, text));
+      return modelCall(step, chapterSystem(langName, language), chapterPrompt(context, text));
     }
     const parts = splitIntoParts(text, PART_WORDS);
-    const partSummaries: string[] = [];
-    for (const [i, part] of parts.entries()) {
-      partSummaries.push(
-        await callModel(
+    // The parts run in parallel; `Promise.all` keeps their order for the merge. No slot is held while waiting here.
+    const partSummaries = await Promise.all(
+      parts.map((part, i) =>
+        modelCall(
           `${step}, parte ${i + 1}/${parts.length}`,
           chapterSystem(langName, language),
           partPrompt(context, part, i + 1, parts.length),
         ),
-      );
-    }
-    return callModel(
+      ),
+    );
+    return modelCall(
       `${step} (unione delle parti)`,
       chapterSystem(langName, language),
       mergePrompt(context, partSummaries),
@@ -245,45 +271,56 @@ export async function summarizeBook(
 
   let bookText: string;
   try {
-    await runPool(
-      manifest.chapters.map((_, i) => i),
-      concurrency,
-      async (i) => {
-        signal?.throwIfAborted();
-        const chapter = manifest.chapters[i]!;
-        let summary: string | null = null;
-        let status: "summarized" | "skipped" | "reused" = "skipped";
-        let reason: SkipReason | undefined;
-        if (isFrontOrBackMatter(chapter.title)) reason = "front-back-matter";
-        else if (chapter.words < SHORT_CHAPTER_WORDS) reason = "short";
-        if (reason === undefined) {
-          const text = await readFile(path.join(outputDir, chapter.file), "utf8");
-          const hash = sha256(text);
-          const saved = reusable.get(`${chapter.n}:${hash}`);
-          if (saved !== undefined) {
-            summary = saved;
-            status = "reused";
-          } else {
-            summary = await summarizeChapter(text, chapter);
-            status = "summarized";
-          }
-          checkpoint.push({ n: chapter.n, hash, summary });
-          await saveCheckpoint();
-        }
-        chapters[i] = { n: chapter.n, title: chapter.title, words: chapter.words, summary };
-        done += 1;
-        options.onProgress?.({
-          kind: "chapter",
-          done,
-          total: manifest.chapters.length,
-          chapter,
-          status,
-          ...(reason !== undefined ? { reason } : {}),
-        });
-      },
+    // The texts are read first, so every chapter queues its model call in chapter order (the limiter is FIFO).
+    const texts = await Promise.all(
+      manifest.chapters.map((chapter) =>
+        isFrontOrBackMatter(chapter.title) || chapter.words < SHORT_CHAPTER_WORDS
+          ? Promise.resolve(undefined)
+          : readFile(path.join(outputDir, chapter.file), "utf8"),
+      ),
     );
+    // Every chapter starts at once; the limiter lets only `concurrency` model calls run. A failure stops the rest.
+    await Promise.all(
+      manifest.chapters.map(async (chapter, i) => {
+        try {
+          runSignal.throwIfAborted();
+          let summary: string | null = null;
+          let status: "summarized" | "skipped" | "reused" = "skipped";
+          let reason: SkipReason | undefined;
+          if (isFrontOrBackMatter(chapter.title)) reason = "front-back-matter";
+          else if (chapter.words < SHORT_CHAPTER_WORDS) reason = "short";
+          if (reason === undefined) {
+            const text = texts[i]!;
+            const hash = sha256(text);
+            const saved = reusable.get(`${chapter.n}:${hash}`);
+            if (saved !== undefined) {
+              summary = saved;
+              status = "reused";
+            } else {
+              summary = await summarizeChapter(text, chapter);
+              status = "summarized";
+            }
+            checkpoint.push({ n: chapter.n, hash, summary });
+            await saveCheckpoint();
+          }
+          chapters[i] = { n: chapter.n, title: chapter.title, words: chapter.words, summary };
+          done += 1;
+          options.onProgress?.({
+            kind: "chapter",
+            done,
+            total: manifest.chapters.length,
+            chapter,
+            status,
+            ...(reason !== undefined ? { reason } : {}),
+          });
+        } catch (error) {
+          fail(error);
+        }
+      }),
+    );
+    if (failures.length > 0) throw failures[0];
 
-    bookText = await callModel(
+    bookText = await modelCall(
       "sintesi del libro",
       bookSystem(langName, language),
       bookPrompt(
@@ -292,11 +329,14 @@ export async function summarizeBook(
       ),
     );
   } catch (error) {
-    // The chapters saved so far stay in the progress file: the next run resumes from them.
+    // Pending checkpoint writes finish first: the chapters saved so far are on disk, the next run resumes from them.
+    await saving;
     if (error instanceof AiFailedError) {
       throw new AiFailedError(error.step, { cause: error.cause, savedChapters: checkpoint.length });
     }
     throw error;
+  } finally {
+    signal?.removeEventListener("abort", onCallerAbort);
   }
   options.onProgress?.({ kind: "book" });
 
@@ -392,31 +432,33 @@ export function splitIntoParts(text: string, maxWords: number): string[] {
   return parts;
 }
 
-/** Runs `worker` over `items` with at most `concurrency` in flight. The first failure stops the lanes and is rethrown. */
-async function runPool<T>(
-  items: readonly T[],
-  concurrency: number,
-  worker: (item: T) => Promise<void>,
-): Promise<void> {
-  let next = 0;
-  let failed = false;
-  let failure: unknown;
-  const lane = async (): Promise<void> => {
-    while (!failed && next < items.length) {
-      const item = items[next++]!;
-      try {
-        await worker(item);
-      } catch (error) {
-        if (!failed) {
-          failed = true;
-          failure = error;
-        }
-        return;
-      }
+/**
+ * Counting semaphore: `limit(fn)` waits for a free slot, runs `fn` and frees the slot when it settles (also on error).
+ * A freed slot goes straight to the next waiter, so no more than `concurrency` calls run at once.
+ */
+function createLimiter(concurrency: number): <T>(fn: () => Promise<T>) => Promise<T> {
+  let active = 0;
+  const waiting: Array<() => void> = [];
+  const acquire = (): Promise<void> => {
+    if (active < concurrency) {
+      active += 1;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => waiting.push(resolve));
+  };
+  const release = (): void => {
+    const next = waiting.shift();
+    if (next) next();
+    else active -= 1;
+  };
+  return async <T>(fn: () => Promise<T>): Promise<T> => {
+    await acquire();
+    try {
+      return await fn();
+    } finally {
+      release();
     }
   };
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => lane()));
-  if (failed) throw failure;
 }
 
 // ---------------------------------------------------------------------------------------------

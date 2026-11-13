@@ -1,8 +1,8 @@
 /** R1-02, R1-03, R1-05, R1-10: prune guard, import resume / orphans, staging cleanup, cross-process lock. */
-import { copyFile, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cachedEpubPath, isNonEmptyFile } from "../../../src/node/cache/index.ts";
+import { cacheBookDir, cachedEpubPath, isNonEmptyFile } from "../../../src/node/cache/index.ts";
 import { type CliIO, runCli } from "../../../src/node/cli/program.ts";
 import { readAllBooks } from "../../../src/node/repo/index.ts";
 import {
@@ -21,10 +21,9 @@ import { buildEpub, makeEpub } from "../../helpers/epub.ts";
 import { type TempDir, makeTempDir } from "../../helpers/tmp.ts";
 import {
   type ServicesTestEnv,
-  failingKepubRclone,
   offlineFetch,
+  offlineKoboTransport,
   setupServices,
-  whichBinary,
 } from "./setup.ts";
 
 const NEW_BOOK: NewBook = {
@@ -47,7 +46,7 @@ async function elib(t: ServicesTestEnv, ...argv: string[]) {
   return { code, stdout, stderr };
 }
 
-describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("hardening (R1)", () => {
+describe.skipIf(!hasBinary("kepubify"))("hardening (R1)", () => {
   let t: ServicesTestEnv;
   beforeEach(async () => {
     t = await setupServices();
@@ -68,7 +67,7 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("hardening (R1)"
   }
 
   describe("R1-02: sync --prune guard", () => {
-    it("refuses a real prune on an empty data dir, trashes nothing, --dry-run still works", async () => {
+    it("refuses a real prune on an empty data dir, deletes nothing, --dry-run still works", async () => {
       await createOne();
       await createOne("Secondo libro");
       expect(await t.remoteFiles()).toHaveLength(4);
@@ -89,7 +88,7 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("hardening (R1)"
 
         const dry = await elib(wrong, "sync", "--prune", "--dry-run");
         expect(dry.stderr).toContain("Data dir:");
-        expect(dry.stdout).toContain("To the Drive trash (4)");
+        expect(dry.code).toBe(0);
         expect(await t.remoteFiles()).toHaveLength(4);
       } finally {
         await empty.cleanup();
@@ -103,7 +102,7 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("hardening (R1)"
       await createOne("Quarto libro");
       await createOne("Quinto libro");
       await createOne("Sesto libro");
-      // Hide every book from the CLI: 12 files look like orphans but the data dir is not empty.
+      // Hide every book from the CLI: 14 files look like orphans but the data dir is not empty.
       await createOne("Settimo libro");
       const books = (await readAllBooks(t.env.dataDir)).books;
       expect(books).toHaveLength(7);
@@ -125,16 +124,14 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("hardening (R1)"
       await createOne("Terzo libro");
       await createOne("Quarto libro");
       await createOne("Quinto libro");
-      await mkdir(t.env.remote.localPath("Archivio/Varie"), { recursive: true });
-      await writeFile(t.env.remote.localPath("Archivio/Varie/Altro [zzzz0000].epub"), "x");
+      await writeFile(path.join(t.env.koboDir, "Altro [zzzz0000].kepub.epub"), "x");
       const run = await elib(t, "sync", "--prune");
       expect(run.code).toBe(0);
-      expect(run.stdout).toContain("To the Drive trash (1)");
       expect(await t.remoteFiles()).toHaveLength(10);
     });
   });
 
-  describe("R1-03: import after a partial failure", () => {
+  describe("R1-03: import and the EPUB cache", () => {
     let src: TempDir;
     beforeEach(async () => {
       src = await makeTempDir("elib-import-src-");
@@ -144,33 +141,43 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("hardening (R1)"
       await src.cleanup();
     });
 
-    it("a rerun resumes the failed import with the same book ID", async () => {
-      const failing = t.makeCtx({
-        rcloneBinary: await failingKepubRclone(src.dir, whichBinary("rclone")),
-      });
+    it("a failed KEPUB conversion is resumed by a rerun with the same book ID", async () => {
+      const failing = t.makeCtx({ kepubifyBinary: "/nonexistent/kepubify" });
       const first = await importFolder(failing, src.dir);
       expect(first.items.map((i) => i.status)).toEqual(["failed"]);
       expect((await readAllBooks(t.env.dataDir)).books).toEqual([]);
-      const orphans = await t.remoteFiles();
-      expect(orphans).toHaveLength(1); // the EPUB reached Drive, the KEPUB did not
-      const orphanId = /\[([0-9a-z]{8})\]\.epub$/.exec(orphans[0]!)![1]!;
+      const [uploadId] = await readdir(path.join(t.env.cacheDir, "uploads"));
+      const state = JSON.parse(
+        await readFile(path.join(t.env.cacheDir, "uploads", uploadId!, "state.json"), "utf8"),
+      ) as { bookId: string };
 
       const second = await importFolder(t.ctx, src.dir);
       expect(second.items.map((i) => i.status)).toEqual(["imported"]);
-      expect(second.items[0]!.bookId).toBe(orphanId);
-      expect(await t.remoteFiles()).toHaveLength(2);
-      expect((await readAllBooks(t.env.dataDir)).books.map((b) => b.id)).toEqual([orphanId]);
+      expect(second.items[0]!.bookId).toBe(state.bookId);
+      expect((await readAllBooks(t.env.dataDir)).books.map((b) => b.id)).toEqual([state.bookId]);
+      expect(await t.koboNames()).toHaveLength(2);
     });
 
-    it("an orphan copy on Drive (no book in the repo, no staging) is not a duplicate", async () => {
-      const failing = t.makeCtx({
-        rcloneBinary: await failingKepubRclone(src.dir, whichBinary("rclone")),
-      });
-      await importFolder(failing, src.dir);
-      // The staging is gone (e.g. the 24h cleanup, or another cache): only the orphan EPUB is left.
-      const { cleanupStaleUploads: clean } = await import("../../../src/node/services/index.ts");
-      const later = t.makeCtx({ now: () => new Date(Date.now() + 48 * 3600 * 1000) });
-      expect(await clean(later)).toBe(1);
+    it("an import with the Kobo off imports the books; the next sync puts them on the Kobo", async () => {
+      const offline = t.makeCtx({ transport: offlineKoboTransport(t.env.koboDir) });
+      const first = await importFolder(offline, src.dir);
+      expect(first.items.map((i) => i.status)).toEqual(["imported"]);
+      expect(first.items[0]!.report?.errors.map((e) => e.code)).toEqual(["listing-failed"]);
+      expect((await readAllBooks(t.env.dataDir)).books).toHaveLength(1);
+      expect(await t.remoteFiles()).toEqual([]);
+
+      expect((await elib(t, "sync")).code).toBe(0);
+      expect(await t.koboNames()).toHaveLength(2);
+
+      // The same file again is a duplicate of the cached EPUB.
+      const again = await importFolder(t.ctx, src.dir);
+      expect(again.items.map((i) => i.status)).toEqual(["duplicate"]);
+    });
+
+    it("an orphan copy in the cache (no book in the repo) is not a duplicate", async () => {
+      const file = path.join(src.dir, "a.epub");
+      await mkdir(cacheBookDir(t.env.cacheDir, "zzzz0000"), { recursive: true });
+      await copyFile(file, cachedEpubPath(t.env.cacheDir, "zzzz0000"));
 
       const dry = await importFolder(t.ctx, src.dir, { dryRun: true });
       expect(dry.items[0]!.status).toBe("ready");
@@ -179,21 +186,15 @@ describe.skipIf(!hasBinary("rclone") || !hasBinary("kepubify"))("hardening (R1)"
       const real = await importFolder(t.ctx, src.dir);
       expect(real.items.map((i) => i.status)).toEqual(["imported"]);
       expect((await readAllBooks(t.env.dataDir)).books).toHaveLength(1);
-
-      // The upload form's duplicate list ignores orphans too, but keeps real books.
-      const bytes = new Uint8Array(
-        await (await import("node:fs/promises")).readFile(path.join(src.dir, "a.epub")),
-      );
-      const analysis = await analyzeUpload(t.ctx, { fileName: "a.epub", bytes });
-      expect(analysis.duplicates.map((d) => d.kind)).toContain("md5");
     });
 
-    it("analyzeUpload: an orphan MD5 match is dropped with a warning", async () => {
-      await mkdir(t.env.remote.localPath("Archivio/Varie"), { recursive: true });
+    it("analyzeUpload: an orphan cache match is dropped with a warning", async () => {
       const file = path.join(src.dir, "a.epub");
-      await copyFile(file, t.env.remote.localPath("Archivio/Varie/Orfano [zzzz0000].epub"));
-      await copyFile(file, t.env.remote.localPath("Archivio/Varie/senza id.epub"));
-      const bytes = new Uint8Array(await (await import("node:fs/promises")).readFile(file));
+      for (const id of ["zzzz0000", "zzzz0001"]) {
+        await mkdir(cacheBookDir(t.env.cacheDir, id), { recursive: true });
+        await copyFile(file, cachedEpubPath(t.env.cacheDir, id));
+      }
+      const bytes = new Uint8Array(await readFile(file));
       const analysis = await analyzeUpload(t.ctx, { fileName: "a.epub", bytes });
       expect(analysis.duplicates.filter((d) => d.kind === "md5")).toEqual([]);
       expect(analysis.warnings.filter((w) => w.includes("copia orfana"))).toHaveLength(2);

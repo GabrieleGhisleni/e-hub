@@ -1,6 +1,7 @@
 /**
- * Topics management (PLAN §5 "Classificazione", §7.6): add, rename (Drive folders renamed, books unchanged), delete
- * (books reassigned to `unsorted`, then reconciled), usage counts for the confirmation dialogs.
+ * Topics management (PLAN §5 "Classificazione", §7.6): add, rename (the series of the books is rewritten on the Kobo),
+ * delete (books reassigned to `unsorted`, then reconciled), usage counts for the confirmation dialogs. A topic label is
+ * the series of its books (docs/kobo-ssh-migration.md): no file is moved by a topic change.
  */
 import {
   type DeleteTopicResponse,
@@ -11,7 +12,7 @@ import {
 import { topicIdFromLabel } from "../../shared/ids.ts";
 import { UNSORTED_TOPIC_ID } from "../../shared/labels.ts";
 import { TopicIdSchema, type Topic } from "../../shared/schema.ts";
-import { reconcile, renameTopicFolders } from "../drive/index.ts";
+import { reconcile } from "../kobo/index.ts";
 import { InvalidDataError, readAllBooks, writeBook, writeTopics } from "../repo/index.ts";
 import type { ServiceContext } from "./context.ts";
 import { badRequest, conflict, notFound } from "./errors.ts";
@@ -40,7 +41,7 @@ async function saveTopics(ctx: ServiceContext, topics: Topic[], label: string): 
     if (error instanceof InvalidDataError) {
       throw conflict(
         "topic-conflict",
-        `"${label}" finirebbe nella stessa cartella di Drive di un altro argomento (le maiuscole non contano).`,
+        `"${label}" si confonderebbe con un altro argomento (le maiuscole non contano).`,
         { issues: error.issues },
       );
     }
@@ -48,7 +49,7 @@ async function saveTopics(ctx: ServiceContext, topics: Topic[], label: string): 
   }
 }
 
-/** New topic: its ID comes from the label (`topicIdFromLabel`) and never changes. No Drive change. */
+/** New topic: its ID comes from the label (`topicIdFromLabel`) and never changes. Nothing on the Kobo changes. */
 export async function addTopic(ctx: ServiceContext, label: string): Promise<TopicWriteResponse> {
   const clean = cleanLabel(label);
   return ctx.lock.runExclusive(async () => {
@@ -75,7 +76,10 @@ function findTopic(topics: readonly Topic[], id: string): Topic {
   return topic;
 }
 
-/** New label in topics.json (books keep the ID), then the topic folders are renamed on Drive. */
+/**
+ * New label in topics.json (books keep the ID), then the series metadata of their books is rewritten on the Kobo
+ * (`reconcile` rewrites only `custom_metadata.lua`: no file is renamed).
+ */
 export async function renameTopic(
   ctx: ServiceContext,
   id: string,
@@ -89,14 +93,17 @@ export async function renameTopic(
     const topic: Topic = { ...old, label: clean };
     const next = topics.map((t) => (t.id === id ? topic : t));
     await saveTopics(ctx, next, clean);
-    const report = await renameTopicFolders(ctx.drive, old.label, clean);
+    const ids = (await readAllBooks(ctx.dataDir)).books
+      .filter((b) => b.topic === id)
+      .map((b) => b.id);
+    const report = ids.length > 0 ? await reconcile(ctx.kobo, ids) : emptyReconcileReport();
     return { topic, topics: next, report };
   });
 }
 
 /**
  * Deletes a topic: its books are reassigned to `unsorted` first (each book.json rewritten), then topics.json, then one
- * reconcile moves their files into the "Da smistare" folders. `unsorted` cannot be deleted.
+ * reconcile rewrites their series on the Kobo to "Da smistare". `unsorted` cannot be deleted.
  */
 export async function deleteTopic(ctx: ServiceContext, id: string): Promise<DeleteTopicResponse> {
   if (id === UNSORTED_TOPIC_ID) {
@@ -118,7 +125,7 @@ export async function deleteTopic(ctx: ServiceContext, id: string): Promise<Dele
     const report =
       books.length > 0
         ? await reconcile(
-            ctx.drive,
+            ctx.kobo,
             books.map((b) => b.id),
           )
         : emptyReconcileReport();

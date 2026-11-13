@@ -124,7 +124,7 @@ export function BulkEditDialog({
           <Field
             label="Stato"
             htmlFor="bulk-status"
-            hint={state.topic !== "" ? "Cambiare argomento sposta i file su Drive." : undefined}
+            hint={state.topic !== "" ? "Cambiare argomento aggiorna la serie sul Kobo." : undefined}
           >
             <Select
               value={state.status === "" ? KEEP : state.status}

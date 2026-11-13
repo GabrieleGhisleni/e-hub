@@ -1,20 +1,21 @@
 {
-  "drive": {
-    "remote": "elib",
-    "root": "",
-    "koboTree": "Rakuten Kobo",
-    "archiveTree": "Archivio",
-    "topicSubfolders": {
-      "kobo": true,
-      "archive": true
-    }
+  "kobo": {
+    "host": "root@192.168.1.11",
+    "port": 2222,
+    "identityFile": "~/.ssh/id_ecds_kobo",
+    "booksDir": "/mnt/onboard/books"
   },
   "cache": {
     "dir": "~/.cache/e-library"
   },
   "server": {
     "port": 8787,
-    "allowedOrigins": ["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:5200", "http://localhost:5200"]
+    "allowedOrigins": [
+      "http://127.0.0.1:5173",
+      "http://localhost:5173",
+      "http://127.0.0.1:5200",
+      "http://localhost:5200"
+    ]
   },
   "site": {
     "basePath": "/e-library/"

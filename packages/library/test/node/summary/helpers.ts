@@ -126,7 +126,7 @@ export interface SeedChapter {
 
 /**
  * A book in the repo (book.json) and its text in the cache (`books/<id>/text/` with manifest.json and one Markdown file
- * per chapter), so `extractBookText` finds the text and never touches Drive.
+ * per chapter), so `extractBookText` finds the text and never needs the EPUB.
  */
 export async function seedBook(
   env: Pick<TestEnv, "dataDir" | "cacheDir">,

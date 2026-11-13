@@ -1,6 +1,6 @@
 /**
  * Write serialization: an in-process queue (`Mutex`) plus a cross-process lock file (`ProcessLock`), so the server,
- * `elib sync` and `elib import` never write the repo / cache / Drive at the same time (R1-10).
+ * `elib sync` and `elib import` never write the repo / cache / Kobo at the same time (R1-10).
  */
 import { mkdir, open, readFile, stat, unlink } from "node:fs/promises";
 import path from "node:path";

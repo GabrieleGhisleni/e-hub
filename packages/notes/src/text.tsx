@@ -1,5 +1,3 @@
-import { Fragment, type ReactNode } from "react";
-
 /** Lowercase, without diacritics ("Perché" matches "perche"). */
 export function normalize(text: string): string {
   return text
@@ -20,51 +18,6 @@ export function matchesTokens(
   if (tokens.length === 0) return true;
   const haystack = normalize(fields.filter(Boolean).join("\n"));
   return tokens.every((token) => haystack.includes(token));
-}
-
-const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-/** Wraps search matches in <mark> (case-insensitive; accents must match for the highlight). */
-export function highlight(text: string, tokens: readonly string[]): ReactNode {
-  if (tokens.length === 0) return text;
-  const pattern = new RegExp(`(${tokens.map(escapeRegExp).join("|")})`, "gi");
-  return text.split(pattern).map((part, i) =>
-    i % 2 === 1 ? (
-      <mark
-        key={i}
-        className="rounded-[3px] bg-brand-soft px-0.5 text-foreground ring-1 ring-brand/25"
-      >
-        {part}
-      </mark>
-    ) : (
-      <Fragment key={i}>{part}</Fragment>
-    ),
-  );
-}
-
-const URL_PATTERN = /(https?:\/\/[^\s<>"')\]]+)/g;
-
-/** Note body: URLs become links, the rest keeps its line breaks (the container uses `whitespace-pre-wrap`). */
-export function NoteText({ text, tokens = [] }: { text: string; tokens?: readonly string[] }) {
-  return (
-    <>
-      {text.split(URL_PATTERN).map((part, i) =>
-        i % 2 === 1 ? (
-          <a
-            key={i}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="break-all text-brand underline decoration-brand/40 underline-offset-2 hover:decoration-brand"
-          >
-            {highlight(part, tokens)}
-          </a>
-        ) : (
-          <Fragment key={i}>{highlight(part, tokens)}</Fragment>
-        ),
-      )}
-    </>
-  );
 }
 
 const dayFormat = new Intl.DateTimeFormat("it-IT", {

@@ -1,17 +1,17 @@
 /** Shared setup for the services / server / CLI integration tests: test env + service context + fakes. */
 import { accessSync, constants } from "node:fs";
-import { chmod, readdir, writeFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { type LoadedConfig, loadConfig } from "../../../src/node/config/index.ts";
-import { readTopics } from "../../../src/node/repo/index.ts";
+import { type KoboTransport, localTransport } from "../../../src/node/kobo/index.ts";
 import {
   type ServiceContext,
   type ServiceContextOptions,
   createServiceContext,
   silentLogger,
 } from "../../../src/node/services/index.ts";
-import { type DrivePaths, expectedDrivePaths } from "../../../src/shared/paths.ts";
+import { koboFileName } from "../../../src/shared/naming.ts";
 import type { Book } from "../../../src/shared/schema.ts";
 import { type TestEnv, createTestEnv } from "../../helpers/test-env.ts";
 
@@ -57,16 +57,28 @@ export async function openLibraryFetch(): Promise<{ fetch: typeof fetch; urls: s
   return { fetch: fake, urls };
 }
 
+/** A Kobo that is off or not on the Wi-Fi: every listing fails (the report gets `listing-failed`). */
+export function offlineKoboTransport(koboDir: string): KoboTransport {
+  return {
+    ...localTransport(koboDir),
+    list: async () => {
+      throw new Error("ssh: connect to host 192.168.1.11 port 2222: Connection timed out");
+    },
+  };
+}
+
 export interface ServicesTestEnv {
   env: TestEnv;
   config: LoadedConfig;
   ctx: ServiceContext;
-  /** Another service context on the same dirs/remote (e.g. with a different rclone binary). */
+  /** Another service context on the same dirs and Kobo folder (e.g. with another transport). */
   makeCtx(options?: ServiceContextOptions): ServiceContext;
-  /** Every file under the remote root (sorted remote paths). */
+  /** Every file under the Kobo folder (sorted, "/"-separated, sidecar metadata included). */
   remoteFiles(): Promise<string[]>;
-  remoteDirs(): Promise<string[]>;
-  expected(book: Book): Promise<DrivePaths>;
+  /** Names directly inside the Kobo folder (KEPUBs and `.kepub.sdr` folders), sorted. */
+  koboNames(): Promise<string[]>;
+  /** Content of `custom_metadata.lua` of a book on the Kobo (null when missing). */
+  koboMetadata(book: Pick<Book, "title" | "authors" | "id">): Promise<string | null>;
   cleanup(): Promise<void>;
 }
 
@@ -75,13 +87,15 @@ export async function setupServices(options: ServiceContextOptions = {}): Promis
   const config = loadConfig({ env: env.env });
   const makeCtx = (extra: ServiceContextOptions = {}) =>
     createServiceContext(config, {
-      env: env.env,
+      // The test folders on top of the real env: kepubify still needs PATH.
+      env: { ...process.env, ...env.env },
       fetch: offlineFetch,
       logger: silentLogger,
+      transport: localTransport(env.koboDir),
       ...options,
       ...extra,
     });
-  const walk = async (wantDirs: boolean): Promise<string[]> => {
+  const walk = async (): Promise<string[]> => {
     const out: string[] = [];
     const visit = async (dir: string, rel: string): Promise<void> => {
       let entries;
@@ -92,15 +106,11 @@ export async function setupServices(options: ServiceContextOptions = {}): Promis
       }
       for (const e of entries) {
         const r = rel ? `${rel}/${e.name}` : e.name;
-        if (e.isDirectory()) {
-          if (wantDirs) out.push(r);
-          await visit(path.join(dir, e.name), r);
-        } else if (!wantDirs) {
-          out.push(r);
-        }
+        if (e.isDirectory()) await visit(path.join(dir, e.name), r);
+        else out.push(r);
       }
     };
-    await visit(env.remote.dir, "");
+    await visit(env.koboDir, "");
     return out.sort();
   };
   return {
@@ -108,9 +118,16 @@ export async function setupServices(options: ServiceContextOptions = {}): Promis
     config,
     ctx: makeCtx(),
     makeCtx,
-    remoteFiles: () => walk(false),
-    remoteDirs: () => walk(true),
-    expected: async (book) => expectedDrivePaths(book, await readTopics(env.dataDir), config.drive),
+    remoteFiles: walk,
+    koboNames: async () => (await readdir(env.koboDir)).sort(),
+    koboMetadata: async (book) => {
+      const file = path.join(env.koboDir, koboFileName(book, "sidecar"), "custom_metadata.lua");
+      try {
+        return await readFile(file, "utf8");
+      } catch {
+        return null;
+      }
+    },
     cleanup: env.cleanup,
   };
 }
@@ -128,25 +145,4 @@ export function whichBinary(name: string): string {
     }
   }
   throw new Error(`${name} not found on PATH`);
-}
-
-/**
- * An rclone wrapper (shell script in `dir`) that fails every `copyto` of a `.kepub.epub` and runs the real rclone
- * otherwise: uploads stop half-way (EPUB on Drive, KEPUB not).
- */
-export async function failingKepubRclone(dir: string, realRclone: string): Promise<string> {
-  const script = path.join(dir, "rclone-fail-kepub.sh");
-  await writeFile(
-    script,
-    `#!/bin/sh
-if [ "$1" = "copyto" ]; then
-  for arg in "$@"; do
-    case "$arg" in *.kepub.epub) echo "simulated failure" >&2; exit 1;; esac
-  done
-fi
-exec "${realRclone}" "$@"
-`,
-  );
-  await chmod(script, 0o755);
-  return script;
 }

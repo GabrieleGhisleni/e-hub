@@ -8,6 +8,8 @@ export const BOOK_JSON = "book.json";
 export const COVER_FILE = "cover.webp";
 /** LLM-written summaries (docs/chat.md §4), written by `elib summarize`. */
 export const SUMMARY_FILE = "summary.json";
+/** Highlights pulled from the Kobo (KOReader), written by `elib sync`. */
+export const HIGHLIGHTS_FILE = "highlights.json";
 export const MARKDOWN_FILES: Readonly<Record<BookMarkdownKind, string>> = {
   notes: "notes.md",
   recall: "recall.md",
@@ -54,6 +56,11 @@ export function markdownPath(dataDir: string, id: string, kind: BookMarkdownKind
 /** `<dataDir>/books/<id>/summary.json`. */
 export function summaryPath(dataDir: string, id: string): string {
   return path.join(bookDir(dataDir, id), SUMMARY_FILE);
+}
+
+/** `<dataDir>/books/<id>/highlights.json`. */
+export function highlightsPath(dataDir: string, id: string): string {
+  return path.join(bookDir(dataDir, id), HIGHLIGHTS_FILE);
 }
 
 export function notesPath(dataDir: string, id: string): string {

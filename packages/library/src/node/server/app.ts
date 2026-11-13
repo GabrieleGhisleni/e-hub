@@ -22,7 +22,7 @@ import {
 import type { ElibConfig } from "../../shared/config.ts";
 import { InvalidUploadIdError } from "../cache/index.ts";
 import { InvalidBookIdError } from "../repo/index.ts";
-import { ServiceError, type Services } from "../services/index.ts";
+import { ServiceError, type Services, startSummaryInBackground } from "../services/index.ts";
 import { securityConfig, securityMiddleware } from "./security.ts";
 
 export interface AppOptions {
@@ -80,7 +80,10 @@ export function createApp(
   // ---- books
   app.post("/api/library/books", jsonLimit, async (c) => {
     const body = await jsonBody(c, CreateBookRequestSchema);
-    return c.json(await services.createBook(body), 201);
+    const created = await services.createBook(body);
+    // The summary of the new book runs in the background: the 201 does not wait for it.
+    startSummaryInBackground(services.ctx, created.book.id);
+    return c.json(created, 201);
   });
   app.post("/api/library/books/bulk", jsonLimit, async (c) => {
     const body = await jsonBody(c, BulkUpdateRequestSchema);

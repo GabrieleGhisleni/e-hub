@@ -31,13 +31,13 @@ import {
   uploadDir,
 } from "../cache/index.ts";
 import { toCoverWebp } from "../covers/index.ts";
-import { findDuplicatesByMd5, md5File } from "../drive/index.ts";
 import { EpubError, type EpubMetadata, extractEpubMetadata } from "../epub/index.ts";
 import {
   downloadOpenLibraryCover,
   findOpenLibraryCoverDetailed,
   type OpenLibraryMatch,
 } from "../openlibrary/index.ts";
+import { findDuplicatesInCache, md5File } from "../kobo/index.ts";
 import { readAllBooks } from "../repo/index.ts";
 import { bookJsonPath } from "../repo/paths.ts";
 import type { ServiceContext } from "./context.ts";
@@ -86,13 +86,13 @@ export interface UploadInput {
 export interface AnalyzeUploadOptions {
   /** Open Library lookup: always (default, upload form), never, or only when the EPUB has no cover (bulk import). */
   openLibrary?: "always" | "never" | "if-no-epub-cover";
-  /** MD5 check against the Archive tree (default true; `elib import` does one listing for the whole batch). */
+  /** MD5 check against the EPUBs of the cache (default true; `elib import` indexes the cache once for the batch). */
   checkMd5?: boolean;
 }
 
 /**
  * Stages and analyses an EPUB: 413 when too large, 400 `kepub-not-supported` / `not-an-epub` when it cannot be used.
- * Never touches the repo or Drive (Drive is only read for the MD5 duplicate check).
+ * Never touches the repo or the Kobo (the cache is only read for the MD5 duplicate check).
  */
 export async function analyzeUpload(
   ctx: ServiceContext,
@@ -196,13 +196,13 @@ export async function analyzeUpload(
       try {
         const split = await dropOrphanMd5Matches(
           ctx,
-          await findDuplicatesByMd5(ctx.drive, stagedEpub),
+          await findDuplicatesInCache(ctx.cacheDir, stagedEpub),
         );
         duplicates.push(...split.duplicates);
         warnings.push(...split.warnings);
       } catch (error) {
         warnings.push(
-          `Controllo duplicati su Drive non riuscito: ${(error as Error).message.split("\n")[0]}`,
+          `Controllo duplicati nella cache non riuscito: ${(error as Error).message.split("\n")[0]}`,
         );
       }
     }
@@ -312,8 +312,8 @@ export function openLibraryCandidate(
 
 /**
  * An MD5 match is a real duplicate only when its book exists in the repo. A match with no book ID, or whose
- * `data/books/<id>/` folder is missing, is an orphan copy left by a failed import: it must not block a new import
- * (R1-03). Returns the remaining duplicates and one warning per orphan.
+ * `data/books/<id>/` folder is missing, is an orphan copy (a deleted book whose cache copy was kept, or a failed
+ * import): it must not block a new import (R1-03). Returns the remaining duplicates and one warning per orphan.
  */
 export async function dropOrphanMd5Matches(
   ctx: ServiceContext,
@@ -324,8 +324,8 @@ export async function dropOrphanMd5Matches(
   for (const match of matches) {
     if (match.kind === "md5" && !(match.bookId && (await bookFolderExists(ctx, match.bookId)))) {
       warnings.push(
-        `Su Drive c'è già una copia orfana di questo file (${match.path}), senza libro nel repo: ` +
-          "viene ignorata (`elib sync --prune` la sposterà nel cestino).",
+        `Nella cache c'è già una copia orfana di questo file (${match.path}), senza libro nel repo: ` +
+          "viene ignorata.",
       );
     } else {
       duplicates.push(match);
@@ -452,12 +452,12 @@ export async function discardUpload(ctx: ServiceContext, uploadId: string): Prom
 /**
  * Removes a staging dir. When it reserved a book ID whose book.json was never written, also removes the leftovers of
  * the failed attempt: the cached EPUB/KEPUB and a repo folder holding nothing but the cover. Files that already
- * reached Drive stay there and show up as orphans in `elib sync`.
+ * reached the Kobo stay there and show up as orphans in `elib sync`.
  */
 export async function removeStaging(ctx: ServiceContext, dir: string): Promise<void> {
   const state = await readState(dir);
   // Only a `reserved` ID is an unfinished attempt. A `created` one belongs to a book that exists or was deleted:
-  // its cache copy is the last local copy of a deleted book (the Drive trash keeps 30 days) and must stay (R1-05).
+  // its cache copy is the last local copy of a deleted book (the Kobo has no trash) and must stay (R1-05).
   if (
     state?.status === "reserved" &&
     !(await isNonEmptyFile(bookJsonPath(ctx.dataDir, state.bookId)))
