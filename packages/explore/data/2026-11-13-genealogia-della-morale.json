@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "id": "2026-11-13-genealogia-della-morale",
+  "title": "Genealogia della morale",
+  "question": "Il rapporto con il cristianesimo secondo nizstche.",
+  "status": "open",
+  "createdAt": "2026-11-13T19:07:56.033Z",
+  "updatedAt": "2026-11-13T19:07:57.896Z",
+  "sources": [
+    {
+      "kind": "book",
+      "id": "cshwx6jq",
+      "origin": "explore",
+      "title": "Genealogia della morale",
+      "authors": [
+        "Friedrich Nietzsche"
+      ],
+      "language": "it",
+      "epub": {
+        "fileName": "Friedrich Nietzsche - Genealogia della morale.epub",
+        "md5": "60e4aeab68a4b7520ddd663e454cc193",
+        "bytes": 839228
+      },
+      "addedAt": "2026-11-13T19:07:57.896Z",
+      "verdict": null
+    }
+  ],
+  "summary": null,
+  "notes": [],
+  "journal": []
+}
