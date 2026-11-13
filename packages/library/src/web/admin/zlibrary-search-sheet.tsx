@@ -56,7 +56,12 @@ import {
 } from "./explore-client";
 import { ApiRequestError, friendlyMessage } from "./lib/errors";
 import type { ExplorationsState } from "./zlibrary-explore-menu";
-import { ZlibraryResultCard, ZlibraryResultSkeleton, type BusyKind } from "./zlibrary-result-card";
+import {
+  ZlibraryResultCard,
+  ZlibraryResultSkeleton,
+  type AddedExploration,
+  type BusyKind,
+} from "./zlibrary-result-card";
 
 /** Page size of the Z-Library API: a full page with fewer raw results is the last one. */
 const PAGE_SIZE = 30;
@@ -202,6 +207,9 @@ export function ZlibrarySearchSheet({
 
   // Per-row busy state, keyed by `id/hash`, so one row's action does not block the others.
   const [busyRows, setBusyRows] = useState<Record<string, BusyKind>>({});
+
+  // Last exploration each book was added to, keyed like `busyRows`, shown inside the card.
+  const [addedRows, setAddedRows] = useState<Record<string, AddedExploration>>({});
 
   // Explorations, loaded the first time an "Esplorazione" menu opens and shared by all rows.
   const [explorations, setExplorations] = useState<ExplorationsState>({
@@ -350,14 +358,22 @@ export function ZlibrarySearchSheet({
       const { blob, fileName } = await adminApi.zlibraryEpub(book.id, book.hash);
       const file = new File([blob], fileName, { type: "application/epub+zip" });
       const updated = await addEpubToExploration(target.id, file);
-      toast.success(`«${book.title}» aggiunto a «${updated.title}»`, {
-        action: { label: "Apri", onClick: () => navigate(`/explore/${updated.id}`) },
-      });
+      setAddedRows((current) => ({
+        ...current,
+        [rowKey(book)]: { id: updated.id, title: updated.title },
+      }));
+      toast.success(`«${book.title}» aggiunto a «${updated.title}»`);
     } catch (error) {
       toast.error(errorText(error));
     } finally {
       setRowBusy(book, null);
     }
+  }
+
+  /** Closes the sheet first: it is modal and would otherwise cover the exploration page. */
+  function openExploration(id: string) {
+    onOpenChange(false);
+    navigate(`/explore/${id}`);
   }
 
   function openCreate(book: ZlibraryBook) {
@@ -451,6 +467,7 @@ export function ZlibrarySearchSheet({
             key={rowKey(book)}
             book={book}
             busy={busyRows[rowKey(book)]}
+            added={addedRows[rowKey(book)]}
             explorations={explorations}
             onStage={() => void stageBook(book)}
             onLoadExplorations={loadExplorations}
@@ -458,6 +475,7 @@ export function ZlibrarySearchSheet({
               void sendToExploration(book, async () => exploration)
             }
             onNewExploration={() => openCreate(book)}
+            onOpenExploration={openExploration}
           />
         ))}
       </ul>

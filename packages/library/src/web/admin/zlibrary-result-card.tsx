@@ -2,7 +2,7 @@
  * One Z-Library result: cover, metadata and the two actions ("Biblioteca" stages the file for the upload form,
  * "Esplorazione" adds the EPUB to an exploration). Only EPUB results can be used.
  */
-import { BookOpenIcon, LibraryIcon, Loader2Icon } from "lucide-react";
+import { ArrowRightIcon, BookOpenIcon, CheckIcon, LibraryIcon, Loader2Icon } from "lucide-react";
 import { useState } from "react";
 import { ZLIBRARY_LANGUAGES, type ZlibraryBook } from "@shared/zlibrary";
 import { Button } from "@ehub/ui/components/button";
@@ -80,22 +80,32 @@ function Badge({ children, accent = false }: { children: string; accent?: boolea
   );
 }
 
+/** The exploration this book was last added to, shown as a success line inside the card. */
+export interface AddedExploration {
+  id: string;
+  title: string;
+}
+
 export function ZlibraryResultCard({
   book,
   busy,
+  added,
   explorations,
   onStage,
   onLoadExplorations,
   onPickExploration,
   onNewExploration,
+  onOpenExploration,
 }: {
   book: ZlibraryBook;
   busy: BusyKind | undefined;
+  added: AddedExploration | undefined;
   explorations: ExplorationsState;
   onStage: () => void;
   onLoadExplorations: () => void;
   onPickExploration: (exploration: ExplorationSummary) => void;
   onNewExploration: () => void;
+  onOpenExploration: (id: string) => void;
 }) {
   const epub = isEpubResult(book);
   const anyBusy = busy !== undefined;
@@ -151,6 +161,22 @@ export function ZlibraryResultCard({
           />
           {!epub ? <span className="text-xs text-muted-foreground">Solo EPUB</span> : null}
         </div>
+
+        {added ? (
+          <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+            <CheckIcon aria-hidden className="size-3.5 shrink-0 text-brand" />
+            <span className="min-w-0 truncate">Aggiunto a «{added.title}»</span>
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto gap-1 p-0 text-xs"
+              onClick={() => onOpenExploration(added.id)}
+            >
+              Apri
+              <ArrowRightIcon aria-hidden className="size-3" />
+            </Button>
+          </div>
+        ) : null}
       </div>
     </li>
   );
