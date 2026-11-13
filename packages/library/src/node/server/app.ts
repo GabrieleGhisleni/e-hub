@@ -4,13 +4,11 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { z } from "zod";
 import { HTTPException } from "hono/http-exception";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { z } from "zod";
 import {
   API_LIMITS,
-  type ApiError,
-  type ApiErrorCode,
   BookPatchSchema,
   BulkUpdateRequestSchema,
   CreateBookRequestSchema,
@@ -23,11 +21,16 @@ import type { ElibConfig } from "../../shared/config.ts";
 import { InvalidUploadIdError } from "../cache/index.ts";
 import { InvalidBookIdError } from "../repo/index.ts";
 import { ServiceError, type Services, startSummaryInBackground } from "../services/index.ts";
+import { ZlibraryClient, zlibraryEnvFrom } from "../zlibrary/index.ts";
+import { apiError, jsonBody } from "./http.ts";
 import { securityConfig, securityMiddleware } from "./security.ts";
+import { registerZlibraryRoutes } from "./zlibrary-routes.ts";
 
 export interface AppOptions {
   /** Request size limits (default `API_LIMITS`). */
   limits?: Partial<typeof API_LIMITS>;
+  /** Z-Library client (default: built from the environment, see `zlibraryEnvFrom`). Tests inject a fake. */
+  zlibrary?: ZlibraryClient;
 }
 
 /** Room for the multipart envelope around the file. */
@@ -93,26 +96,32 @@ export function createApp(
     const body = await jsonBody(c, BookPatchSchema);
     return c.json(await services.updateBook(c.req.param("id"), body));
   });
-  app.delete("/api/library/books/:id", async (c) => c.json(await services.deleteBook(c.req.param("id"))));
+  app.delete("/api/library/books/:id", async (c) =>
+    c.json(await services.deleteBook(c.req.param("id"))),
+  );
   app.get("/api/library/books/:id/cover-candidates", async (c) =>
     c.json(await services.coverCandidates(c.req.param("id"))),
   );
   app.get("/api/library/books/:id/cover-candidates/:source", async (c) =>
     webp(c, await services.readBookCoverCandidate(c.req.param("id"), c.req.param("source"))),
   );
-  app.put("/api/library/books/:id/cover", limit(limits.imageMaxBytes + MULTIPART_OVERHEAD), async (c) => {
-    const id = c.req.param("id");
-    if (isMultipart(c)) {
-      const image = await multipartFile(c, "image");
-      return c.json(
-        await services.setBookCover(id, { image: new Uint8Array(await image.arrayBuffer()) }),
-      );
-    }
-    if (Number(c.req.header("content-length") ?? 0) > limits.jsonMaxBytes) {
-      return apiError(c, 413, "payload-too-large", "Richiesta troppo grande.");
-    }
-    return c.json(await services.setBookCover(id, await jsonBody(c, SetCoverRequestSchema)));
-  });
+  app.put(
+    "/api/library/books/:id/cover",
+    limit(limits.imageMaxBytes + MULTIPART_OVERHEAD),
+    async (c) => {
+      const id = c.req.param("id");
+      if (isMultipart(c)) {
+        const image = await multipartFile(c, "image");
+        return c.json(
+          await services.setBookCover(id, { image: new Uint8Array(await image.arrayBuffer()) }),
+        );
+      }
+      if (Number(c.req.header("content-length") ?? 0) > limits.jsonMaxBytes) {
+        return apiError(c, 413, "payload-too-large", "Richiesta troppo grande.");
+      }
+      return c.json(await services.setBookCover(id, await jsonBody(c, SetCoverRequestSchema)));
+    },
+  );
 
   // ---- summaries (docs/chat.md §4). Literal path: `apiPaths.bookSummary(":id")` would encode the colon.
   app.post("/api/library/books/:id/summary", jsonLimit, async (c) => {
@@ -130,7 +139,16 @@ export function createApp(
     const { label } = await jsonBody(c, TopicLabelRequestSchema);
     return c.json(await services.renameTopic(c.req.param("id"), label));
   });
-  app.delete("/api/library/topics/:id", async (c) => c.json(await services.deleteTopic(c.req.param("id"))));
+  app.delete("/api/library/topics/:id", async (c) =>
+    c.json(await services.deleteTopic(c.req.param("id"))),
+  );
+
+  registerZlibraryRoutes(
+    app,
+    services,
+    options.zlibrary ?? new ZlibraryClient(zlibraryEnvFrom(), services.ctx.cacheDir),
+    jsonLimit,
+  );
 
   app.notFound((c) =>
     apiError(c, 404, "not-found", `Nessun endpoint ${c.req.method} ${c.req.path}.`),
@@ -165,19 +183,6 @@ export function createApp(
   return app;
 }
 
-function apiError(
-  c: Context,
-  status: ContentfulStatusCode,
-  code: ApiErrorCode,
-  message: string,
-  details?: unknown,
-): Response {
-  const body: ApiError = {
-    error: { code, message, ...(details === undefined ? {} : { details }) },
-  };
-  return c.json(body, status);
-}
-
 function webp(c: Context, bytes: Uint8Array): Response {
   return c.body(bytes as Uint8Array<ArrayBuffer>, 200, {
     "Content-Type": "image/webp",
@@ -210,31 +215,6 @@ async function multipartFile(c: Context, field: string): Promise<File> {
     throw new ServiceError("invalid-request", 400, `Manca il file nel campo "${field}".`);
   }
   return file;
-}
-
-/** JSON body validated with `schema`: 415 when not JSON, 400 `invalid-request` (Zod issues in details) otherwise. */
-async function jsonBody<T extends z.ZodType>(c: Context, schema: T): Promise<z.output<T>> {
-  const type = (c.req.header("content-type") ?? "").toLowerCase();
-  if (!type.startsWith("application/json")) {
-    throw new ServiceError("unsupported-media-type", 415, "Serve un corpo application/json.");
-  }
-  let raw: unknown;
-  try {
-    raw = await c.req.json();
-  } catch (error) {
-    if (error instanceof HTTPException) throw error;
-    throw new ServiceError("invalid-request", 400, "JSON non valido.");
-  }
-  const parsed = schema.safeParse(raw);
-  if (!parsed.success) {
-    throw new ServiceError(
-      "invalid-request",
-      400,
-      `Richiesta non valida: ${z.prettifyError(parsed.error)}`,
-      { details: { issues: parsed.error.issues } },
-    );
-  }
-  return parsed.data;
 }
 
 /** Like `jsonBody`, but an empty body means `{}` (every field of the schema has a default). */

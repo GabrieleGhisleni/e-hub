@@ -89,7 +89,8 @@ export const API_LIMITS = {
  *   `cover-changed` (the Open Library candidate is not the one the client saw);
  * - 413 `payload-too-large`; 415 `unsupported-media-type`;
  * - 409 `busy` (another elib process, e.g. the CLI or the server, holds the write lock);
- * - 502 `kobo-failed` (`details: {report}`), `kepub-failed`;
+ * - 502 `kobo-failed` (`details: {report}`), `kepub-failed`, `zlibrary-failed` (Z-Library unreachable or refused);
+ * - 429 `zlibrary-limit` (daily download quota used up); 503 `zlibrary-not-configured` (no credentials in the env);
  * - 500 `internal-error`.
  */
 export type ApiErrorCode =
@@ -115,6 +116,9 @@ export type ApiErrorCode =
   | "unsupported-media-type"
   | "kobo-failed"
   | "kepub-failed"
+  | "zlibrary-failed"
+  | "zlibrary-limit"
+  | "zlibrary-not-configured"
   | "busy"
   | "ai-not-configured"
   | "ai-failed"

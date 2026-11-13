@@ -46,6 +46,10 @@ const HINTS: Partial<Record<string, string>> = {
   "upload-not-found": "Il caricamento è scaduto o è già stato eliminato: carica di nuovo il file.",
   "cover-changed":
     "La copertina di Open Library è cambiata nel frattempo: ricarica i candidati e riprova.",
+  "zlibrary-not-configured":
+    "Configura le credenziali Z-Library in packages/library/.env e riavvia il server.",
+  "zlibrary-limit": "Hai raggiunto il limite giornaliero di download di Z-Library: riprova domani.",
+  "zlibrary-failed": "Z-Library non ha risposto come previsto: riprova tra poco.",
 };
 
 /** Message to show in a toast or an inline alert. API messages are Italian already; transport errors are mapped. */
@@ -55,7 +59,12 @@ export function friendlyMessage(error: unknown): string {
     if (hint && (error.code === "network" || error.message.trim() === "")) return hint;
     if (error.code === "forbidden-origin" || error.code === "forbidden-host")
       return hint ?? error.message;
-    if (error.code === "upload-not-found" || error.code === "cover-changed")
+    if (
+      error.code === "upload-not-found" ||
+      error.code === "cover-changed" ||
+      error.code === "zlibrary-not-configured" ||
+      error.code === "zlibrary-limit"
+    )
       return hint ?? error.message;
     return error.message || `Errore del server (HTTP ${error.status}).`;
   }

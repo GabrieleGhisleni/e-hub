@@ -19,7 +19,7 @@ export function fakeServices(overrides: Partial<Services> = {}): Services {
     throw new Error("not used in this test");
   };
   return {
-    ctx: { logger: silentLogger } as unknown as ServiceContext,
+    ctx: { logger: silentLogger, cacheDir: "/nonexistent-cache" } as unknown as ServiceContext,
     analyzeUpload: unused,
     readUploadCover: unused,
     discardUpload: unused,
@@ -120,7 +120,10 @@ describe("security middleware", () => {
       expect(res.status, method).toBe(403);
       expect(await code(res)).toBe("origin-required");
     }
-    const ok = await request(app, "POST", "/api/library/topics", { origin: UI, json: { label: "Nuovo" } });
+    const ok = await request(app, "POST", "/api/library/topics", {
+      origin: UI,
+      json: { label: "Nuovo" },
+    });
     expect(ok.status).toBe(201);
     expect(((await ok.json()) as { topic: unknown }).topic).toEqual({
       id: "nuovo",

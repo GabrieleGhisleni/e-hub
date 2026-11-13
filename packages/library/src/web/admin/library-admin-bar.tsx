@@ -7,6 +7,7 @@ import {
   InfoIcon,
   PencilLineIcon,
   PlusIcon,
+  SearchIcon,
   XIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -15,6 +16,7 @@ import { Button } from "@ehub/ui/components/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@ehub/ui/components/popover";
 import { useLibrarySelection } from "@library/selection";
 import { BulkEditDialog } from "./bulk-edit-dialog";
+import { ZlibrarySearchSheet } from "./zlibrary-search-sheet";
 import { collectTags } from "./lib/tags";
 import { ADMIN_BUNDLE_MARKER } from "./marker";
 import type { LibraryAdminBarProps } from "./types";
@@ -23,6 +25,7 @@ import { libraryPath } from "@library/lib/paths";
 export function LibraryAdminBar({ index, visibleBooks }: LibraryAdminBarProps) {
   const selection = useLibrarySelection();
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [zlibraryOpen, setZlibraryOpen] = useState(false);
   const count = selection.selectedIds.size;
   const selectedBooks = useMemo(
     () => index.books.filter((b) => selection.selectedIds.has(b.id)),
@@ -111,6 +114,15 @@ export function LibraryAdminBar({ index, visibleBooks }: LibraryAdminBarProps) {
               Argomenti
             </Link>
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setZlibraryOpen(true)}
+            title="Cerca su Z-Library"
+          >
+            <SearchIcon />
+            Cerca libri
+          </Button>
           <Button asChild size="sm">
             <Link to={libraryPath("admin/upload")}>
               <PlusIcon />
@@ -119,6 +131,8 @@ export function LibraryAdminBar({ index, visibleBooks }: LibraryAdminBarProps) {
           </Button>
         </>
       )}
+      {/* Outside the branch above: the sheet keeps its query and results when selection mode toggles. */}
+      <ZlibrarySearchSheet open={zlibraryOpen} onOpenChange={setZlibraryOpen} />
     </div>
   );
 }

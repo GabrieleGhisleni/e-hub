@@ -5,10 +5,10 @@ import {
   Loader2Icon,
   RefreshCwIcon,
 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState, type DragEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
-import { API_LIMITS, type UploadResponse } from "@shared/api";
+import { API_LIMITS, UploadResponseSchema, type UploadResponse } from "@shared/api";
 import { UNSORTED_TOPIC_ID } from "@shared/labels";
 import { BookCover } from "@library/components/book-cover";
 import { Button } from "@ehub/ui/components/button";
@@ -363,8 +363,31 @@ function UploadForm({ upload, onCancel }: { upload: UploadResponse; onCancel: ()
   );
 }
 
+/** Upload handed over by the Z-Library search (router state), if present and valid. */
+function uploadFromLocationState(state: unknown): UploadResponse | null {
+  const incoming = (state as { zlibraryUpload?: unknown } | null)?.zlibraryUpload;
+  if (incoming === undefined) return null;
+  const parsed = UploadResponseSchema.safeParse(incoming);
+  return parsed.success ? parsed.data : null;
+}
+
 export function UploadPage() {
-  const [stage, setStage] = useState<Stage>({ kind: "pick" });
+  const location = useLocation();
+  const navigate = useNavigate();
+  const hasHandoff =
+    (location.state as { zlibraryUpload?: unknown } | null)?.zlibraryUpload !== undefined;
+  const [stage, setStage] = useState<Stage>(() => {
+    const upload = uploadFromLocationState(location.state);
+    return upload ? { kind: "form", upload } : { kind: "pick" };
+  });
+
+  // Clear the handoff from the history entry so a reload does not reuse the staged upload.
+  useEffect(() => {
+    if (hasHandoff) {
+      void navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [hasHandoff, location.pathname, navigate]);
+
   // Incremented to remount the form after "Annulla" (only "Annulla" discards the staging; leaving the page keeps it until the 24 h cleanup).
   const [formKey, setFormKey] = useState(0);
 

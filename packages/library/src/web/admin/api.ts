@@ -32,6 +32,14 @@ import {
   type TopicsResponse,
   type UploadResponse,
 } from "@shared/api";
+import {
+  ZlibrarySearchResponseSchema,
+  ZlibraryStatusResponseSchema,
+  zlibraryPaths,
+  type ZlibrarySearchRequest,
+  type ZlibrarySearchResponse,
+  type ZlibraryStatusResponse,
+} from "@shared/zlibrary";
 import { refreshSiteData } from "@library/data/site-data";
 import { ApiRequestError, isServerDownStatus } from "./lib/errors";
 
@@ -185,7 +193,48 @@ export const adminApi = {
   summarizeBook(id: string, body: SummarizeRequest): Promise<SummarizeResponse> {
     return written(request("POST", apiPaths.bookSummary(id), SummarizeResponseSchema, body));
   },
+
+  zlibraryStatus(): Promise<ZlibraryStatusResponse> {
+    return request("GET", zlibraryPaths.status, ZlibraryStatusResponseSchema);
+  },
+
+  zlibrarySearch(
+    req: ZlibrarySearchRequest,
+    signal?: AbortSignal,
+  ): Promise<ZlibrarySearchResponse> {
+    return request("POST", zlibraryPaths.search, ZlibrarySearchResponseSchema, req, signal);
+  },
+
+  /** The book staged like an upload: pass the result to the "Aggiungi libro" form. */
+  zlibraryStage(id: string, hash: string): Promise<UploadResponse> {
+    return request("POST", zlibraryPaths.stage(id, hash), UploadResponseSchema);
+  },
+
+  /** The original EPUB, as downloaded from Z-Library; the file name comes from Content-Disposition. */
+  async zlibraryEpub(id: string, hash: string): Promise<{ blob: Blob; fileName: string }> {
+    const response = await send("POST", zlibraryPaths.epub(id, hash));
+    const blob = await response.blob();
+    return { blob, fileName: fileNameFromDisposition(response.headers.get("Content-Disposition")) };
+  },
 };
+
+const FALLBACK_EPUB_NAME = "libro.epub";
+
+/** `attachment; filename*=UTF-8''...` (preferred) or `attachment; filename="..."`. */
+function fileNameFromDisposition(header: string | null): string {
+  if (!header) return FALLBACK_EPUB_NAME;
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header)?.[1];
+  if (encoded) {
+    try {
+      const name = decodeURIComponent(encoded.trim());
+      if (name) return name;
+    } catch {
+      // Malformed percent-encoding: try the plain form below.
+    }
+  }
+  const plain = /filename="([^"]+)"/i.exec(header);
+  return plain?.[1] || FALLBACK_EPUB_NAME;
+}
 
 /** URL of a candidate cover image of a staged upload / an existing book (the server answers `Cache-Control: no-store`). */
 export function uploadCoverUrl(uploadId: string, source: CandidateSource): string {
