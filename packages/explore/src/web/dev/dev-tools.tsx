@@ -6,7 +6,7 @@ import { CheckIcon, CompassIcon, PencilIcon, PlusIcon, Trash2Icon, UploadIcon } 
 import { type FormEvent, useEffect, useId, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
-import { ChatButton, chatNoteBody, type ToolPartInfo } from "@ehub/chat/web";
+import { ChatButton, type ToolPartInfo } from "@ehub/chat/web";
 import { Container, PageHeader } from "@ehub/ui";
 import { Button } from "@ehub/ui/components/button";
 import { Checkbox } from "@ehub/ui/components/checkbox";
@@ -31,12 +31,16 @@ import {
   type VerdictInput,
 } from "../store.ts";
 import { PROPOSAL_TOOL, parseChapterText, readProposal } from "../proposal-input.ts";
+import { notebookChunk } from "../notebook-input.ts";
+import { NotebookProposalCard } from "./notebook-proposal.tsx";
+import { PROPOSE_NOTEBOOK_TOOL } from "../../chat/notebook.ts";
 import type { ProposeVerdictsInput } from "../../chat/proposal.ts";
 
 const EXPLORATION_SUGGESTIONS = [
   "Cosa dicono le fonti sulla domanda?",
   "Quali capitoli leggere per primi?",
   "Proponi i verdetti",
+  "Riorganizza il quaderno",
 ];
 
 const DECISION_OPTIONS = (Object.keys(VERDICT_LABELS) as VerdictDecision[]).map((value) => ({
@@ -166,19 +170,34 @@ export function ExplorationDevToolbar({
         title={exploration.title}
         subtitle={exploration.question}
         suggestions={EXPLORATION_SUGGESTIONS}
-        onSaveNote={(note) => {
-          void run(() => store.addNote(exploration.id, { body: chatNoteBody(note) }), "Nota salvata");
+        onSaveNote={async (note) => {
+          // A failed save throws: the chat tells the model the note was not saved, with the reason.
+          try {
+            await store.appendNotebook(exploration.id, notebookChunk(note));
+            toast.success("Aggiunto al quaderno");
+          } catch (error) {
+            toast.error((error as Error).message || "Operazione non riuscita.");
+            throw error;
+          }
         }}
-        renderToolPart={(part: ToolPartInfo) =>
-          part.toolName === PROPOSAL_TOOL ? (
-            <ProposalCard
-              key={part.toolCallId}
-              exploration={exploration}
-              part={part}
-              store={store}
-            />
-          ) : undefined
-        }
+        noteLabels={{
+          save: "Aggiungi al quaderno",
+          saved: "Nel quaderno",
+          savedOutput: "Aggiunto in fondo al quaderno.",
+          savedTitle: "Aggiunto al quaderno",
+          placeholder: "Fai una domanda, o chiedi di aggiungere al quaderno",
+        }}
+        renderToolPart={(part: ToolPartInfo) => {
+          if (part.toolName === PROPOSAL_TOOL) {
+            return <ProposalCard key={part.toolCallId} exploration={exploration} part={part} store={store} />;
+          }
+          if (part.toolName === PROPOSE_NOTEBOOK_TOOL) {
+            return (
+              <NotebookProposalCard key={part.toolCallId} exploration={exploration} part={part} store={store} />
+            );
+          }
+          return undefined;
+        }}
       />
 
       <Button variant="outline" onClick={() => setAdding(true)} disabled={busy}>

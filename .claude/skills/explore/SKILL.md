@@ -16,12 +16,13 @@ La stessa esplorazione si apre anche nell'app (`pnpm dev`, pagina `/explore/<id>
 - **Testi lunghi** (note, sintesi, diario): con `--text-file -` e un heredoc, mai dentro le virgolette di un argomento.
 - **Il repo è pubblico.** Nelle note e nella sintesi solo parole tue o dell'utente, citazioni di al massimo due frasi. Il testo dei capitoli resta nella cache (`~/.cache/e-library`), mai nel repo.
 - **Libri non in libreria**: si aggiungono con `--epub <file>` e restano "solo da esplorare" (cache locale, niente Drive né Kobo). Non importarli in libreria a meno che l'utente lo chieda esplicitamente.
+- **Quaderno**: è il documento condiviso dell'esplorazione (campo `notebook`), letto da `show` e aggiornato dall'app. Non sostituirlo mai senza il via libera dell'utente.
 - **Niente commit** se l'utente non lo chiede.
 
 ## 1. Avvio o ripresa
 
 - Elenco: `pnpm --silent explore list`. Stato completo: `pnpm --silent explore show <id>`.
-- **Ripresa**: leggi `pnpm --silent explore show <id>` per intero prima di fare altro. Domanda, verdetti già dati, note e diario dicono cosa è già stato visto (anche nell'app): non rifarlo, riparti da "cosa resta da vedere".
+- **Ripresa**: leggi `pnpm --silent explore show <id>` per intero prima di fare altro. Domanda, verdetti già dati, note, quaderno e diario dicono cosa è già stato visto (anche nell'app): non rifarlo, riparti da "cosa resta da vedere". Il **quaderno** (sezione «Quaderno» di `show`) è la base comune: leggilo come appunti condivisi con l'utente.
 - **Nuova**: chiedi domanda e fonti se mancano, proponi un titolo breve, poi:
   ```bash
   pnpm --silent explore new --title "Nietzsche e la morale cristiana" --question "Che cosa dice Nietzsche della morale cristiana, e dove?" --book 78w462eb --epub /home/<utente>/Scaricati/genealogia.epub
@@ -55,6 +56,13 @@ Conversazione libera con l'utente, nella sua lingua.
   EOF
   ```
   `--book` è facoltativo (una nota può riguardare l'intera domanda).
+- **Quaderno**: è il posto per gli appunti di lavoro condivisi (ragionamenti, elenchi di passaggi, risposte lunghe). Durante la sessione accoda in fondo quello che emerge, senza riscrivere il resto:
+  ```bash
+  pnpm --silent explore notebook <id> --append --via skill --text-file - <<'EOF'
+  Cosa è emerso, con parole tue e (cap. N).
+  EOF
+  ```
+  Se vuoi **riscrivere** il quaderno (riordinarlo, correggerlo), prima mostra all'utente il testo proposto e scrivi senza `--append` solo dopo il suo sì. Non usare `--clear` senza una richiesta esplicita.
 
 ## 4. Chiusura: verdetti rivisti dall'utente
 
@@ -63,7 +71,7 @@ Quando l'utente vuole chiudere (o la sessione finisce), **proponi** senza scrive
 | Fonte | Verdetto | Capitoli | Motivazione (una riga) |
 | ----- | -------- | -------- | ---------------------- |
 
-Verdetti possibili: `all` (leggere tutto), `parts` (leggere i capitoli X, con `--chapters`), `skip` (non leggere), `undecided` (da decidere). Proponi anche una **sintesi** dell'esito (pochi paragrafi) e la voce di **diario** (cosa è emerso in questa sessione, cosa resta da vedere).
+Verdetti possibili: `all` (leggere tutto), `parts` (leggere i capitoli X, con `--chapters`), `skip` (non leggere), `undecided` (da decidere). Proponi anche una **sintesi** dell'esito (pochi paragrafi) e la voce di **diario** (cosa è emerso in questa sessione, cosa resta da vedere). Se nel quaderno manca ciò che conta, proponi anche di aggiungerlo (o di riscriverlo, se è disordinato).
 
 **Aspetta che l'utente li riveda e li approvi**, anche in parte. Solo dopo scrivi quello che ha approvato:
 

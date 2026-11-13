@@ -30,3 +30,7 @@ export const DevExplorationNewLink = import.meta.env.DEV
 export const DevNewExplorationPage = import.meta.env.DEV
   ? lazy(() => import("./dev/dev-tools.tsx").then((m) => ({ default: m.NewExplorationPage })))
   : null;
+
+export const DevNotebookEditor = import.meta.env.DEV
+  ? lazy(() => import("./dev/notebook-editor.tsx").then((m) => ({ default: m.NotebookDevEditor })))
+  : null;

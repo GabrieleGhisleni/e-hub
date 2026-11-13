@@ -28,7 +28,13 @@ import { Button } from "@ehub/ui/components/button";
 import { cn } from "@ehub/ui";
 import { SAVE_NOTE_TOOL, type ChatUIMessage } from "../shared/types";
 import { ChatMarkdown, type ChatTextSize, ChatTextSizeContext, useChatTextSize } from "./markdown";
-import { NOTE_DRAFTED_OUTPUT, NOTE_SAVED_OUTPUT, type SaveNote, type SaveNoteInput } from "./notes";
+import {
+  NOTE_DRAFTED_OUTPUT,
+  type NoteLabels,
+  type SaveNote,
+  type SaveNoteInput,
+  resolveNoteLabels,
+} from "./notes";
 import { markdownToPlainText } from "./plain-text";
 import { describeToolCall } from "./tool-labels";
 
@@ -68,6 +74,8 @@ export interface MessageListProps {
   onSuggestion?: (text: string) => void;
   /** When given, each finished assistant reply offers "Salva come nota". */
   onSaveNote?: SaveNote;
+  /** Labels of the save button and of the saved note. See `NoteLabels`. */
+  noteLabels?: NoteLabels;
   /** Custom view for a tool call; when it returns something, it replaces the chip. */
   renderToolPart?: RenderToolPart;
   /** Name of the source, used in the empty state ("Chiedi qualcosa su …"). */
@@ -97,6 +105,7 @@ export function MessageList({
   suggestions = DEFAULT_SUGGESTIONS,
   onSuggestion,
   onSaveNote,
+  noteLabels,
   renderToolPart,
   emptyTitle,
   className,
@@ -105,6 +114,7 @@ export function MessageList({
   onAddToDraft,
   draftedIds,
 }: MessageListProps) {
+  const labels = resolveNoteLabels(noteLabels);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
   const [showJump, setShowJump] = useState(false);
@@ -222,6 +232,7 @@ export function MessageList({
                 renderMarkdown={renderMarkdown}
                 renderToolPart={renderToolPart}
                 note={note}
+                labels={labels}
                 drafted={draftedIds?.has(message.id) ?? false}
                 onAddToDraft={
                   finished && onAddToDraft && message.role === "assistant"
@@ -368,6 +379,7 @@ function MessageItem({
   renderMarkdown,
   renderToolPart,
   note,
+  labels,
   saved,
   onSave,
   drafted = false,
@@ -381,6 +393,7 @@ function MessageItem({
   renderToolPart?: RenderToolPart;
   /** The note this reply would become; `undefined` hides the save button. */
   note?: SaveNoteInput;
+  labels: Required<NoteLabels>;
   saved: boolean;
   onSave?: () => void;
   /** Notes mode: the reply is already in the draft. */
@@ -432,7 +445,16 @@ function MessageItem({
             });
             if (custom !== undefined) return <div key={key}>{custom}</div>;
             if (name === SAVE_NOTE_TOOL) {
-              return <SavedNoteCard key={key} input={part.input} output={part.output} state={part.state} />;
+              return (
+                <SavedNoteCard
+                  key={key}
+                  input={part.input}
+                  output={part.output}
+                  state={part.state}
+                  savedOutput={labels.savedOutput}
+                  savedTitle={labels.savedTitle}
+                />
+              );
             }
             return (
               <ToolChip
@@ -459,7 +481,7 @@ function MessageItem({
                 disabled={saved}
                 onClick={onSave}
               >
-                {saved ? <Check aria-hidden /> : <NotebookPen aria-hidden />} {saved ? "Salvata" : "Salva come nota"}
+                {saved ? <Check aria-hidden /> : <NotebookPen aria-hidden />} {saved ? labels.saved : labels.save}
               </Button>
             )}
             {onAddToDraft && answer.trim() !== "" && (
@@ -635,7 +657,19 @@ export function ToolChip({
 }
 
 /** The note the model saved with `save_note`: its text, and whether it was saved. */
-function SavedNoteCard({ input, output, state }: { input: unknown; output: unknown; state: string }) {
+function SavedNoteCard({
+  input,
+  output,
+  state,
+  savedOutput,
+  savedTitle,
+}: {
+  input: unknown;
+  output: unknown;
+  state: string;
+  savedOutput: string;
+  savedTitle: string;
+}) {
   const text =
     input !== null && typeof input === "object" && "text" in input && typeof input.text === "string"
       ? input.text
@@ -643,7 +677,7 @@ function SavedNoteCard({ input, output, state }: { input: unknown; output: unkno
   const result = typeof output === "string" ? output : "";
   const pending = state !== "output-available" && state !== "output-error";
   const drafted = result === NOTE_DRAFTED_OUTPUT;
-  const failed = state === "output-error" || (result !== "" && result !== NOTE_SAVED_OUTPUT && !drafted);
+  const failed = state === "output-error" || (result !== "" && result !== savedOutput && !drafted);
   return (
     <div
       className={cn(
@@ -664,7 +698,7 @@ function SavedNoteCard({ input, output, state }: { input: unknown; output: unkno
         ) : (
           <NotebookPen aria-hidden className="size-3.5" />
         )}
-        {pending ? "Salvo la nota…" : failed ? result || "Nota non salvata" : drafted ? "Aggiunta alla bozza" : "Nota salvata"}
+        {pending ? "Salvo la nota…" : failed ? result || "Nota non salvata" : drafted ? "Aggiunta alla bozza" : savedTitle}
       </div>
       {text !== "" && <ChatMarkdown>{text}</ChatMarkdown>}
     </div>

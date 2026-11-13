@@ -55,7 +55,13 @@ import { cn } from "@ehub/ui";
 import { CHAT_API_PATH, type ChatSource, type ChatUIMessage } from "../shared/types";
 import { MessageList, type RenderToolPart } from "./message-list";
 import { DraftPanel } from "./draft-panel";
-import { NOTE_DRAFTED_OUTPUT, handleSaveNoteToolCall, type SaveNote } from "./notes";
+import {
+  NOTE_DRAFTED_OUTPUT,
+  type NoteLabels,
+  type SaveNote,
+  handleSaveNoteToolCall,
+  resolveNoteLabels,
+} from "./notes";
 import {
   type DraftEntry,
   loadDraft,
@@ -88,6 +94,8 @@ export interface ChatPanelProps {
    * note"). The caller stores the note.
    */
   onSaveNote?: SaveNote;
+  /** Labels of the save buttons and of the answer to `save_note`, when the notes go somewhere else. See `NoteLabels`. */
+  noteLabels?: NoteLabels;
   /** Custom view for a tool call (e.g. proposed verdicts) that replaces its chip. See `RenderToolPart`. */
   renderToolPart?: RenderToolPart;
   open: boolean;
@@ -169,11 +177,13 @@ export function ChatPanel({
   suggestions,
   notice,
   onSaveNote,
+  noteLabels,
   renderToolPart,
   open,
   onOpenChange,
 }: ChatPanelProps) {
   const headingId = useId();
+  const labels = resolveNoteLabels(noteLabels);
   const descriptionId = useId();
 
   // The conversation shown: its ID (also the chat's ID) and the messages it starts with.
@@ -250,6 +260,8 @@ export function ChatPanel({
   // The tool handler runs outside React's render: it reads the latest callback and messages through refs.
   const onSaveNoteRef = useRef(onSaveNote);
   onSaveNoteRef.current = onSaveNote;
+  const labelsRef = useRef(labels);
+  labelsRef.current = labels;
   const messagesRef = useRef<ChatUIMessage[]>([]);
 
   const { messages, sendMessage, status, stop, regenerate, error, addToolOutput } = useChat<ChatUIMessage>({
@@ -267,7 +279,7 @@ export function ChatPanel({
         onSaveNote: drafting
           ? ({ answer }) => updateDraft((current) => [...current, newDraftEntry(answer)])
           : onSaveNoteRef.current,
-        ...(drafting ? { successOutput: NOTE_DRAFTED_OUTPUT } : {}),
+        successOutput: drafting ? NOTE_DRAFTED_OUTPUT : labelsRef.current.savedOutput,
         model: lastAssistant?.metadata?.model,
         addToolOutput: (result) => addToolOutput(result as Parameters<typeof addToolOutput>[0]),
       });
@@ -568,6 +580,7 @@ export function ChatPanel({
             onChange={(entries) => updateDraft(() => entries)}
             onSave={(text) => onSaveNote?.({ answer: text })}
             onClose={() => setDraftOpen(false)}
+            saveLabel={labels.save}
           />
         ) : (
         <div className="flex min-h-0 flex-1 flex-col">
@@ -579,6 +592,7 @@ export function ChatPanel({
             suggestions={suggestions}
             onSuggestion={send}
             onSaveNote={onSaveNote}
+            noteLabels={labels}
             renderToolPart={renderToolPart}
             emptyTitle={title}
             className={cn("px-4", expanded && "sm:px-8")}
@@ -640,7 +654,7 @@ export function ChatPanel({
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={onComposerKeyDown}
-              placeholder={onSaveNote ? "Fai una domanda, o chiedi di salvare una nota" : "Fai una domanda"}
+              placeholder={onSaveNote ? labels.placeholder : "Fai una domanda"}
               aria-label="Messaggio"
               rows={1}
               className={cn(
@@ -714,6 +728,7 @@ export function ChatPanel({
             entries={draftEntries}
             onChange={(entries) => updateDraft(() => entries)}
             onSave={(text) => onSaveNote?.({ answer: text })}
+            saveLabel={labels.save}
           />
         )}
         </div>

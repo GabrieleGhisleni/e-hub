@@ -3,6 +3,7 @@ import { EXPLORATION_ID, sampleExploration } from "./fixtures.ts";
 import {
   ExploreApiError,
   createHttpExploreStore,
+  createMemoryExploreStore,
   createStaticExploreStore,
   isExploration,
 } from "../../src/web/store.ts";
@@ -99,5 +100,38 @@ describe("static explore store", () => {
     expect(isExploration(sampleExploration())).toBe(true);
     expect(isExploration({ version: 2 })).toBe(false);
     expect(isExploration(null)).toBe(false);
+  });
+});
+
+describe("notebook in the stores", () => {
+  it("the static store rejects notebook writes", async () => {
+    const store = createStaticExploreStore([sampleExploration()]);
+    await expect(store.setNotebook(EXPLORATION_ID, "x")).rejects.toThrow(/sola lettura/);
+    await expect(store.appendNotebook(EXPLORATION_ID, "x")).rejects.toThrow(/sola lettura/);
+  });
+
+  it("the memory store sets, appends and clears the notebook like the server", async () => {
+    const store = createMemoryExploreStore([sampleExploration()]);
+    const set = await store.setNotebook(EXPLORATION_ID, "  Uno  ");
+    expect(set.notebook).toMatchObject({ body: "Uno", via: "app" });
+    const appended = await store.appendNotebook(EXPLORATION_ID, "Due");
+    expect(appended.notebook?.body).toBe("Uno\n\nDue");
+    const cleared = await store.setNotebook(EXPLORATION_ID, "");
+    expect(cleared.notebook).toBeUndefined();
+  });
+
+  it("the HTTP store sends the notebook writes to the notebook routes", async () => {
+    const fetch = vi.fn(async () => json(sampleExploration()));
+    const store = createHttpExploreStore({ fetch: fetch as unknown as typeof globalThis.fetch });
+    await store.setNotebook(EXPLORATION_ID, "Testo");
+    expect(fetch.mock.calls[0]).toEqual([
+      `/api/explore/${EXPLORATION_ID}/notebook`,
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ body: "Testo" }) }),
+    ]);
+    await store.appendNotebook(EXPLORATION_ID, "Altro");
+    expect(fetch.mock.calls[1]).toEqual([
+      `/api/explore/${EXPLORATION_ID}/notebook/append`,
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ text: "Altro" }) }),
+    ]);
   });
 });

@@ -10,6 +10,8 @@ export { ChatMarkdown } from "./markdown";
 export {
   chatNoteBody,
   handleSaveNoteToolCall,
+  type NoteLabels,
+  resolveNoteLabels,
   type SaveNote,
   type SaveNoteInput,
   type SaveNoteToolCall,

@@ -10,6 +10,7 @@ export const MAX_QUESTION_LENGTH = 2000;
 export const MAX_SUMMARY_LENGTH = 5000;
 export const MAX_NOTE_LENGTH = 20_000;
 export const MAX_JOURNAL_LENGTH = 5000;
+export const MAX_NOTEBOOK_LENGTH = 100_000;
 export const MAX_SOURCES = 30;
 export const MAX_EPUB_BYTES = 100 * 1024 * 1024;
 
@@ -109,6 +110,18 @@ export const JournalEntry = z.strictObject({
 });
 export type JournalEntry = z.output<typeof JournalEntry>;
 
+/** The exploration's notebook: one Markdown document shared by the reader and Claude. Absent means empty. */
+export const Notebook = z.strictObject({
+  body: z
+    .string()
+    .trim()
+    .min(1, "Il quaderno è vuoto")
+    .max(MAX_NOTEBOOK_LENGTH, `Il quaderno supera ${MAX_NOTEBOOK_LENGTH} caratteri`),
+  updatedAt: Instant,
+  via: Via,
+});
+export type Notebook = z.output<typeof Notebook>;
+
 export const Exploration = z
   .strictObject({
     version: z.literal(1),
@@ -127,6 +140,7 @@ export const Exploration = z
       ),
     summary: z.string().trim().min(1).max(MAX_SUMMARY_LENGTH).nullable(),
     notes: z.array(Note),
+    notebook: Notebook.optional(),
     journal: z.array(JournalEntry),
   })
   .refine(

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   BookSource,
   Exploration,
+  MAX_NOTEBOOK_LENGTH,
+  Notebook,
   VERDICT_LABELS,
   Verdict,
   explorationIdFor,
@@ -165,5 +167,25 @@ describe("labels and IDs", () => {
     expect(explorationIdFor("!!!", date)).toBe("2026-11-12-esplorazione");
     const long = explorationIdFor("a".repeat(100), date);
     expect(long).toBe(`2026-11-12-${"a".repeat(60)}`);
+  });
+});
+
+describe("notebook schema", () => {
+  const notebook = { body: "# Quaderno\n\nAppunti.", updatedAt: NOW, via: "app" };
+
+  it("accepts an exploration with a notebook, and one without (old files stay valid)", () => {
+    expect(Exploration.safeParse({ ...exploration, notebook }).success).toBe(true);
+    expect(Exploration.safeParse(exploration).success).toBe(true);
+  });
+
+  it("refuses an empty notebook, a notebook over the limit and an unknown key", () => {
+    expect(Notebook.safeParse({ ...notebook, body: "  \n " }).success).toBe(false);
+    expect(Notebook.safeParse({ ...notebook, body: "x".repeat(MAX_NOTEBOOK_LENGTH + 1) }).success).toBe(false);
+    expect(Notebook.safeParse({ ...notebook, body: "x".repeat(MAX_NOTEBOOK_LENGTH) }).success).toBe(true);
+    expect(Notebook.safeParse({ ...notebook, extra: true }).success).toBe(false);
+  });
+
+  it("trims the notebook body", () => {
+    expect(Notebook.parse({ ...notebook, body: "  Testo  " }).body).toBe("Testo");
   });
 });

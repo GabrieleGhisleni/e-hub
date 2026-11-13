@@ -261,3 +261,49 @@ describe("explore API: local only", () => {
     expect(await body(response)).toMatchObject({ code: "invalid-file" });
   });
 });
+
+describe("explore API: notebook", () => {
+  it("sets, appends to and clears the notebook, all via app", async () => {
+    const { app } = setup();
+    const id = (await create(app)).id;
+
+    const set = await call(app, "PUT", `/api/explore/${id}/notebook`, { body: "# Quaderno" });
+    expect(set.status).toBe(200);
+    expect((await body(set)).notebook).toMatchObject({ body: "# Quaderno", via: "app" });
+
+    const appended = await call(app, "POST", `/api/explore/${id}/notebook/append`, { text: "Altro" });
+    expect(appended.status).toBe(200);
+    expect((await body(appended)).notebook.body).toBe("# Quaderno\n\nAltro");
+
+    const cleared = await call(app, "PUT", `/api/explore/${id}/notebook`, { body: "" });
+    expect(cleared.status).toBe(200);
+    expect((await body(cleared)).notebook).toBeUndefined();
+  });
+
+  it("rejects bad notebook bodies with 400 (shape, length) and 422 (empty append)", async () => {
+    const { app } = setup();
+    const id = (await create(app)).id;
+    expect((await call(app, "PUT", `/api/explore/${id}/notebook`, { text: "x" })).status).toBe(400);
+    expect((await call(app, "PUT", `/api/explore/${id}/notebook`, { body: 42 })).status).toBe(400);
+    expect(
+      (await call(app, "PUT", `/api/explore/${id}/notebook`, { body: "x".repeat(100_001) })).status,
+    ).toBe(400);
+    expect((await call(app, "POST", `/api/explore/${id}/notebook/append`, { text: "   " })).status).toBe(422);
+    expect((await call(app, "PUT", `/api/explore/2026-11-12-assente/notebook`, { body: "x" })).status).toBe(404);
+  });
+
+  it("accepts a notebook of 100k characters in several bytes each (over the 256 KB JSON limit)", async () => {
+    const { app } = setup();
+    const id = (await create(app)).id;
+    const response = await call(app, "PUT", `/api/explore/${id}/notebook`, { body: "è".repeat(100_000) });
+    expect(response.status).toBe(200);
+    expect((await body(response)).notebook.body.length).toBe(100_000);
+  });
+
+  it("refuses a notebook body over 1 MB with 413", async () => {
+    const { app } = setup();
+    const id = (await create(app)).id;
+    const response = await call(app, "PUT", `/api/explore/${id}/notebook`, { body: "x".repeat(1024 * 1024 + 10) });
+    expect(response.status).toBe(413);
+  });
+});

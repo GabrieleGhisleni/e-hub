@@ -14,6 +14,8 @@
  *   PATCH  /api/explore/:id/notes/:noteId            { body } → Exploration
  *   DELETE /api/explore/:id/notes/:noteId            → Exploration
  *   POST   /api/explore/:id/journal                  { text } → 201 Exploration
+ *   PUT    /api/explore/:id/notebook                 { body } (empty clears) → Exploration
+ *   POST   /api/explore/:id/notebook/append          { text } → Exploration
  *
  * Writes come from the app, so they are recorded with `via: "app"`. Error bodies: `{ error, code, details? }`.
  */
@@ -30,11 +32,13 @@ import {
   addJournal,
   addLibraryBook,
   addNote,
+  appendNotebook,
   createExploration,
   listExplorations,
   readExploration,
   removeBook,
   removeNote,
+  setNotebook,
   setVerdict,
   updateExploration,
   updateNote,
@@ -44,6 +48,7 @@ import {
   BookId,
   JournalEntry,
   MAX_EPUB_BYTES,
+  MAX_NOTEBOOK_LENGTH,
   Exploration,
   ExplorationId,
   Note,
@@ -51,6 +56,8 @@ import {
 } from "../schema.ts";
 
 const MAX_JSON_BYTES = 256 * 1024;
+/** 100k characters of UTF-8 (up to 3 bytes each, more when escaped in JSON) do not fit in the 256 KB limit. */
+const MAX_NOTEBOOK_JSON_BYTES = 1024 * 1024;
 
 const CreateBody = z.strictObject({
   title: Exploration.shape.title,
@@ -65,6 +72,12 @@ const NoteBody = z.strictObject({
 });
 const NoteEditBody = z.strictObject({ body: Note.shape.body });
 const JournalBody = z.strictObject({ text: JournalEntry.shape.text });
+const NotebookBody = z.strictObject({
+  body: z.string().max(MAX_NOTEBOOK_LENGTH, `Il quaderno supera ${MAX_NOTEBOOK_LENGTH} caratteri`),
+});
+const NotebookAppendBody = z.strictObject({
+  text: z.string().max(MAX_NOTEBOOK_LENGTH, `Il testo supera ${MAX_NOTEBOOK_LENGTH} caratteri`),
+});
 
 class BadRequest extends Error {
   constructor(
@@ -78,6 +91,7 @@ class BadRequest extends Error {
 const LOOPBACK_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/i;
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const EPUB_ROUTE = /^\/api\/explore\/[^/]+\/epub$/;
+const NOTEBOOK_ROUTE = /^\/api\/explore\/[^/]+\/notebook(\/append)?$/;
 
 /**
  * The server writes files that end up in a public repo, so every request must come from the app itself: loopback
@@ -205,11 +219,16 @@ export function createExploreApp(options: ExploreAppOptions = {}): Hono {
   app.use("/api/explore/*", localOnly);
   app.use("/api/explore", localOnly);
 
-  // Body limits: 256 KB for JSON writes; the EPUB upload has its own, larger limit (see its route). Only on
-  // requests with a body (the limiter reads the stream, which a bodyless DELETE does not have).
+  // Body limits: 256 KB for JSON writes; the notebook routes and the EPUB upload have their own, larger limits
+  // (see their routes). Only on requests with a body (the limiter reads the stream, which a bodyless DELETE does
+  // not have).
   const jsonLimit = bodyLimit({
     maxSize: MAX_JSON_BYTES,
     onError: (c) => c.json({ error: "Richiesta troppo grande.", code: "too-large" }, 413),
+  });
+  const notebookLimit = bodyLimit({
+    maxSize: MAX_NOTEBOOK_JSON_BYTES,
+    onError: (c) => c.json({ error: "Il quaderno è troppo grande.", code: "too-large" }, 413),
   });
   const epubLimit = bodyLimit({
     maxSize: MAX_EPUB_BYTES,
@@ -217,7 +236,7 @@ export function createExploreApp(options: ExploreAppOptions = {}): Hono {
       c.json({ error: "L'EPUB supera la dimensione massima (100 MB).", code: "too-large" }, 413),
   });
   const limitJson: MiddlewareHandler = (c, next) =>
-    EPUB_ROUTE.test(c.req.path) ? next() : jsonLimit(c, next);
+    EPUB_ROUTE.test(c.req.path) || NOTEBOOK_ROUTE.test(c.req.path) ? next() : jsonLimit(c, next);
   app.on(["POST", "PATCH"], ["/api/explore", "/api/explore/*"], limitJson);
 
   // Registered before `/api/explore/:id`, so the word is not taken for an ID.
@@ -294,6 +313,18 @@ export function createExploreApp(options: ExploreAppOptions = {}): Hono {
     const id = explorationId(c);
     const input = await readJson(c, JournalBody);
     return c.json(await addJournal(id, input.text, "app"), 201);
+  });
+
+  app.put("/api/explore/:id/notebook", notebookLimit, async (c) => {
+    const id = explorationId(c);
+    const input = await readJson(c, NotebookBody);
+    return c.json(await setNotebook(id, input.body, "app"));
+  });
+
+  app.post("/api/explore/:id/notebook/append", notebookLimit, async (c) => {
+    const id = explorationId(c);
+    const input = await readJson(c, NotebookAppendBody);
+    return c.json(await appendNotebook(id, input.text, "app"));
   });
 
   return app;
