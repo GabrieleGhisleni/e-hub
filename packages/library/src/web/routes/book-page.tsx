@@ -19,6 +19,7 @@ import {
   SUMMARY_SECTION_TITLE,
   summarizedChapters,
 } from "@library/components/book/book-summary-section";
+import { CollapsibleBox } from "@library/components/book/collapsible-box";
 import { isFromLibraryState } from "@library/components/library/book-card";
 import { Container, PageHeader, SourceExtras } from "@ehub/ui";
 import { type NoteItemRef, NoteThread, NotesJumpLink } from "@ehub/notes";
@@ -170,21 +171,13 @@ function studySection(book: BookDetail): NoteSection | null {
   return book.studyHtml ? { id: "studio", title: "Studio", html: book.studyHtml } : null;
 }
 
-/** "Appunti": the general notes of the book, the block right under the cover and summary. */
+/** "Appunti": the general notes of the book, a full-width box like Capitoli and Sottolineature (open by default). */
 function NotesBlock({ html }: { html: string | null }) {
   return (
-    <section aria-labelledby={NOTES_SECTION_ID} className="mt-10">
-      <h2
-        id={NOTES_SECTION_ID}
-        tabIndex={-1}
-        className="flex scroll-mt-6 items-center gap-4 text-2xl font-medium tracking-tight outline-none sm:text-3xl"
-      >
-        Appunti
-        <span aria-hidden className="h-px flex-1 bg-border" />
-      </h2>
+    <CollapsibleBox id={NOTES_SECTION_ID} title="Appunti">
       {html ? (
         <div
-          className="prose-book mt-5"
+          className="prose-book mt-5 max-w-none"
           // Sanitized at build time (raw HTML in the Markdown is escaped).
           dangerouslySetInnerHTML={{ __html: demoteHeadings(html) }}
         />
@@ -193,7 +186,7 @@ function NotesBlock({ html }: { html: string | null }) {
           Ancora nessun appunto. Apri «Chatta» e chiedi di scriverli dalle tue sottolineature.
         </p>
       )}
-    </section>
+    </CollapsibleBox>
   );
 }
 
@@ -380,10 +373,6 @@ export function BookPage() {
               </div>
             </div>
 
-            {full && (full.notesHtml || __ELIB_ADMIN__) ? (
-              <NotesBlock html={full.notesHtml} />
-            ) : null}
-
             {full ? (
               <>
                 {navSections.length > 1 ? (
@@ -409,6 +398,7 @@ export function BookPage() {
                 ) : null}
 
                 <div className="mt-6 flex flex-col gap-6">
+                  {full.notesHtml || __ELIB_ADMIN__ ? <NotesBlock html={full.notesHtml} /> : null}
                   {full.summary ? <BookChaptersSection summary={full.summary} /> : null}
                   <BookHighlightsSection highlights={highlights} />
                 </div>
