@@ -192,6 +192,27 @@ describe("PUT /api/podcasts/episodes/:slug", () => {
   });
 });
 
+describe("DELETE /api/podcasts/episodes/:slug", () => {
+  it("removes the episode with its conversations and transcript", async () => {
+    await seedEpisode();
+    await writeTranscript(SLUG, syntheticTranscript(50).transcript);
+    await request("POST", `/api/podcasts/episodes/${SLUG}/conversations`, {
+      agent: "Claude",
+      markdown: "A short chat.",
+    });
+    const res = await request("DELETE", `/api/podcasts/episodes/${SLUG}`);
+    expect(res.status).toBe(200);
+    expect(await readJson(res)).toMatchObject({ slug: SLUG });
+    const left = (await listFilesRecursive(dirs.data)).filter((file) => file.includes(SLUG));
+    expect(left).toEqual([]);
+  });
+
+  it("404s for an unknown episode and 400s for a bad slug", async () => {
+    expect((await request("DELETE", "/api/podcasts/episodes/missing-episode")).status).toBe(404);
+    expect((await request("DELETE", "/api/podcasts/episodes/Bad_Slug")).status).toBe(400);
+  });
+});
+
 describe("POST /api/podcasts/episodes/:slug/conversations", () => {
   it("adds a conversation and reports removed excerpts", async () => {
     await seedEpisode();

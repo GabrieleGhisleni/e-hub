@@ -25,6 +25,18 @@ export const SAVE_NOTE_INSTRUCTIONS = [
   "Non salvare note se l'utente non te lo chiede. Non dire mai che una nota è stata salvata, se l'esito dello strumento non lo conferma.",
 ].join(" ");
 
+/**
+ * Appended to the system prompt of every source, last so it wins: the prompts, transcripts, books and notes are in
+ * whatever language they were written in, but the reply follows the user's latest message.
+ */
+export const LANGUAGE_INSTRUCTIONS = [
+  "## Lingua della risposta",
+  "Rispondi sempre nella lingua dell'ultimo messaggio dell'utente (se scrive in inglese rispondi in inglese, se scrive in italiano in italiano), qualunque sia la lingua di queste istruzioni, della trascrizione, del libro o delle note. Se l'utente cambia lingua, cambia anche tu. Traduci le tue spiegazioni, non le citazioni.",
+].join("\n");
+
+/** Estimated tokens of LANGUAGE_INSTRUCTIONS. */
+export const LANGUAGE_TOKENS = 80;
+
 /** Estimated tokens of SAVE_NOTE_INSTRUCTIONS and the tool definition, added to each source's `tokens`. */
 export const SAVE_NOTE_TOKENS = 250;
 
@@ -163,11 +175,14 @@ export function createChatApp({ getLlm, resolveSource }: ChatAppOptions) {
 
       // The save_note tool and its instructions go with every source; the source's own tools win on a name clash.
       const notesMode = body.notesMode === true;
-      const tokens = context.tokens + SAVE_NOTE_TOKENS + (notesMode ? NOTES_MODE_TOKENS : 0);
+      const tokens = context.tokens + SAVE_NOTE_TOKENS + LANGUAGE_TOKENS + (notesMode ? NOTES_MODE_TOKENS : 0);
       const tools: ToolSet = { [SAVE_NOTE_TOOL]: saveNoteTool, ...context.tools };
-      const system = [context.system, SAVE_NOTE_INSTRUCTIONS, ...(notesMode ? [NOTES_MODE_INSTRUCTIONS] : [])].join(
-        "\n\n",
-      );
+      const system = [
+        context.system,
+        SAVE_NOTE_INSTRUCTIONS,
+        ...(notesMode ? [NOTES_MODE_INSTRUCTIONS] : []),
+        LANGUAGE_INSTRUCTIONS,
+      ].join("\n\n");
 
       if (!fitsBudget(tokens, llm.config)) {
         const budget = Math.floor(llm.config.maxContextTokens * 0.8);

@@ -12,6 +12,7 @@ import {
   NotFoundError,
   ValidationError,
 } from "@ehub/podcasts/chat-context";
+import { listItemNotes } from "@ehub/notes/node";
 import { createBookChatSource } from "@ehub/library/chat-context";
 import { createExplorationChatSource } from "@ehub/explore/chat";
 
@@ -29,12 +30,18 @@ export default createChatApp({
     return llm;
   },
   resolveSource: async (source): Promise<ChatSourceContext | undefined> => {
-    if (source.kind === "book") return bookSource(source.id);
+    if (source.kind === "book") {
+      // The notes thread of the page is read on every request, so the chat sees notes added after it opened.
+      const threadNotes = await listItemNotes("library", source.id).catch(() => []);
+      return bookSource(source.id, { threadNotes });
+    }
     if (source.kind === "exploration") return explorationSource(source.id);
     if (source.kind !== "episode") return undefined;
     try {
-      const context = await buildEpisodeChatContext(source.id);
-      return { system: context.system, tokens: context.tokens };
+      // The notes thread of the page is read on every request, so the chat sees notes added after it opened.
+      const threadNotes = await listItemNotes("podcasts", source.id).catch(() => []);
+      const context = await buildEpisodeChatContext(source.id, { threadNotes });
+      return { system: context.system, tokens: context.tokens, tools: context.tools };
     } catch (error) {
       // Unknown or invalid slug, or no local transcript: the source does not exist for the chat.
       if (error instanceof NotFoundError || error instanceof ValidationError) return undefined;

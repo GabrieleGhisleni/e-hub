@@ -125,6 +125,12 @@ export async function listAllNotes(): Promise<Note[]> {
   return notes;
 }
 
+/** The notes of one book or episode, oldest first; `[]` when it has none. */
+export async function listItemNotes(module: NoteModule, itemId: string): Promise<Note[]> {
+  const file = await readNotesFile(filePath(module, itemId));
+  return file ? file.notes.map((stored) => toNote(file, stored)) : [];
+}
+
 /** Strictly later than `previous` (two writes in the same millisecond still order). */
 function nextInstant(previous: string | undefined, now: Date): string {
   const at = now.getTime();

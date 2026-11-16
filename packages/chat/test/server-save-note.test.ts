@@ -3,7 +3,7 @@
 import { tool } from "ai";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createChatApp, type ChatSourceContext } from "../src/server/app.ts";
+import { createChatApp, LANGUAGE_INSTRUCTIONS, type ChatSourceContext } from "../src/server/app.ts";
 import { createLlm, loadAiConfig } from "../src/node/index.ts";
 import type { ChatRequestBody } from "../src/shared/types.ts";
 import { startMockLlm, type MockLlm } from "@ehub/chat/testing";
@@ -70,6 +70,15 @@ describe("save_note on POST /api/chat", () => {
     expect(request.messages[0].content).toMatch(/^Sei un assistente di test\.\n\n/);
     expect(request.messages[0].content).toContain("save_note");
     expect(request.messages[0].content).toContain("«aggiungilo alle note»");
+  });
+
+  it("ends the system prompt of every source with the reply-language rule", async () => {
+    mock = await startMockLlm([{ text: "Done." }]);
+    await (await post(appFor(mock.baseURL), body())).text();
+
+    const system: string = mock.requests[0].messages[0].content;
+    expect(system.endsWith(LANGUAGE_INSTRUCTIONS)).toBe(true);
+    expect(system).toContain("lingua dell'ultimo messaggio dell'utente");
   });
 
   it("keeps the source's own tools next to save_note", async () => {

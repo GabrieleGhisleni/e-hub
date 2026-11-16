@@ -82,7 +82,7 @@ function EpisodePage({ episode, show }: { episode: Episode; show: Show | undefin
     episode.transcriptTimebase === "feed" && timestampPattern().test(episode.notes);
 
   return (
-    <article className="max-w-3xl pt-6 sm:pt-10">
+    <article className="pt-6 sm:pt-10">
       <div className="flex items-center justify-between gap-3">
         <BackLink />
         <DevSlot name="header-actions" />

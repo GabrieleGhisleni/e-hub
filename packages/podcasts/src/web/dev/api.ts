@@ -168,6 +168,9 @@ export const api = {
     slug: string,
     body: { agent: string; markdown: string; expectedUpdatedAt?: string },
   ) => apiJson<ConversationResponse>("POST", `${episodeBase(slug)}/conversations`, body),
+  remove: (slug: string) =>
+    // The write guard requires a JSON content type, which `apiJson` only sends with a body.
+    apiJson<{ slug: string; title: string }>("DELETE", episodeBase(slug), {}),
   speakers: (slug: string) =>
     apiJson<SpeakersResponse>("GET", `${episodeBase(slug)}/transcript/speakers`),
   renameSpeakers: (slug: string, mapping: Record<string, string>) =>

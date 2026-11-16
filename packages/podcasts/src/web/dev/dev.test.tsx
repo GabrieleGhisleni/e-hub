@@ -8,6 +8,7 @@ import { cleanTag } from "./chip-input";
 import { conversationOutcome } from "./conversation-dialog";
 import { clearDraft, loadDraft, saveDraft, startingState, valuesOf } from "./drafts";
 import { EpisodeEditorDialog } from "./episode-editor";
+import { api } from "./api";
 import { changedMapping } from "./speakers-dialog";
 
 afterEach(() => {
@@ -187,5 +188,19 @@ describe("EpisodeEditorDialog", () => {
     fireEvent.change(screen.getByLabelText(/Appunti/), { target: { value: "x" } });
     fireEvent.click(screen.getByRole("button", { name: "Salva" }));
     expect(await screen.findByText(/25 consecutive words/)).toBeInTheDocument();
+  });
+});
+
+describe("api.remove", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends a JSON content type, which the local write guard requires", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ slug: "a", title: "A" })));
+    vi.stubGlobal("fetch", fetchMock);
+    await api.remove("a");
+    const [path, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(path).toBe("/api/podcasts/episodes/a");
+    expect(init.method).toBe("DELETE");
+    expect(init.headers).toEqual({ "Content-Type": "application/json" });
   });
 });

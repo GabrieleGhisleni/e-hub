@@ -13,6 +13,7 @@ import { countTags } from "../core/tags";
 import { exportTranscriptMarkdown } from "../core/transcript-export";
 import { correctTranscriptSpeakers } from "../core/transcripts";
 import { addEpisode, previewAdd, type IngestDeps } from "../core/ingest";
+import { deleteEpisode } from "../core/episodes";
 import { BadRequestError, handleError } from "./errors";
 import { localOnly } from "./security";
 
@@ -126,6 +127,11 @@ export function createApp(options: { ingest?: IngestDeps } = {}): Hono {
       episode: result.episode,
     });
   });
+
+  // Remove an episode with its conversations and local transcript.
+  app.delete("/api/podcasts/episodes/:slug", async (c) =>
+    c.json(await deleteEpisode(c.req.param("slug"))),
+  );
 
   // Add one conversation; reports how many transcript excerpts were removed.
   app.post("/api/podcasts/episodes/:slug/conversations", async (c) => {

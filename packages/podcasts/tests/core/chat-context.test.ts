@@ -84,6 +84,35 @@ describe("buildEpisodeChatContext", () => {
     expect(context.tokens).toBeGreaterThan(0);
   });
 
+  it("gives the model the Appunti, the thread notes and the edit tool", async () => {
+    const slug = "demo-show-first-episode";
+    await seedEpisode({ slug, notes: "Appunti dell'episodio", transcriptSource: "lex-official", transcriptTimebase: "youtube" });
+    await writeTranscript(slug, transcript);
+
+    const context = await buildEpisodeChatContext(slug, {
+      threadNotes: [
+        { body: "Prima nota", createdAt: "2026-11-10T10:00:00.000Z" },
+        { body: "Seconda nota", pinned: true },
+      ],
+    });
+
+    expect(context.system).toContain("## Appunti dell'episodio");
+    expect(context.system).toContain("Appunti dell'episodio\n");
+    expect(context.system).toContain("### Nota 1, 2026-11-10\nPrima nota");
+    expect(context.system).toContain("### Nota 2 (fissata)\nSeconda nota");
+    expect(context.system).toContain("propose_episode_edit");
+    expect(Object.keys(context.tools)).toEqual(["propose_episode_edit"]);
+  });
+
+  it("marks empty Appunti and omits the thread section when there are no notes", async () => {
+    const slug = "demo-show-first-episode";
+    await seedEpisode({ slug, notes: "", transcriptSource: "lex-official", transcriptTimebase: "youtube" });
+    await writeTranscript(slug, transcript);
+    const { system } = await buildEpisodeChatContext(slug);
+    expect(system).toContain("(vuoto)");
+    expect(system).not.toContain("## Note dell'utente");
+  });
+
   it("throws NotFoundError when the episode does not exist", async () => {
     await expect(buildEpisodeChatContext("demo-show-missing")).rejects.toBeInstanceOf(NotFoundError);
   });

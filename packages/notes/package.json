@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.tsx",
     "./server": "./src/server/app.ts",
+    "./node": "./src/node/repo.ts",
     "./vite": "./src/node/vite.ts"
   },
   "scripts": {

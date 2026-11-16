@@ -2,6 +2,7 @@
  * Episode creation and duplicate detection (Node only). Used by ingest
  * (phase 4: `pnpm episode add`, the local "Aggiungi da URL" form).
  */
+import { rm } from "node:fs/promises";
 import { DuplicateEpisodeError, ValidationError } from "./errors";
 import { z } from "zod";
 import {
@@ -12,11 +13,12 @@ import {
   normalizeTags,
   type TranscriptInput,
 } from "./schema";
-import { assertSlug } from "./paths";
+import { assertSlug, files } from "./paths";
 import { generateEpisodeSlug } from "./slug";
 import {
   listEpisodeSlugs,
   listEpisodes,
+  readEpisode,
   readShow,
   withLock,
   writeEpisode,
@@ -136,5 +138,22 @@ export async function createEpisode(
 
     if (transcript) await writeTranscriptFile(slug, transcript);
     return writeEpisode(parsed.data, { now });
+  });
+}
+
+/**
+ * Removes an episode: `data/episodes/<slug>.json` plus its conversations and
+ * local transcript files (`NotFoundError` if the episode does not exist).
+ * Notes written on the episode live in `packages/notes` and are left alone.
+ */
+export async function deleteEpisode(slug: string): Promise<{ slug: string; title: string }> {
+  assertSlug(slug, "episode slug");
+  return withLock(`episode:${slug}`, async () => {
+    const episode = await readEpisode(slug);
+    // The episode file goes last: if anything fails midway the episode is still listed and can be retried.
+    await rm(files.conversations(slug), { force: true });
+    await rm(files.transcript(slug), { force: true });
+    await rm(files.episode(slug));
+    return { slug, title: episode.title };
   });
 }
