@@ -13,10 +13,12 @@ import {
   InvalidBookIdError,
   assertBookId,
   readBook,
+  readBookHighlights,
+  readBookMarkdown,
   readBookSummary,
 } from "../repo/index.ts";
 import type { TextContext, TextManifest } from "../text/index.ts";
-import { renderBookPrompt } from "./prompt.ts";
+import { type ThreadNote, renderBookPrompt } from "./prompt.ts";
 import { type BookText, loadBookText, readCachedManifest } from "./text.ts";
 import { bookTools } from "./tools.ts";
 
@@ -35,7 +37,10 @@ export type BookChatDeps = {
 };
 
 /** Resolves a book ID to its chat context; undefined when the book does not exist or the ID is invalid. */
-export type BookChatSource = (id: string) => Promise<ChatSourceContext | undefined>;
+export type BookChatSource = (
+  id: string,
+  options?: { threadNotes?: readonly ThreadNote[] },
+) => Promise<ChatSourceContext | undefined>;
 
 export function createBookChatSource(deps: BookChatDeps = {}): BookChatSource {
   let defaults: { dataDir: string; text: TextContext } | undefined;
@@ -65,7 +70,7 @@ export function createBookChatSource(deps: BookChatDeps = {}): BookChatSource {
     return text;
   };
 
-  return async (id) => {
+  return async (id, options = {}) => {
     try {
       assertBookId(id);
     } catch (error) {
@@ -89,7 +94,18 @@ export function createBookChatSource(deps: BookChatDeps = {}): BookChatSource {
           ((bookId: string) => readCachedManifest(defaultsFromConfig().text.cacheDir, bookId))
         )(id);
 
-    const system = renderBookPrompt({ book, summary, chapters: manifest?.chapters });
+    const [notes, highlightsFile] = await Promise.all([
+      readBookMarkdown(dataDir, id, "notes"),
+      readBookHighlights(dataDir, id),
+    ]);
+    const system = renderBookPrompt({
+      book,
+      summary,
+      chapters: manifest?.chapters,
+      notes,
+      highlights: highlightsFile?.highlights,
+      threadNotes: options.threadNotes,
+    });
     const tools = bookTools({ language: book.language, summary, loadText: () => textOf(id) });
     return { system, tokens: estimateTokens(system), tools };
   };

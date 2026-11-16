@@ -190,3 +190,28 @@ describe("frozen baseline (R1-09)", () => {
     expect(diffToPatch(bookToFormState(refreshed), edited)).toMatchObject({ topic: "unsorted" });
   });
 });
+
+describe("year and translators", () => {
+  it("round-trips through the form, the patch and a new book", () => {
+    const initial = bookToFormState({ ...book, year: 2011, translators: ["Laura Serra"] });
+    expect(initial.year).toBe("2011");
+    expect(initial.translators).toEqual(["Laura Serra"]);
+
+    const edited = { ...initial, year: "2012", translators: [] };
+    expect(BookPatchSchema.parse(diffToPatch(initial, edited))).toEqual({ year: 2012, translators: null });
+    expect(diffToPatch(initial, { ...initial, year: "" })).toEqual({ year: null });
+
+    const created = toNewBook({ ...initial, year: "1999" });
+    expect(NewBookSchema.parse(created)).toMatchObject({ year: 1999, translators: ["Laura Serra"] });
+  });
+
+  it("starts from the extracted metadata and rejects a bad year", () => {
+    const state = formStateFromMetadata(
+      { authors: ["A"], subjects: [], year: 2017, translators: ["B"] },
+      { title: "T", topic: "unsorted" },
+    );
+    expect(state).toMatchObject({ year: "2017", translators: ["B"] });
+    expect(validateForm({ ...state, year: "abcd" }).year).toBe("Anno non valido.");
+    expect(validateForm(state).year).toBeUndefined();
+  });
+});

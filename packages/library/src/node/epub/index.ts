@@ -23,6 +23,10 @@ export interface EpubMetadata {
   isbn?: string;
   language?: string;
   publisher?: string;
+  /** Year of publication (`dc:date`). */
+  year?: number;
+  /** Contributors with the translator role (`trl`). */
+  translators?: string[];
   description?: string;
   cover?: EpubCover;
   warnings: string[];
@@ -302,6 +306,22 @@ async function extractEpubMetadataUnchecked(input: string | Uint8Array): Promise
     if (filtered.length > 0) chosen = filtered;
   }
   const authors = dedupe(chosen.map((c) => normalizeAuthorName(c.name)));
+  // Translators: `dc:contributor` (or a creator) with role `trl`, as attribute or as a refining meta.
+  const contributors = asArray(metadata["contributor"]).map((c) => {
+    const node = asNode(c);
+    const id = attr(node, "id");
+    const role = (attr(node, "role") ?? (id ? refinedRoles.get(id) : undefined) ?? "").toLowerCase();
+    return { name: textOf(c), role };
+  });
+  const translators = dedupe(
+    [...creators, ...contributors]
+      .filter((c) => c.role === "trl")
+      .map((c) => normalizeAuthorName(c.name)),
+  );
+  // Year: the first four-digit year of `dc:date` (EPUB 3 may also carry a `dcterms:modified` meta: ignored).
+  const yearText = asArray(metadata["date"]).map(textOf).find((d) => /\b(1\d{3}|2[01]\d{2})\b/.test(d));
+  const yearMatch = yearText?.match(/\b(1\d{3}|2[01]\d{2})\b/);
+  const year = yearMatch ? Number(yearMatch[1]) : undefined;
   if (authors.length === 0) warnings.push("No author found.");
 
   // ---- subjects, language, publisher, description
@@ -394,6 +414,8 @@ async function extractEpubMetadataUnchecked(input: string | Uint8Array): Promise
   if (isbn) result.isbn = isbn;
   if (language) result.language = language;
   if (publisher) result.publisher = publisher;
+  if (year !== undefined) result.year = year;
+  if (translators.length > 0) result.translators = translators;
   if (description) result.description = description;
   if (cover) result.cover = cover;
   return result;

@@ -299,6 +299,8 @@ async function importOne(
         status: "to-read",
         ...(m.isbn ? { isbn: m.isbn } : {}),
         ...(m.publisher ? { publisher: m.publisher } : {}),
+        ...(m.year !== undefined ? { year: m.year } : {}),
+        ...(m.translators ? { translators: m.translators } : {}),
         ...(m.language ? { language: m.language } : {}),
         ...(m.description ? { description: m.description } : {}),
         ...(m.subjects.length > 0 ? { subjects: m.subjects } : {}),

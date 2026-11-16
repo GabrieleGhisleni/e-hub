@@ -29,7 +29,12 @@ export function BookHighlightsSection({ highlights }: { highlights: readonly Pub
   if (highlights.length === 0) return null;
   const groups = groupByChapter(highlights);
   return (
-    <CollapsibleBox id={HIGHLIGHTS_SECTION_ID} title={HIGHLIGHTS_SECTION_TITLE} count={highlights.length}>
+    <CollapsibleBox
+      id={HIGHLIGHTS_SECTION_ID}
+      title={HIGHLIGHTS_SECTION_TITLE}
+      count={highlights.length}
+      defaultOpen={false}
+    >
       <div className="flex flex-col gap-8 pt-5">
         {groups.map((group, g) => (
           <section key={g} aria-label={group.chapter ?? "Senza capitolo"}>

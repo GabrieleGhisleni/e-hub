@@ -149,6 +149,8 @@ export async function analyzeUpload(
       ...(metadata.isbn ? { isbn: metadata.isbn } : {}),
       ...(metadata.language ? { language: metadata.language } : {}),
       ...(metadata.publisher ? { publisher: metadata.publisher } : {}),
+      ...(metadata.year !== undefined ? { year: metadata.year } : {}),
+      ...(metadata.translators ? { translators: metadata.translators } : {}),
       ...(metadata.description ? { description: metadata.description } : {}),
     };
 

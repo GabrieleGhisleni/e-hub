@@ -63,6 +63,8 @@ export const apiPaths = {
    * Slow (one model call per chapter, minutes for a long book); 503 `ai-not-configured` without EHUB_AI_* settings.
    */
   bookSummary: (id: string) => `/api/library/books/${encodeURIComponent(id)}/summary`,
+  /** PUT `SaveNotesRequest` → `SaveNotesResponse`: replaces the general notes (`notes.md`) of the book. */
+  bookNotes: (id: string) => `/api/library/books/${encodeURIComponent(id)}/notes`,
 } as const;
 
 /** Request size limits enforced by the server (HTTP 413 `payload-too-large` beyond them). */
@@ -225,6 +227,8 @@ export const ExtractedMetadataSchema = z.object({
   isbn: z.string().optional(),
   language: z.string().optional(),
   publisher: z.string().optional(),
+  year: z.number().int().optional(),
+  translators: z.array(z.string()).optional(),
   description: z.string().optional(),
 });
 export type ExtractedMetadata = z.infer<typeof ExtractedMetadataSchema>;
@@ -320,6 +324,8 @@ export const BookPatchSchema = z.strictObject({
   isbn: z.string().nullable().optional(),
   openLibraryCoverId: z.number().int().positive().nullable().optional(),
   publisher: z.string().nullable().optional(),
+  year: z.number().int().min(1).max(2200).nullable().optional(),
+  translators: z.array(NonBlankStringSchema).nullable().optional(),
   language: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   subjects: z.array(z.string()).nullable().optional(),
@@ -425,3 +431,19 @@ export const SummarizeResponseSchema = z.object({
   durationMs: z.number().int().nonnegative(),
 });
 export type SummarizeResponse = z.infer<typeof SummarizeResponseSchema>;
+
+// ---------------------------------------------------------------------------------------------
+// General notes of a book (`notes.md`)
+// ---------------------------------------------------------------------------------------------
+
+/** Longest notes.md accepted, in characters. */
+export const NOTES_MAX_CHARS = 200_000;
+
+/** PUT /api/library/books/:id/notes — the whole Markdown text; an empty text removes the file. */
+export const SaveNotesRequestSchema = z.strictObject({
+  notes: z.string().max(NOTES_MAX_CHARS),
+});
+export type SaveNotesRequest = z.infer<typeof SaveNotesRequestSchema>;
+
+export const SaveNotesResponseSchema = z.object({ written: z.boolean() });
+export type SaveNotesResponse = z.infer<typeof SaveNotesResponseSchema>;

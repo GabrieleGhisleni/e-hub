@@ -42,6 +42,8 @@ describe("bookChatSuggestions", () => {
       "Di cosa parla il libro, in breve?",
       "Quali capitoli dovrei leggere se mi interessa bias?",
       "Qual è la tesi più discutibile?",
+      "Cosa ho sottolineato finora?",
+      "Scrivi gli appunti del libro a partire dalle mie sottolineature",
     ]);
   });
 

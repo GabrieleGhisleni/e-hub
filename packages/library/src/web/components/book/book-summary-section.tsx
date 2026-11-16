@@ -80,6 +80,7 @@ export function BookChaptersSection({ summary }: { summary: BookSummaryData }) {
       id={CHAPTERS_SECTION_ID}
       title={CHAPTERS_SECTION_TITLE}
       count={chapters.length}
+      defaultOpen={false}
       actions={
         chapters.length > EXPAND_ALL_THRESHOLD ? (
           <button

@@ -11,6 +11,8 @@ import type {
   CreateBookRequest,
   DeleteBookResponse,
   DeleteTopicResponse,
+  SaveNotesRequest,
+  SaveNotesResponse,
   SummarizeRequest,
   SummarizeResponse,
   TopicWriteResponse,
@@ -25,6 +27,7 @@ import {
   readBookCoverCandidate,
   setBookCover,
 } from "./covers.ts";
+import { saveBookNotes } from "./notes.ts";
 import { type SummarizeServiceOptions, summarizeBookService } from "./summary.ts";
 import { addTopic, deleteTopic, listTopics, renameTopic } from "./topics.ts";
 import {
@@ -76,6 +79,7 @@ export {
   startSummaryInBackground,
   summarizeBookService,
 } from "./summary.ts";
+export { saveBookNotes } from "./notes.ts";
 export { addTopic, deleteTopic, listTopics, renameTopic } from "./topics.ts";
 export {
   type AnalyzeUploadOptions,
@@ -105,6 +109,7 @@ export interface Services {
   addTopic(label: string): Promise<TopicWriteResponse>;
   renameTopic(id: string, label: string): Promise<TopicWriteResponse>;
   deleteTopic(id: string): Promise<DeleteTopicResponse>;
+  saveBookNotes(id: string, request: SaveNotesRequest): Promise<SaveNotesResponse>;
   summarizeBook(
     id: string,
     request: SummarizeRequest,
@@ -130,6 +135,7 @@ export function createServices(ctx: ServiceContext): Services {
     addTopic: (label) => addTopic(ctx, label),
     renameTopic: (id, label) => renameTopic(ctx, id, label),
     deleteTopic: (id) => deleteTopic(ctx, id),
+    saveBookNotes: (id, request) => saveBookNotes(ctx, id, request),
     summarizeBook: (id, request, options) => summarizeBookService(ctx, id, request, options),
   };
 }

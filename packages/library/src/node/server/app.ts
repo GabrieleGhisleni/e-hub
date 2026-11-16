@@ -11,6 +11,7 @@ import {
   API_LIMITS,
   BookPatchSchema,
   BulkUpdateRequestSchema,
+  SaveNotesRequestSchema,
   CreateBookRequestSchema,
   type HealthResponse,
   SetCoverRequestSchema,
@@ -122,6 +123,12 @@ export function createApp(
       return c.json(await services.setBookCover(id, await jsonBody(c, SetCoverRequestSchema)));
     },
   );
+
+  // ---- general notes (notes.md)
+  app.put("/api/library/books/:id/notes", jsonLimit, async (c) => {
+    const body = await jsonBody(c, SaveNotesRequestSchema);
+    return c.json(await services.saveBookNotes(c.req.param("id"), body));
+  });
 
   // ---- summaries (docs/chat.md §4). Literal path: `apiPaths.bookSummary(":id")` would encode the colon.
   app.post("/api/library/books/:id/summary", jsonLimit, async (c) => {

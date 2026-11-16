@@ -6,6 +6,11 @@
  */
 import { defineTool, type ToolSet } from "@ehub/chat/node";
 import { z } from "zod";
+import {
+  BOOK_NOTES_PROPOSAL_MESSAGE,
+  PROPOSE_BOOK_NOTES_TOOL,
+  ProposeBookNotesInput,
+} from "../../shared/chat-edit.ts";
 import type { BookSummary } from "../../shared/schema.ts";
 import { splitIntoParts } from "../summary/index.ts";
 import type { TextManifestChapter } from "../text/index.ts";
@@ -33,6 +38,20 @@ export type ChapterListItem = { n: number; title: string; words: number; hasSumm
 
 export function bookTools({ language, summary, loadText }: BookToolsOptions): ToolSet {
   return {
+    [PROPOSE_BOOK_NOTES_TOOL]: defineTool({
+      description:
+        "Propone gli Appunti generali del libro (Markdown, il blocco «Appunti» in cima alla pagina). Il testo SOSTITUISCE per intero quello attuale: riporta anche le parti da mantenere. Non salva nulla: l'utente rivede la proposta e decide se applicarla. Non serve per aggiungere una nota in fondo (usa save_note).",
+      inputSchema: ProposeBookNotesInput,
+      execute: (input) => {
+        const parsed = ProposeBookNotesInput.safeParse(input);
+        if (!parsed.success) {
+          const message = parsed.error.issues[0]?.message ?? "formato non valido";
+          return `La proposta non è valida: ${message}. Correggi e chiama di nuovo ${PROPOSE_BOOK_NOTES_TOOL}.`;
+        }
+        return BOOK_NOTES_PROPOSAL_MESSAGE;
+      },
+    }),
+
     list_chapters: defineTool({
       description: "Elenca i capitoli del libro: numero, titolo, parole e se hanno una sintesi.",
       inputSchema: z.object({}),

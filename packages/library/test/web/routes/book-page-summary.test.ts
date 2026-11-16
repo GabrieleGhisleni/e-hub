@@ -124,14 +124,15 @@ describe("book page: Sintesi section", () => {
 
   it("lists the section in the in-page navigation, before the other sections", () => {
     const html = render(
-      baseBook({ summary, recallHtml: "<p>Ricordare questo.</p>", studyHtml: "<p>Studio.</p>" }),
+      baseBook({ summary, notesHtml: "<p>Appunto qui.</p>", studyHtml: "<p>Studio.</p>" }),
     );
     const nav = html.slice(html.indexOf('aria-label="In questa pagina"'));
     const sintesiAt = nav.indexOf('href="#sintesi"');
     expect(sintesiAt).toBeGreaterThan(-1);
-    expect(sintesiAt).toBeLessThan(nav.indexOf('href="#da-ricordare"'));
-    expect(sintesiAt).toBeLessThan(nav.indexOf('href="#studio"'));
-    expect(html.indexOf('id="sintesi"')).toBeLessThan(html.indexOf("Ricordare questo."));
+    expect(sintesiAt).toBeLessThan(nav.indexOf('href="#appunti"'));
+    expect(nav.indexOf('href="#appunti"')).toBeLessThan(nav.indexOf('href="#studio"'));
+    // "Appunti" comes right under the cover and summary.
+    expect(html.indexOf('id="sintesi"')).toBeLessThan(html.indexOf("Appunto qui."));
   });
 
   it("uses a native collapsible per chapter, closed by default", () => {
@@ -143,13 +144,13 @@ describe("book page: Sintesi section", () => {
     expect(html).not.toContain("Espandi tutto");
   });
 
-  it("shows the expand-all toggle above three summarized chapters", () => {
+  it("keeps the expand-all toggle hidden while the chapters box is folded (default)", () => {
     const many = {
       ...summary,
       chapters: [1, 2, 3, 4].map((n) => ({ n, title: `Capitolo ${n}`, summary: `Testo ${n}.` })),
     };
     const html = render(baseBook({ summary: many }));
-    expect(html).toContain("Espandi tutto");
+    expect(html).not.toContain("Espandi tutto");
     expect(html).toContain("Capitolo 4");
   });
 
@@ -159,11 +160,11 @@ describe("book page: Sintesi section", () => {
   });
 
   it("renders no section when the book has no summary", () => {
-    const html = render(baseBook({ summary: null, recallHtml: "<p>Ricordare.</p>" }));
+    const html = render(baseBook({ summary: null, notesHtml: "<p>Appunto.</p>" }));
     expect(html).not.toContain('id="sintesi"');
     expect(html).not.toContain("Sintesi generata");
     expect(html).not.toContain('href="#sintesi"');
-    expect(html).toContain("Ricordare.");
+    expect(html).toContain("Appunto.");
   });
 });
 
@@ -188,7 +189,7 @@ describe("book page: layout, chapters and highlights", () => {
     expect(at('id="capitoli"')).toBeLessThan(at('id="sottolineature"'));
     const nav = html.slice(at('aria-label="In questa pagina"'));
     expect(nav.indexOf('href="#capitoli"')).toBeLessThan(nav.indexOf('href="#sottolineature"'));
-    expect(html).toMatch(/aria-expanded="true"[^>]*>.*Capitoli/);
+    expect(html).toMatch(/aria-expanded="false"[^>]*>.*Capitoli/);
   });
 
   it("shows the highlights grouped by chapter, in order, with page and note", () => {

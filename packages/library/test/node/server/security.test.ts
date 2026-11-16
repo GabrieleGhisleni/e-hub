@@ -28,6 +28,7 @@ export function fakeServices(overrides: Partial<Services> = {}): Services {
     updateBook: unused,
     bulkUpdate: unused,
     deleteBook: unused,
+    saveBookNotes: unused,
     coverCandidates: unused,
     readBookCoverCandidate: unused,
     setBookCover: unused,

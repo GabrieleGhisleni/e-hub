@@ -11,6 +11,7 @@ import {
   CoverCandidatesResponseSchema,
   DeleteBookResponseSchema,
   DeleteTopicResponseSchema,
+  SaveNotesResponseSchema,
   SummarizeResponseSchema,
   TopicWriteResponseSchema,
   TopicsResponseSchema,
@@ -26,6 +27,7 @@ import {
   type DeleteBookResponse,
   type DeleteTopicResponse,
   type SetCoverRequest,
+  type SaveNotesResponse,
   type SummarizeRequest,
   type SummarizeResponse,
   type TopicWriteResponse,
@@ -192,6 +194,10 @@ export const adminApi = {
   /** Slow: one model call per chapter. No client timeout; the dialog shows a spinner meanwhile. */
   summarizeBook(id: string, body: SummarizeRequest): Promise<SummarizeResponse> {
     return written(request("POST", apiPaths.bookSummary(id), SummarizeResponseSchema, body));
+  },
+
+  saveNotes(id: string, notes: string): Promise<SaveNotesResponse> {
+    return written(request("PUT", apiPaths.bookNotes(id), SaveNotesResponseSchema, { notes }));
   },
 
   zlibraryStatus(): Promise<ZlibraryStatusResponse> {

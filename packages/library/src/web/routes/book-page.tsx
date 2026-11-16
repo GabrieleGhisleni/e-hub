@@ -85,6 +85,19 @@ function Detail({ term, children }: { term: string; children: ReactNode }) {
 function BookDetails({ book }: { book: BookDetail }) {
   return (
     <dl>
+      <Detail term={book.authors.length > 1 ? "Autori" : "Autore"}>
+        {book.authors.join(", ")}
+      </Detail>
+      {book.translators && book.translators.length > 0 ? (
+        <Detail term={book.translators.length > 1 ? "Traduttori" : "Traduttore"}>
+          {book.translators.join(", ")}
+        </Detail>
+      ) : null}
+      {book.year ? (
+        <Detail term="Anno">
+          <span className="tabular-nums">{book.year}</span>
+        </Detail>
+      ) : null}
       {book.startedAt ? <Detail term="Iniziato">{formatDate(book.startedAt)}</Detail> : null}
       {book.finishedAt ? <Detail term="Finito">{formatDate(book.finishedAt)}</Detail> : null}
       {book.publisher ? <Detail term="Editore">{book.publisher}</Detail> : null}
@@ -147,18 +160,41 @@ interface NoteSection {
   id: string;
   title: string;
   html: string;
-  compact?: boolean;
 }
 
-function noteSections(book: BookDetail): NoteSection[] {
-  const sections: (NoteSection | null)[] = [
-    book.recallHtml
-      ? { id: "da-ricordare", title: "Da ricordare", html: book.recallHtml, compact: true }
-      : null,
-    book.notesHtml ? { id: "appunti", title: "Appunti", html: book.notesHtml } : null,
-    book.studyHtml ? { id: "studio", title: "Studio", html: book.studyHtml } : null,
-  ];
-  return sections.filter((s): s is NoteSection => s !== null);
+/** The general notes ("Appunti", block right under the cover and summary, `notes.md`). */
+const NOTES_SECTION_ID = "appunti";
+
+/** The study sessions ("Studio", `study.md`), after the chapters and highlights. */
+function studySection(book: BookDetail): NoteSection | null {
+  return book.studyHtml ? { id: "studio", title: "Studio", html: book.studyHtml } : null;
+}
+
+/** "Appunti": the general notes of the book, the block right under the cover and summary. */
+function NotesBlock({ html }: { html: string | null }) {
+  return (
+    <section aria-labelledby={NOTES_SECTION_ID} className="mt-10">
+      <h2
+        id={NOTES_SECTION_ID}
+        tabIndex={-1}
+        className="flex scroll-mt-6 items-center gap-4 text-2xl font-medium tracking-tight outline-none sm:text-3xl"
+      >
+        Appunti
+        <span aria-hidden className="h-px flex-1 bg-border" />
+      </h2>
+      {html ? (
+        <div
+          className="prose-book mt-5"
+          // Sanitized at build time (raw HTML in the Markdown is escaped).
+          dangerouslySetInnerHTML={{ __html: demoteHeadings(html) }}
+        />
+      ) : (
+        <p className="mt-5 rounded-xl border border-dashed px-5 py-6 text-sm text-muted-foreground">
+          Ancora nessun appunto. Apri «Chatta» e chiedi di scriverli dalle tue sottolineature.
+        </p>
+      )}
+    </section>
+  );
 }
 
 function scrollToSection(id: string) {
@@ -209,15 +245,16 @@ export function BookPage() {
 
   const full = detail.data;
   const topic = book && index.data ? topicLabel(index.data, book.topic) : null;
-  const sections = full ? noteSections(full) : [];
+  const study = full ? studySection(full) : null;
   const highlights = full?.highlights ?? [];
   const hasChapters = full?.summary ? summarizedChapters(full.summary).length > 0 : false;
-  // In-page navigation, in page order: summary, chapters, highlights, then the notes sections.
+  // In-page navigation, in page order: summary, notes, chapters, highlights, study.
   const navSections: { id: string; title: string }[] = [
     ...(full?.summary ? [{ id: SUMMARY_SECTION_ID, title: SUMMARY_SECTION_TITLE }] : []),
+    ...(full?.notesHtml || (full && __ELIB_ADMIN__) ? [{ id: NOTES_SECTION_ID, title: "Appunti" }] : []),
     ...(hasChapters ? [{ id: CHAPTERS_SECTION_ID, title: CHAPTERS_SECTION_TITLE }] : []),
     ...(highlights.length > 0 ? [{ id: HIGHLIGHTS_SECTION_ID, title: HIGHLIGHTS_SECTION_TITLE }] : []),
-    ...sections,
+    ...(study ? [{ id: study.id, title: study.title }] : []),
   ];
   const noteItem: NoteItemRef | null = book
     ? {
@@ -303,7 +340,12 @@ export function BookPage() {
             {/* Top: cover + metadata (same width) | summary. Stacked on small screens. */}
             <div className="mt-8 grid gap-10 lg:grid-cols-2 lg:gap-14">
               <div className="lg:sticky lg:top-8 lg:self-start">
-                <div className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-5 sm:grid-cols-2 sm:gap-6">
+                {/* Same heading as "Sintesi" (next column), so the two columns start on the same line. */}
+                <h2 className="flex items-center gap-4 text-2xl font-medium tracking-tight sm:text-3xl">
+                  Scheda
+                  <span aria-hidden className="h-px flex-1 bg-border" />
+                </h2>
+                <div className="mt-5 grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-5 sm:grid-cols-2 sm:gap-6">
                   <BookCover book={book} alt={`Copertina di ${book.title}`} eager className="w-full" />
                   <div className="min-w-0">
                     {full ? (
@@ -338,6 +380,10 @@ export function BookPage() {
               </div>
             </div>
 
+            {full && (full.notesHtml || __ELIB_ADMIN__) ? (
+              <NotesBlock html={full.notesHtml} />
+            ) : null}
+
             {full ? (
               <>
                 {navSections.length > 1 ? (
@@ -367,44 +413,23 @@ export function BookPage() {
                   <BookHighlightsSection highlights={highlights} />
                 </div>
 
-                {sections.map((section) =>
-                  section.compact ? (
-                    <section
-                      key={section.id}
-                      aria-labelledby={section.id}
-                      className="mt-12 max-w-[52rem] rounded-xl border border-brand/20 bg-brand-soft/70 px-5 py-6 sm:px-8 sm:py-7"
+                {study ? (
+                  <section aria-labelledby={study.id} className="mt-14">
+                    <h2
+                      id={study.id}
+                      tabIndex={-1}
+                      className="flex scroll-mt-6 items-center gap-4 text-3xl font-medium tracking-tight outline-none sm:text-[2.125rem]"
                     >
-                      <h2
-                        id={section.id}
-                        tabIndex={-1}
-                        className="scroll-mt-6 font-sans text-xs font-semibold tracking-[0.16em] text-brand uppercase outline-none"
-                      >
-                        {section.title}
-                      </h2>
-                      <div
-                        className="prose-book prose-book--compact mt-4"
-                        // Sanitized at build time (raw HTML in the Markdown is escaped).
-                        dangerouslySetInnerHTML={{ __html: demoteHeadings(section.html) }}
-                      />
-                    </section>
-                  ) : (
-                    <section key={section.id} aria-labelledby={section.id} className="mt-14">
-                      <h2
-                        id={section.id}
-                        tabIndex={-1}
-                        className="flex scroll-mt-6 items-center gap-4 text-3xl font-medium tracking-tight outline-none sm:text-[2.125rem]"
-                      >
-                        {section.title}
-                        <span aria-hidden className="h-px flex-1 bg-border" />
-                      </h2>
-                      <div
-                        className="prose-book mt-6"
-                        // Sanitized at build time (raw HTML in the Markdown is escaped).
-                        dangerouslySetInnerHTML={{ __html: demoteHeadings(section.html) }}
-                      />
-                    </section>
-                  ),
-                )}
+                      {study.title}
+                      <span aria-hidden className="h-px flex-1 bg-border" />
+                    </h2>
+                    <div
+                      className="prose-book mt-6"
+                      // Sanitized at build time (raw HTML in the Markdown is escaped).
+                      dangerouslySetInnerHTML={{ __html: demoteHeadings(study.html) }}
+                    />
+                  </section>
+                ) : null}
               </>
             ) : null}
 
@@ -412,7 +437,7 @@ export function BookPage() {
               <NoteThread
                 item={noteItem}
                 noun="questo libro"
-                className="mt-14 max-w-[52rem] border-t border-border pt-10"
+                className="mt-14 border-t border-border pt-10"
               />
             ) : null}
           </>

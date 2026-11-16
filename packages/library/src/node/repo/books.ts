@@ -143,6 +143,22 @@ export async function readBookMarkdown(
   return readTextIfExists(markdownPath(dataDir, id, kind));
 }
 
+/** Writes notes.md / recall.md / study.md atomically; an empty text removes the file. */
+export async function writeBookMarkdown(
+  dataDir: string,
+  id: string,
+  kind: BookMarkdownKind,
+  text: string,
+): Promise<void> {
+  assertBookId(id);
+  const file = markdownPath(dataDir, id, kind);
+  if (text.trim() === "") {
+    await rm(file, { force: true });
+    return;
+  }
+  await writeFileAtomic(file, text.endsWith("\n") ? text : `${text}\n`);
+}
+
 /** Raw book.json text, or null (useful to check that a file is in canonical format). */
 export async function readBookJsonText(dataDir: string, id: string): Promise<string | null> {
   assertBookId(id);

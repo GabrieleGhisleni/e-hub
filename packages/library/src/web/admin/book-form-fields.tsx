@@ -282,6 +282,28 @@ export function BookFormFields({
           onChange={(e) => set("publisher", e.target.value)}
         />
       </Field>
+      <Field label="Anno" htmlFor={id("year")} error={errors.year}>
+        <Input
+          id={id("year")}
+          value={value.year}
+          disabled={disabled}
+          inputMode="numeric"
+          maxLength={4}
+          aria-invalid={errors.year ? true : undefined}
+          onChange={(e) => set("year", e.target.value)}
+        />
+      </Field>
+      <Field label="Traduttore" htmlFor={id("translators")} hint="Invio per aggiungerne un altro.">
+        <TokenInput
+          id={id("translators")}
+          label="Traduttore"
+          value={value.translators}
+          onChange={(v) => set("translators", v)}
+          commit={addItem}
+          disabled={disabled}
+          placeholder="Nome e cognome"
+        />
+      </Field>
       <Field label="Descrizione" htmlFor={id("description")} className="sm:col-span-2">
         <Textarea
           id={id("description")}
