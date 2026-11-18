@@ -48,7 +48,7 @@ beforeAll(async () => {
   mountHosted(roots, new TursoDocClient(client as never), new MemoryBlobStore());
   app = createApi({
     corsOrigins: [],
-    auth: { verify: sessionVerifier(SECRET), allowedEmails: parseAllowedEmails("") },
+    auth: { verify: sessionVerifier(SECRET), allowedEmails: parseAllowedEmails("a@example.com, b@example.com") },
     modules: [createNotesApp({ access: passThrough }), createStoreRoutes(roots)],
   });
   A = { authorization: `Bearer ${await sessionToken(SECRET, { sub: "userA", email: "a@example.com" })}` };
@@ -98,9 +98,9 @@ describe("two users on the same API", () => {
     expect((await app.request(key, { headers: A })).status).toBe(200);
   });
 
-  it("no request without a token reads or writes anything", async () => {
+  it("no request without a token reads or writes anything (the only GETs allowed are the demo's: demo.test.ts)", async () => {
     for (const [method, url] of [
-      ["GET", "/api/notes"],
+      ["POST", "/api/notes"],
       ["GET", "/api/store/notes/library/78w462eb.json"],
       ["GET", "/api/store/notes?list=library"],
       ["PUT", "/api/store/notes/library/78w462eb.json"],

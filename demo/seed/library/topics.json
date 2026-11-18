@@ -1,0 +1,22 @@
+[
+  {
+    "id": "unsorted",
+    "label": "Da smistare"
+  },
+  {
+    "id": "filosofia",
+    "label": "Filosofia"
+  },
+  {
+    "id": "politica",
+    "label": "Politica"
+  },
+  {
+    "id": "narrativa",
+    "label": "Narrativa"
+  },
+  {
+    "id": "natura",
+    "label": "Natura"
+  }
+]

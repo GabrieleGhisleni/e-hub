@@ -27,10 +27,10 @@ let auth;
 let google: Hono | undefined;
 if (env.SESSION_SECRET && docs) {
   const verify = sessionVerifier(env.SESSION_SECRET);
-  // Empty ALLOWED_EMAILS = any verified Google account may log in (docs/hosting.md).
+  // ALLOWED_EMAILS is mandatory: an empty list would let nobody in, so refuse to start (docs/hosting.md).
   const allowedEmails = parseAllowedEmails(env.ALLOWED_EMAILS.join(","));
+  if (allowedEmails.size === 0) throw new Error("ALLOWED_EMAILS è obbligatoria: elenca le email che possono entrare.");
   auth = { verify, allowedEmails };
-  if (allowedEmails.size === 0) console.warn("ALLOWED_EMAILS vuota: può entrare chiunque abbia un account Google verificato.");
   if (env.GOOGLE_CLIENT_ID) {
     google = createGoogleLogin({
       clientId: env.GOOGLE_CLIENT_ID,

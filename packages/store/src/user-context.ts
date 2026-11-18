@@ -14,6 +14,12 @@ const storage = new AsyncLocalStorage<Scope>();
 /** Google `sub` (digits) or the placeholder of a user not yet seen (`email:<address>`, see users.ts). */
 const USER_ID = /^[A-Za-z0-9_.:@+-]{1,254}$/;
 
+/**
+ * The reserved user that owns the public demo (demo/seed). It is not a Google account: nobody can log in as `demo`
+ * (the login refuses it, session tokens for it are never accepted); anonymous GETs of a few read routes are served as it.
+ */
+export const DEMO_USER_ID = "demo";
+
 export class NoUserError extends Error {
   constructor() {
     super("nessun utente nel contesto della richiesta");

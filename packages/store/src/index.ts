@@ -8,3 +8,4 @@ export * from "./sql.ts";
 export * from "./remote.ts";
 export * from "./user-context.ts";
 export * from "./users.ts";
+export * from "./demo.ts";

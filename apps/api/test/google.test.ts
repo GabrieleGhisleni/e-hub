@@ -61,8 +61,16 @@ describe("Google login (ID token)", () => {
     expect(await me.json()).toEqual({ email: "me@example.com", name: "Me", kobo: true });
   });
 
-  it("creates the user at the first login and lets anyone in when the allowlist is empty", async () => {
+  it("an empty allowlist admits nobody (403, no user created)", async () => {
     const { idToken, post, docs } = await setup("");
+    const res = await post(await idToken());
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: "Account non abilitato." });
+    expect(await docs.users.list()).toEqual([]);
+  });
+
+  it("creates the user at the first login of an allowed email", async () => {
+    const { idToken, post, docs } = await setup("nuovo@example.com");
     const res = await post(await idToken({ email: "Nuovo@Example.com", sub: "2200" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ email: "nuovo@example.com", kobo: false });
@@ -70,7 +78,7 @@ describe("Google login (ID token)", () => {
   });
 
   it("does not let a second Google account take over an email already bound to another sub (403)", async () => {
-    const { idToken, post } = await setup("");
+    const { idToken, post } = await setup();
     expect((await post(await idToken({ sub: "1" }))).status).toBe(200);
     expect((await post(await idToken({ sub: "2" }))).status).toBe(403);
   });
@@ -86,6 +94,11 @@ describe("Google login (ID token)", () => {
     expect((await post(await idToken({ iss: "https://evil.example" }))).status).toBe(401);
     expect((await post(await idToken({ verified: false }))).status).toBe(401);
     expect((await post("x".repeat(40))).status).toBe(401);
+  });
+
+  it("nobody can log in as the reserved demo user", async () => {
+    const { idToken, post } = await setup();
+    expect((await post(await idToken({ sub: "demo" }))).status).toBe(403);
   });
 
   it("refuses a malformed body (400) and /auth/me without a token (401)", async () => {

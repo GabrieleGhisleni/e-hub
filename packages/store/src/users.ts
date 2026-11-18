@@ -7,6 +7,7 @@
  */
 import { type BlobStore } from "./blobs.ts";
 import { type DocClient, type UserRecord } from "./docs.ts";
+import { DEMO_USER_ID } from "./user-context.ts";
 
 export const PENDING_PREFIX = "email:";
 
@@ -40,6 +41,7 @@ export interface GoogleProfile {
 
 /** Creates or updates the user of a login; claims the placeholder of the same email if there is one. */
 export async function loginUser(docs: DocClient, blobs: BlobStore | null, profile: GoogleProfile): Promise<UserRecord> {
+  if (profile.sub === DEMO_USER_ID) throw new UserConflictError("Identità riservata.");
   const email = profile.email.trim().toLowerCase();
   const byId = await docs.users.findById(profile.sub);
   const byEmail = await docs.users.findByEmail(email);

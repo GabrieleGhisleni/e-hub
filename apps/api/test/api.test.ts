@@ -55,12 +55,10 @@ const post = (headers: Record<string, string> = {}) =>
   });
 
 describe("hosted API", () => {
-  it("answers only the health check without a token: GETs need a session too", async () => {
+  it("answers only the health check and the demo's reads without a token (see demo.test.ts)", async () => {
     expect((await app.request("/api/health")).status).toBe(200);
-    expect((await app.request("/api/notes")).status).toBe(401);
-    expect((await app.request("/api/explore")).status).toBe(401);
+    expect((await app.request("/api/notes")).status).toBe(200); // the demo user's notes
     expect((await app.request("/api/library/site/books")).status).toBe(401);
-    expect((await app.request("/api/podcasts/catalog")).status).toBe(401);
     expect((await app.request("/api/podcasts/episodes/x/transcript.md")).status).toBe(401);
     expect((await app.request("/api/library/zlibrary/status")).status).toBe(401);
     expect((await app.request("/api/nope")).status).toBe(401);
@@ -82,12 +80,13 @@ describe("hosted API", () => {
     expect((await post({ authorization: `Bearer ${await token({ sub: "u9" }).then((t) => t.slice(0, -3) + "abc")}` })).status).toBe(401);
   });
 
-  it("with an allowlist, refuses an email outside it; with none, lets any verified account in", async () => {
+  it("refuses an email outside the allowlist, and every email when the list is empty", async () => {
     const stranger = { authorization: `Bearer ${await token({ email: "stranger@example.com", sub: "u7" })}` };
     expect((await post(stranger)).status).toBe(403);
     expect((await app.request("/api/notes", { headers: stranger })).status).toBe(403);
-    const open = build("");
-    expect((await open.request("/api/notes", { headers: stranger })).status).toBe(200);
+    const empty = build("");
+    const me = { authorization: `Bearer ${await token()}` };
+    expect((await empty.request("/api/notes", { headers: me })).status).toBe(403);
   });
 
   it("lets an allowed user write and read their data", async () => {

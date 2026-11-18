@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "migrate": "tsx scripts/migrate.ts",
-    "db:migrate": "tsx scripts/db-migrate.ts"
+    "db:migrate": "tsx scripts/db-migrate.ts",
+    "seed-demo": "tsx scripts/seed-demo.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

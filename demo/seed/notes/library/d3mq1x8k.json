@@ -1,0 +1,18 @@
+{
+  "item": {
+    "module": "library",
+    "id": "d3mq1x8k",
+    "title": "Il Principe",
+    "subtitle": "Niccolò Machiavelli",
+    "href": "/library/book/d3mq1x8k"
+  },
+  "notes": [
+    {
+      "id": "3b1f6c52-8a0e-4c1d-9a27-5d4e0c6f1a01",
+      "body": "Idea da riprendere: **essere temuti o amati?** Machiavelli risponde con un «dipende», e il «dipende» è il punto.",
+      "pinned": true,
+      "createdAt": "2026-11-10T09:00:00.000Z",
+      "updatedAt": "2026-11-10T09:00:00.000Z"
+    }
+  ]
+}

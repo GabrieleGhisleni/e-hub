@@ -6,7 +6,7 @@
  *   POST /auth/google  {credential}  ->  {token, email, name, kobo, expiresAt}
  *   GET  /auth/me      (Bearer)      ->  {email, name, kobo}
  *
- * Anyone with a verified Google account may log in, unless `ALLOWED_EMAILS` is set: then only those emails. The user
+ * Only emails of the (mandatory) `ALLOWED_EMAILS` may log in; an empty list admits nobody. The user
  * (id = Google `sub`) is created or updated at every login; `kobo` tells the site whether to show the Kobo section.
  */
 import { Hono } from "hono";
@@ -21,7 +21,7 @@ export interface GoogleLoginOptions {
   clientId: string;
   /** Secret that signs the session tokens (>= 32 characters). */
   sessionSecret: string;
-  /** Empty = no restriction. */
+  /** Mandatory. Empty = nobody can log in. */
   allowedEmails: ReadonlySet<string>;
   verify: VerifyToken;
   /** Where users live; R2 is needed only to move the files of an owner prepared by the data migration. */
@@ -60,8 +60,8 @@ export function createGoogleLogin(options: GoogleLoginOptions): Hono {
     } catch {
       return c.json({ error: "Identità Google non valida.", code: "unauthorized" }, 401);
     }
-    if (options.allowedEmails.size > 0 && !options.allowedEmails.has(email)) {
-      return c.json({ error: "Questo account non è autorizzato.", code: "forbidden" }, 403);
+    if (!options.allowedEmails.has(email)) {
+      return c.json({ error: "Account non abilitato.", code: "forbidden" }, 403);
     }
     try {
       await loginUser(options.docs, options.blobs ?? null, { sub, email, name });

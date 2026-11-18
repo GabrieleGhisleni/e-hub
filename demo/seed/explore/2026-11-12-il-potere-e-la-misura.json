@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "id": "2026-11-12-il-potere-e-la-misura",
+  "title": "Il potere e la misura",
+  "question": "Come cambia l'idea di governo tra Machiavelli e gli stoici? Quali di questi libri vale la pena leggere per intero?",
+  "status": "open",
+  "tags": [
+    "demo",
+    "filosofia"
+  ],
+  "createdAt": "2026-11-12T10:00:00.000Z",
+  "updatedAt": "2026-11-12T10:30:00.000Z",
+  "sources": [
+    {
+      "kind": "book",
+      "id": "d3mq1x8k",
+      "origin": "library",
+      "title": "Il Principe",
+      "authors": [
+        "Niccolò Machiavelli"
+      ],
+      "language": "it",
+      "addedAt": "2026-11-12T10:01:00.000Z",
+      "verdict": {
+        "decision": "all",
+        "reason": "È il testo da cui parte la domanda.",
+        "decidedAt": "2026-11-12T10:20:00.000Z",
+        "via": "app"
+      }
+    },
+    {
+      "kind": "book",
+      "id": "d3mq2y9m",
+      "origin": "library",
+      "title": "Pensieri a sé stesso",
+      "authors": [
+        "Marco Aurelio"
+      ],
+      "language": "it",
+      "addedAt": "2026-11-12T10:02:00.000Z",
+      "verdict": {
+        "decision": "parts",
+        "chapters": [
+          2,
+          5
+        ],
+        "reason": "Bastano i libri sul dovere e sulla misura.",
+        "decidedAt": "2026-11-12T10:25:00.000Z",
+        "via": "app"
+      }
+    }
+  ],
+  "summary": "Due modi opposti di guardare al potere: uno lo studia come tecnica, l'altro lo teme come tentazione. Esplorazione di esempio per la demo.",
+  "notes": [],
+  "journal": [
+    {
+      "at": "2026-11-12T10:30:00.000Z",
+      "via": "app",
+      "text": "Letti i due indici: il secondo libro si presta a letture parziali."
+    }
+  ]
+}
