@@ -1,0 +1,23 @@
+[Unit]
+Description=e-hub API (Hono)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ehub
+WorkingDirectory=/opt/ehub
+# Secrets (SUPABASE_*, R2_*, EHUB_AI_*, ALLOWED_EMAILS...) live only here, never in the repo.
+EnvironmentFile=/etc/ehub/env
+ExecStart=/usr/bin/node --max-old-space-size=384 /opt/ehub/ehub-api.mjs
+Restart=on-failure
+RestartSec=5
+# The Pi has ~900 MB of RAM: keep the API from taking all of it.
+MemoryMax=600M
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ehub /var/cache/ehub
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

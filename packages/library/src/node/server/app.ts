@@ -2,7 +2,7 @@
  * The local API (contract in src/shared/api.ts): a thin HTTP layer over the services. Testable with `app.request()`.
  */
 import { Hono } from "hono";
-import type { Context } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { HTTPException } from "hono/http-exception";
@@ -32,6 +32,8 @@ export interface AppOptions {
   limits?: Partial<typeof API_LIMITS>;
   /** Z-Library client (default: built from the environment, see `zlibraryEnvFrom`). Tests inject a fake. */
   zlibrary?: ZlibraryClient;
+  /** Request check (default: the local Host/Origin checks). The hosted server passes its own (docs/hosting.md). */
+  access?: MiddlewareHandler;
 }
 
 /** Room for the multipart envelope around the file. */
@@ -50,7 +52,7 @@ export function createApp(
     c.header("X-Content-Type-Options", "nosniff");
     if (!c.res.headers.has("Cache-Control")) c.header("Cache-Control", "no-store");
   });
-  app.use("*", securityMiddleware(securityConfig(config)));
+  app.use("*", options.access ?? securityMiddleware(securityConfig(config)));
 
   const limit = (maxSize: number) =>
     bodyLimit({

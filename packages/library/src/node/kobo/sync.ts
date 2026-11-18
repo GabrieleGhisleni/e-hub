@@ -33,6 +33,7 @@ import {
   cachedKepubPath,
   isNonEmptyFile,
 } from "../cache/index.ts";
+import { ensureCachedEpub } from "../cache/remote.ts";
 import { KepubifyError, convertToKepub } from "../kepub/index.ts";
 import {
   BookNotFoundError,
@@ -387,7 +388,7 @@ async function planUpload(
   const cacheEpub = cachedEpubPath(ctx.cacheDir, book.id);
   let regenerate = false;
   if (!(await isNonEmptyFile(cacheKepub))) {
-    if (!(await isNonEmptyFile(cacheEpub))) {
+    if (!(await ensureCachedEpub(ctx.cacheDir, book.id))) {
       report.errors.push({
         code: "missing-in-cache",
         bookId: book.id,

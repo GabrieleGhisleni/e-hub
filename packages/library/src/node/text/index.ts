@@ -6,7 +6,8 @@ import { randomBytes } from "node:crypto";
 import { mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { slugify } from "../../shared/slug.ts";
-import { cachedEpubPath, cachedTextDir, isNonEmptyFile } from "../cache/index.ts";
+import { cachedEpubPath, cachedTextDir } from "../cache/index.ts";
+import { ensureCachedEpub } from "../cache/remote.ts";
 import { REPO_ROOT } from "../config/index.ts";
 import { extractEpubMetadata } from "../epub/index.ts";
 import { BookNotFoundError, readBook } from "../repo/index.ts";
@@ -112,7 +113,7 @@ export async function readManifest(outputDir: string): Promise<TextManifest | un
 /** Path of the cached EPUB. Throws `EpubNotFoundError` when it is missing: the EPUB is never downloaded. */
 async function ensureEpub(ctx: TextContext, id: string): Promise<string> {
   const file = cachedEpubPath(ctx.cacheDir, id);
-  if (!(await isNonEmptyFile(file))) throw new EpubNotFoundError(id, file);
+  if (!(await ensureCachedEpub(ctx.cacheDir, id))) throw new EpubNotFoundError(id, file);
   return file;
 }
 

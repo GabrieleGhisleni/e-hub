@@ -94,7 +94,7 @@ Flusso di un libro nuovo: upload dalla UI o da `elib` → il Pi salva l'EPUB su 
 | --- | --- | --- |
 | 1. Fondamenta | fatta nel codice, **da eseguire a mano** | `supabase/migrations/0001_init.sql`, `packages/store` (client Supabase, R2, mount), `pnpm --filter @ehub/store migrate` (a secco senza `--apply`). Servono: progetto Supabase con la migrazione applicata, bucket R2, variabili in `.env.local`. |
 | 2. Repository su Supabase | **fatta** | I repository di libreria, esplorazioni, note e podcast passano da `@ehub/store`; test con mount in memoria in `*/hosted.test.ts`. Le CLI di validazione (`elib validate`, `site-data`) leggono ancora file locali: spariscono in fase 5/8. |
-| 3. Backend sul Pi | da fare | |
+| 3. Backend sul Pi | fatta nel codice, **da installare a mano** | `apps/api` (Hono unico: CORS, JWT Supabase via JWKS + allowlist, GET pubbliche), EPUB su R2 (`cache/remote.ts`), bundle esbuild, `deploy/pi/` (unità systemd, env, `deploy.sh`). Vedi «Installazione sul Pi». |
 | 4. Kobo | da fare | |
 | 5. Frontend | da fare | |
 | 6. CLI e skill `explore` | da fare | |
@@ -106,3 +106,13 @@ Flusso di un libro nuovo: upload dalla UI o da `elib` → il Pi salva l'EPUB su 
 Ogni pacchetto legge e scrive i suoi dati con le stesse funzioni di file di prima (`readTextIfExists`, `writeFileAtomic`, `listDir`…), che ora vivono in `@ehub/store`. Se il percorso è dentro una cartella **montata** (`mountHosted`, solo sul Pi) la chiamata va a Supabase (tabelle `id`, `data jsonb`, `updated_at`) o a R2; altrimenti è `node:fs` come sempre. Così i repository non cambiano interfaccia, i test continuano a usare cartelle temporanee (o `MemoryBackend`) e non serve un DB per `pnpm test`. I file che nessuna rotta rivendica (trascrizioni, audio, cache) restano su disco. Le rotte file → tabella sono in `packages/store/src/hosted.ts`.
 
 Nota: `jsonb` non conserva l'ordine delle chiavi; chi legge valida con Zod, ma il controllo «formato canonico» di `elib validate` non ha senso sui dati ospitati.
+
+## Installazione sul Pi (una tantum, a mano)
+
+1. Utente e cartelle: `sudo useradd -r -m ehub`, `sudo install -d -o ehub /var/lib/ehub/data/{library,explore,notes,podcasts} /var/cache/ehub /etc/ehub`.
+2. `/etc/ehub/env` da `deploy/pi/env.example` (permessi 600): qui vivono tutte le chiavi. La chiave SSH del Kobo va in `~ehub/.ssh/` con `known_hosts` per l'alias `ehub-kobo`.
+3. Programmi: Node 22+, `kepubify` (build ARM), `ffmpeg`, `postgresql-client` (per `pg_dump`).
+4. Dal laptop: `deploy/pi/deploy.sh ggabry@<pi>` costruisce il bundle (`pnpm --filter @ehub/api bundle`), scarica `sharp` per linux-arm64 e copia tutto in `/opt/ehub`, poi riavvia `ehub-api`. `sudo systemctl enable --now ehub-api` la prima volta.
+5. Tunnel (da decidere): l'API ascolta su `127.0.0.1:8788`; `cloudflared` o Tailscale Funnel puntano lì. Il dominio e l'origine di Pages stanno in `CORS_ORIGINS`, nessun valore è scritto nel codice.
+
+Rotte private anche se `GET`: trascrizioni dei podcast, area di staging degli upload, candidati di copertina, stato Z-Library, riassunti delle esplorazioni (`PRIVATE_GETS` in `apps/api/src/auth.ts`). Cancellare un libro non cancella l'EPUB su R2 (è l'unica copia: si toglie a mano).

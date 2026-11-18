@@ -10,7 +10,10 @@
     "./vite": "./src/node/vite/index.ts",
     "./config": "./src/node/config/index.ts",
     "./chat-context": "./src/node/chat/index.ts",
-    "./explore": "./src/node/explore/index.ts"
+    "./explore": "./src/node/explore/index.ts",
+    "./server": "./src/node/server/app.ts",
+    "./services": "./src/node/services/index.ts",
+    "./epub-remote": "./src/node/cache/remote.ts"
   },
   "scripts": {
     "dev": "pnpm server",

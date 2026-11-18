@@ -18,6 +18,7 @@ import {
 } from "../../shared/api.ts";
 import type { Book } from "../../shared/schema.ts";
 import { cacheBookDir, cachedEpubPath, isNonEmptyFile } from "../cache/index.ts";
+import { ensureCachedEpub } from "../cache/remote.ts";
 import { placeholderCover, saveCover, toCoverWebp } from "../covers/index.ts";
 import { extractEpubMetadata } from "../epub/index.ts";
 import type { OpenLibraryMatch } from "../openlibrary/index.ts";
@@ -190,7 +191,7 @@ async function ensureEpubCandidate(
   if (await isNonEmptyFile(file)) return new Uint8Array(await readFile(file));
 
   const epub = cachedEpubPath(ctx.cacheDir, book.id);
-  if (!(await isNonEmptyFile(epub))) {
+  if (!(await ensureCachedEpub(ctx.cacheDir, book.id))) {
     warnings.push("L'EPUB non è nella cache locale: copertina dell'EPUB non disponibile.");
     return null;
   }

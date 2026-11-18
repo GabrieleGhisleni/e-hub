@@ -1,0 +1,32 @@
+{
+  "name": "@ehub/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The one Hono server of the hosted setup (runs on the Raspberry Pi): auth, CORS and every module's routes",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "bundle": "tsx scripts/bundle.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ehub/chat": "workspace:*",
+    "@ehub/explore": "workspace:*",
+    "@ehub/library": "workspace:*",
+    "@ehub/notes": "workspace:*",
+    "@ehub/podcasts": "workspace:*",
+    "@ehub/store": "workspace:*",
+    "@hono/node-server": "^2.1.6",
+    "hono": "^4.13.17",
+    "jose": "^6.1.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

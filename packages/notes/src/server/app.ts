@@ -144,7 +144,10 @@ function handleError(error: unknown, c: Context): Response {
   return c.json({ error: "Errore interno del server.", code: "internal" }, 500);
 }
 
-export function createNotesApp(options: { guard?: NoteGuard } = {}): Hono {
+/** `access`: request check (default: loopback only); the hosted server passes its own (docs/hosting.md). */
+export function createNotesApp(
+  options: { guard?: NoteGuard; access?: MiddlewareHandler } = {},
+): Hono {
   const app = new Hono();
   const guard = async (item: Pick<ItemRef, "module" | "id">, body: string) => {
     const reasons = (await options.guard?.(item, body)) ?? [];
@@ -153,8 +156,9 @@ export function createNotesApp(options: { guard?: NoteGuard } = {}): Hono {
 
   app.onError(handleError);
   app.notFound((c) => c.json({ error: "Endpoint inesistente.", code: "not-found" }, 404));
-  app.use("/api/notes/*", localOnly);
-  app.use("/api/notes", localOnly);
+  const access = options.access ?? localOnly;
+  app.use("/api/notes/*", access);
+  app.use("/api/notes", access);
   // Only on requests with a body: on a body-less DELETE the limiter reads an empty stream, which fails inside
   // Vite's Node adapter.
   const limit = bodyLimit({

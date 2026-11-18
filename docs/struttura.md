@@ -4,6 +4,7 @@ Monorepo pnpm (`pnpm-workspace.yaml`: `apps/*` e `packages/*`).
 
 ```
 apps/
+  api/            Server Hono unico dell'hosted (gira sul Pi): auth, CORS, tutte le rotte, bundle esbuild
   web/            App React (Vite) che monta tutti i moduli: shell, header, home, routing
 packages/
   ui/             Design system condiviso (shadcn/ui, tema, layout, filtri, pannello laterale)
@@ -13,6 +14,7 @@ packages/
   chat/           Chat AI: client LLM, loop dell'agente, server /api/chat, pannello (solo in dev)
   explore/        Esplorazioni: triage di libri prima di leggerli (CLI, skill `explore`, pagina e chat)
   store/          Strato di storage: file locali o Supabase/R2 (mount), client, migrazione una tantum
+deploy/pi/        Unità systemd, env d'esempio e script di deploy del Pi
 supabase/         Migrazioni SQL del database (docs/hosting.md)
 docs/             Questa documentazione
 AGENTS.md         Istruzioni per gli agenti (CLAUDE.md è un link a questo file)

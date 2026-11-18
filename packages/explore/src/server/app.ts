@@ -235,6 +235,8 @@ function uploadFileName(c: Context): string {
 export interface ExploreAppOptions {
   /** Library dependencies (tests pass fakes; the default is the library facade). */
   deps?: Partial<LibraryDeps>;
+  /** Request check for /api/explore (default: loopback only). The hosted server passes its own (docs/hosting.md). */
+  access?: MiddlewareHandler;
 }
 
 export function createExploreApp(options: ExploreAppOptions = {}): Hono {
@@ -243,8 +245,9 @@ export function createExploreApp(options: ExploreAppOptions = {}): Hono {
 
   app.onError(handleError);
   app.notFound((c) => c.json({ error: "Endpoint inesistente.", code: "not-found" }, 404));
-  app.use("/api/explore/*", localOnly);
-  app.use("/api/explore", localOnly);
+  const access = options.access ?? localOnly;
+  app.use("/api/explore/*", access);
+  app.use("/api/explore", access);
 
   // Body limits: 256 KB for JSON writes; the notebook routes and the EPUB upload have their own, larger limits
   // (see their routes). Only on requests with a body (the limiter reads the stream, which a bodyless DELETE does

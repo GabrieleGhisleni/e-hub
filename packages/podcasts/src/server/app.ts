@@ -2,7 +2,7 @@
  * The local write server (DESIGN.md §9): thin Hono routes over core and
  * ingest. Dev only, mounted in Vite's dev server by `src/server/index.ts`.
  */
-import { Hono, type Context } from "hono";
+import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { isValidSlug } from "../core/schema";
@@ -69,14 +69,17 @@ function speakersPayload(transcript: Awaited<ReturnType<typeof readTranscriptIfE
   };
 }
 
-export function createApp(options: { ingest?: IngestDeps } = {}): Hono {
+/** `access`: request check (default: loopback only); the hosted server passes its own (docs/hosting.md). */
+export function createApp(
+  options: { ingest?: IngestDeps; access?: MiddlewareHandler } = {},
+): Hono {
   const app = new Hono();
   const ingest = options.ingest ?? {};
 
   app.onError(handleError);
   app.notFound((c) => c.json({ error: "Endpoint inesistente.", code: "not-found" }, 404));
 
-  app.use("/api/podcasts/*", localOnly);
+  app.use("/api/podcasts/*", options.access ?? localOnly);
   app.use(
     "/api/podcasts/*",
     bodyLimit({

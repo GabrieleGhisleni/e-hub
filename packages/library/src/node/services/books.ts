@@ -21,6 +21,7 @@ import {
 import { generateBookId } from "../../shared/ids.ts";
 import { type Book, BookSchema } from "../../shared/schema.ts";
 import { cachedEpubPath, cachedKepubPath, ensureDir, isNonEmptyFile } from "../cache/index.ts";
+import { pushEpub } from "../cache/remote.ts";
 import { placeholderCover, saveCover } from "../covers/index.ts";
 import { reconcile, removeBookFiles } from "../kobo/index.ts";
 import { KepubifyError, convertToKepub } from "../kepub/index.ts";
@@ -127,6 +128,7 @@ async function createBookLocked(
     const epub = cachedEpubPath(ctx.cacheDir, id);
     await ensureDir(path.dirname(epub));
     await copyFile(path.join(dir, STAGED_EPUB), epub);
+    await pushEpub(ctx.cacheDir, id);
     const kepub = cachedKepubPath(ctx.cacheDir, id);
     if (!(await isNonEmptyFile(kepub))) {
       try {
