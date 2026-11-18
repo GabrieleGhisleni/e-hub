@@ -1,18 +1,25 @@
 /**
- * Admin bar above the library grid: add book, topics, and selection mode with bulk edit.
+ * Admin bar above the library grid: add book (from an EPUB file or from Z-Library), topics, and selection mode with bulk edit.
  */
 import {
   CheckSquareIcon,
   FolderTreeIcon,
   InfoIcon,
+  FileUpIcon,
+  LibraryBigIcon,
   PencilLineIcon,
   PlusIcon,
-  SearchIcon,
   XIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Button } from "@ehub/ui/components/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@ehub/ui/components/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@ehub/ui/components/popover";
 import { useLibrarySelection } from "@library/selection";
 import { BulkEditDialog } from "./bulk-edit-dialog";
@@ -25,6 +32,7 @@ import { libraryPath } from "@library/lib/paths";
 
 export function LibraryAdminBar({ index, visibleBooks }: LibraryAdminBarProps) {
   const selection = useLibrarySelection();
+  const navigate = useNavigate();
   const [bulkOpen, setBulkOpen] = useState(false);
   const [zlibraryOpen, setZlibraryOpen] = useState(false);
   const count = selection.selectedIds.size;
@@ -116,21 +124,24 @@ export function LibraryAdminBar({ index, visibleBooks }: LibraryAdminBarProps) {
               Argomenti
             </Link>
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setZlibraryOpen(true)}
-            title="Cerca su Z-Library"
-          >
-            <SearchIcon />
-            Cerca libri
-          </Button>
-          <Button asChild size="sm">
-            <Link to={libraryPath("admin/upload")}>
-              <PlusIcon />
-              Aggiungi libro
-            </Link>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm">
+                <PlusIcon />
+                Aggiungi libro
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => navigate(libraryPath("admin/upload"))}>
+                <FileUpIcon />
+                Da un file EPUB
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setZlibraryOpen(true)}>
+                <LibraryBigIcon />
+                Da Z-Library
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </>
       )}
       {/* Outside the branch above: the sheet keeps its query and results when selection mode toggles. */}

@@ -534,7 +534,7 @@ export function ZlibrarySearchSheet({
             <div className="flex items-start gap-3 pr-12">
               <div className="min-w-0 flex-1">
                 <SheetTitle className="font-serif text-xl font-medium">
-                  Cerca su Z-Library
+                  Aggiungi da Z-Library
                 </SheetTitle>
                 <SheetDescription className="mt-0.5 text-xs">
                   Trova un EPUB e aggiungilo alla biblioteca o a un&apos;esplorazione.
