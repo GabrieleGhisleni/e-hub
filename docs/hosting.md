@@ -43,7 +43,7 @@ Stato: **in implementazione** (2026-11-18). Cambio di piano durante i lavori: Tu
 - I repository di oggi (`packages/explore/src/node/repo.ts` e simili) passano da file a Turso dietro la stessa interfaccia. Per i test resta un'implementazione in memoria o su file, così non serve un DB per `pnpm test`.
 - **Migrazione una tantum**: uno script legge `packages/*/data` e popola Turso; gli EPUB di `~/.cache/e-library/books` vanno su R2 come `books/<id>.epub`. Poi i file di dati si tolgono dal repo.
 - `site-data/build.ts` e la lettura dei JSON al build spariscono: il frontend legge a runtime.
-- **Backup**: un timer notturno sul Pi esporta tutte le tabelle in un unico JSON compresso e lo carica su R2 (`backups/<data>.json.gz`, ultimi 30). Turso ha i suoi ripristini a un punto nel tempo, ma il dump su R2 è indipendente dal fornitore.
+- **Backup**: un timer notturno sul Pi (`ehub-backup.timer`, 03:30) esporta tutte le tabelle in un unico JSON compresso e lo carica su R2 (`backups/<data>.json.gz`, ultimi 30; ripristino: `node ehub-backup.mjs --restore backups/<data>.json.gz`). Turso ha i suoi ripristini a un punto nel tempo, ma il dump su R2 è indipendente dal fornitore.
 
 ## Il Pi
 
@@ -98,8 +98,8 @@ Flusso di un libro nuovo: upload dalla UI o da `elib` → il Pi salva l'EPUB su 
 | 4. Kobo | fatta nel codice, **da attivare sul Pi** | Coda `kobo_queue` (`kobo/queue.ts`): con `ELIB_KOBO_QUEUE=1` i servizi mettono in coda invece di fallire; `ehub-kobo-sync.timer` ogni 5 minuti svuota la coda con `reconcile` (mai `--prune`); ricerca dell'IP sulla `/24` come riserva (`kobo/discovery.ts`); host, porta e alias da `ELIB_KOBO_*`; rotte `GET /api/library/kobo/queue` e `POST /api/library/kobo/sync` («sincronizza ora»). La UI arriva in fase 5. |
 | 5. Frontend | fatta nel codice | Build «hosted» (`pnpm --filter @ehub/web build:hosted`, `VITE_HOSTED=1`, `VITE_API_URL`): niente dati nel bundle, tutto dall'API (`/api/library/site/*`, `/api/podcasts/catalog`, `/api/notes`, `/api/explore`); login con Google (`apps/web/src/session.ts`); coda del Kobo con «Sincronizza ora» nella barra admin della libreria; workflow Pages aggiornato. `site-data/build.ts` resta, ma ora lo usa l'API a runtime. |
 | 6. CLI e skill `explore` | fatta (solo `explore`) | `/api/store/<radice>/<chiave>` (solo con sessione, validazione Zod per tabella sul Pi) e `RemoteBackend` nel client: con `EHUB_API_URL` + `EHUB_API_TOKEN` la CLI `explore` lavora sui dati hosted; la skill lo spiega. `elib` e `episode` NON sono collegate: servono cache EPUB, Kobo e trascrizioni, che stanno sul Pi (si usano lì o dall'app). |
-| 7. Podcast | fatta nel codice, **serve `GROQ_API_KEY` e `yt-dlp` sul Pi** | `src/cli/transcribe/groq.ts`: scarica l'audio (yt-dlp o feed), `ffmpeg` mono 16 kHz 32 kbps, divide in parti da 90 minuti se supera 24 MB, una chiamata a Groq per parte con ripresa e attesa sui 429. Le trascrizioni non hanno più speaker (Groq non li dà). `transcriber/` (Python) rimosso. Resta `core/ingest/git.ts`: sparisce in fase 8 con i dati in git. |
-| 8. Chiusura | da fare | |
+| 7. Podcast | fatta nel codice, **serve `GROQ_API_KEY` e `yt-dlp` sul Pi** | `src/cli/transcribe/groq.ts`: scarica l'audio (yt-dlp o feed), `ffmpeg` mono 16 kHz 32 kbps, divide in parti da 90 minuti se supera 24 MB, una chiamata a Groq per parte con ripresa e attesa sui 429. Le trascrizioni non hanno più speaker (Groq non li dà). `transcriber/` (Python) rimosso. (Nota: `core/ingest/git.ts` non è uno script che committa i dati, come scritto sopra: è il runner di `git` per il clone del wiki di Huberman, e resta.) |
+| 8. Chiusura | **in parte** | Fatto: backup notturno (`apps/api/src/backup.ts`, `ehub-backup.timer`, ripristino con `--restore`). **Non fatto di proposito**: rimozione di `packages/*/data` (aspetta la conferma che la migrazione è avvenuta e verificata) e dei server `*-dev.ts` (dipende dalla scelta sullo sviluppo locale, punto ancora aperto). |
 
 ## Strato di storage (`@ehub/store`)
 
@@ -132,3 +132,17 @@ Rotte private anche se `GET`: trascrizioni dei podcast, area di staging degli up
 - **Login**: «Accedi» porta a `<API>/auth/google?return=<sito>`; l'API rimanda al sito con `#token=…`, che finisce in `localStorage`. `fetch` è avvolta (`apiFetch`) e manda il token solo alle chiamate `/api/…` e `/auth/…`.
 - **Se il Pi è spento** le chiamate falliscono e il sito mostra gli errori di rete già gestiti dai moduli (nessun dato in cache: scelta fatta).
 - Il build non hosted (`pnpm build`) resta com'è finché non si chiude la fase 8.
+
+## Cosa resta da fare a mano
+
+Nell'ordine in cui conviene farlo:
+
+1. **Turso**: creare il database, un token con scrittura, mettere `TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN` in `.env.local` (e in `/etc/ehub/env` sul Pi), poi `pnpm --filter @ehub/store db:migrate --apply`. Un token incollato in chat va considerato compromesso: revocarlo e crearne uno nuovo.
+2. **R2**: bucket privato e token S3 (`R2_*`).
+3. **Google**: client OAuth «Web» con URI di reindirizzamento `<PUBLIC_API_URL>/auth/google/callback`; `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `ALLOWED_EMAILS`.
+4. **Migrazione dei dati**: `pnpm --filter @ehub/store migrate` (a secco), poi `--apply` solo dopo aver controllato l'elenco; confrontare i conti con la UI.
+5. **Pi**: installazione una tantum (sezione sopra), `deploy/pi/deploy.sh`, chiave SSH e `known_hosts` del Kobo, `kepubify`, `ffmpeg`, `yt-dlp`, `GROQ_API_KEY`.
+6. **Tunnel**: Cloudflare Tunnel (serve un dominio) o Tailscale Funnel verso `127.0.0.1:8788`; poi `PUBLIC_API_URL`, `CORS_ORIGINS` e la variabile `API_URL` del repository GitHub.
+7. **Chiusura (fase 8)**, solo dopo la conferma: togliere `packages/*/data` dal repo e dal build, e i server `*-dev.ts` una volta scelto come si sviluppa in locale (`API_LOCAL_DEV=1 pnpm --filter @ehub/api start` è già un'opzione: stessa API su file locali, senza login).
+
+Da sapere: il build non hosted (`pnpm build`) e i server di dev funzionano ancora come prima; `elib` e `episode` restano strumenti del Pi (servono cache EPUB, Kobo, trascrizioni).
