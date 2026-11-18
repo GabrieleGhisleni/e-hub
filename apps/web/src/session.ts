@@ -12,8 +12,6 @@ export const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string
 export const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/+$/, "");
 
 const KEY = "ehub.session";
-/** "off" hides the admin controls for a logged-in user (view as a reader); anything else = admin on. */
-const ADMIN_KEY = "ehub.admin";
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -120,36 +118,12 @@ export function apiFetch(
   };
 }
 
-/** The admin view is on unless the user switched it off (default on, so a first login shows the controls). */
-export function adminPreference(storage: StorageLike): boolean {
-  try {
-    return storage.getItem(ADMIN_KEY) !== "off";
-  } catch {
-    return true;
-  }
-}
-
-/**
- * Switches the admin view on or off and reloads (the flag is read once at startup). Turning it on lands on the
- * library, where the admin bar lives (Sincronizza ora, Z-Library, upload); turning it off stays on the same page.
- */
-export function setAdminView(on: boolean): void {
-  try {
-    if (on) window.localStorage.removeItem(ADMIN_KEY);
-    else window.localStorage.setItem(ADMIN_KEY, "off");
-  } catch {
-    // no storage: the view stays as it is
-  }
-  if (on) window.location.assign(`${import.meta.env.BASE_URL}library`);
-  else window.location.reload();
-}
-
 /** Startup: sets the admin flag and wraps `fetch`. Import this before anything else. */
 export function bootSession(): Session | null {
   if (!HOSTED) return null;
   const storage = window.localStorage;
   const session = loadSession(storage);
-  (globalThis as { __EHUB_ADMIN__?: boolean }).__EHUB_ADMIN__ = session !== null && adminPreference(storage);
+  (globalThis as { __EHUB_ADMIN__?: boolean }).__EHUB_ADMIN__ = session !== null;
   window.fetch = apiFetch(API_URL, () => loadSession(storage)?.token ?? null, window.fetch.bind(window), () => {
     // The session is gone (expired, or the API refused it): back to the login page.
     clearSession(storage);
@@ -159,8 +133,6 @@ export function bootSession(): Session | null {
 }
 
 export const currentSession: Session | null = bootSession();
-/** Whether the admin controls are shown (logged in and the admin view not switched off). */
-export const adminView: boolean = currentSession !== null && adminPreference(window.localStorage);
 
 /** Called by the Google button with the ID token: exchanges it, stores the session and reloads. */
 export async function completeLogin(credential: string): Promise<void> {
