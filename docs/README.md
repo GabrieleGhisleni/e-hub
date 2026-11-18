@@ -3,7 +3,7 @@
 - [Struttura del repo](struttura.md): monorepo, pacchetti, dove stanno i dati.
 - [Chat con l'AI](chat.md): pannello, prompt e tool, note dalla chat, modalità Appunti, Feel rich.
 - [Esplorazioni](esplorazioni.md): esplorare libri con l'agente prima di leggerli, dalla skill `explore` o dalla chat dell'app (v1 fatta, solo libri).
-- [Hosting](hosting.md): visione per portare l'app fuori dal laptop (Supabase come unica fonte dei dati, R2, Pi come backend, GitHub Pages, Kobo in coda).
+- [Hosting](hosting.md): visione per portare l'app fuori dal laptop (Turso come unica fonte dei dati, R2, Pi come backend, GitHub Pages, Kobo in coda).
 
 Documenti specifici dei moduli:
 

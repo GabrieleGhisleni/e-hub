@@ -12,8 +12,12 @@ const Env = z.object({
   HOST: z.string().default("127.0.0.1"),
   /** Origins that may call the API from a browser, comma separated (the GitHub Pages origin). */
   CORS_ORIGINS: List,
-  /** Supabase Auth issuer: `https://<ref>.supabase.co/auth/v1`. */
-  SUPABASE_JWT_ISSUER: z.string().url().optional(),
+  /** Public URL of this API (the Google redirect URI is `<this>/auth/google/callback`). */
+  PUBLIC_API_URL: z.string().url().optional(),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  /** Signs the session tokens: at least 32 random characters. */
+  SESSION_SECRET: z.string().min(32).optional(),
   /** Emails allowed to write, comma separated. */
   ALLOWED_EMAILS: List,
   /** Folder that holds the four data dirs (mount roots when hosted; real files otherwise). */

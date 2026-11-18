@@ -1,37 +1,33 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from "jose";
+import { SignJWT } from "jose";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createNotesApp } from "@ehub/notes/server";
 import { createApi, passThrough } from "../src/app.ts";
-import { jwtVerifier, parseAllowedEmails } from "../src/auth.ts";
+import { SESSION_AUDIENCE, SESSION_ISSUER, parseAllowedEmails, sessionVerifier } from "../src/auth.ts";
 
-const ISSUER = "https://proj.supabase.co/auth/v1";
+const SECRET = "x".repeat(40);
 const PAGES = "https://user.github.io";
 let dir: string;
-let privateKey: CryptoKey;
 let app: ReturnType<typeof createApi>;
 
-async function token(claims: { email?: string; aud?: string; iss?: string; exp?: string } = {}) {
-  return new SignJWT({ ...(claims.email === undefined ? { email: "me@example.com" } : claims.email ? { email: claims.email } : {}) })
-    .setProtectedHeader({ alg: "ES256", kid: "k1" })
-    .setIssuer(claims.iss ?? ISSUER)
-    .setAudience(claims.aud ?? "authenticated")
+async function token(claims: { email?: string; secret?: string; aud?: string; iss?: string; exp?: string } = {}) {
+  return new SignJWT({ email: claims.email ?? "me@example.com" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuer(claims.iss ?? SESSION_ISSUER)
+    .setAudience(claims.aud ?? SESSION_AUDIENCE)
     .setExpirationTime(claims.exp ?? "1h")
-    .sign(privateKey);
+    .sign(new TextEncoder().encode(claims.secret ?? SECRET));
 }
 
 beforeAll(async () => {
   dir = await mkdtemp(path.join(tmpdir(), "ehub-api-"));
   process.env.EHUB_NOTES_DATA_DIR = dir;
-  const pair = await generateKeyPair("ES256");
-  privateKey = pair.privateKey;
-  const jwk = { ...(await exportJWK(pair.publicKey)), kid: "k1", alg: "ES256", use: "sig" };
   app = createApi({
     corsOrigins: [PAGES],
     auth: {
-      verify: jwtVerifier({ issuer: ISSUER, keys: createLocalJWKSet({ keys: [jwk] }) }),
+      verify: sessionVerifier(SECRET),
       allowedEmails: parseAllowedEmails("Me@Example.com, other@example.com"),
     },
     modules: [createNotesApp({ access: passThrough })],
@@ -64,9 +60,10 @@ describe("hosted API", () => {
   it("refuses writes without or with a bad token", async () => {
     expect((await post()).status).toBe(401);
     expect((await post({ authorization: "Bearer nonsense" })).status).toBe(401);
-    expect((await post({ authorization: `Bearer ${await token({ iss: "https://evil.example/auth/v1" })}` })).status).toBe(401);
+    expect((await post({ authorization: `Bearer ${await token({ iss: "someone-else" })}` })).status).toBe(401);
     expect((await post({ authorization: `Bearer ${await token({ aud: "anon" })}` })).status).toBe(401);
     expect((await post({ authorization: `Bearer ${await token({ exp: "-1h" })}` })).status).toBe(401);
+    expect((await post({ authorization: `Bearer ${await token({ secret: "y".repeat(40) })}` })).status).toBe(401);
   });
 
   it("refuses an email outside the allowlist", async () => {

@@ -1,6 +1,6 @@
 /**
  * The hosted backend: maps the file layout of each package (`books/<id>/book.json`, `shows/<slug>.json`, …) onto
- * Supabase tables (`id`, `data jsonb`, `updated_at`) and an R2 bucket. Keys that no route claims stay on disk
+ * Turso tables (`id`, `data jsonb`, `updated_at`) and an R2 bucket. Keys that no route claims stay on disk
  * (the Pi keeps podcast audio, transcripts and caches there).
  */
 import { type Backend, type DirEntry, mountBackend } from "./backend.ts";

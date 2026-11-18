@@ -1,8 +1,8 @@
 /**
- * Moves the data of the repo to Supabase and the EPUBs/covers to R2 (docs/hosting.md, fase 1).
+ * Moves the data of the repo to Turso and the EPUBs/covers to R2 (docs/hosting.md, fase 1).
  *
  *   pnpm --filter @ehub/store migrate            # dry run: lists what would be uploaded, touches nothing
- *   pnpm --filter @ehub/store migrate --apply    # really uploads (needs SUPABASE_* and R2_* in .env.local)
+ *   pnpm --filter @ehub/store migrate --apply    # really uploads (needs TURSO_* and R2_* in .env.local)
  *
  * Idempotent: rows are upserted by id, objects overwritten. Nothing is ever deleted.
  */
@@ -17,7 +17,7 @@ import {
   planMigration,
   r2FromEnv,
   runMigration,
-  supabaseFromEnv,
+  tursoFromEnv,
 } from "../src/index.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -35,7 +35,7 @@ const cacheDir = process.env.ELIB_CACHE_DIR || path.join(os.homedir(), ".cache",
 const plan = await planMigration(roots, cacheDir);
 console.log(`${plan.items.length} file da migrare, ${plan.skipped.length} restano su disco.`);
 
-let docs = new MemoryDocClient() as ReturnType<typeof supabaseFromEnv> & object;
+let docs = new MemoryDocClient() as ReturnType<typeof tursoFromEnv> & object;
 let blobs = new MemoryBlobStore() as ReturnType<typeof r2FromEnv> & object;
 if (apply) {
   const missing = missingHostedEnv();
@@ -43,7 +43,7 @@ if (apply) {
     console.error(`Mancano queste variabili in .env.local: ${missing.join(", ")}`);
     process.exit(1);
   }
-  docs = supabaseFromEnv()!;
+  docs = tursoFromEnv()!;
   blobs = r2FromEnv()!;
 } else {
   console.log("Prova a secco (aggiungi --apply per caricare davvero).");

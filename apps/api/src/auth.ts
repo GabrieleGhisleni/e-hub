@@ -1,9 +1,9 @@
 /**
- * Access rules of the hosted API (docs/hosting.md): reads are public, everything else needs the Supabase JWT of an
- * allowed email. The token only proves who is calling: the Pi checks it against Supabase's public keys (JWKS), so
- * no Supabase secret is needed for this.
+ * Access rules of the hosted API (docs/hosting.md): reads are public, everything else needs a session token. The
+ * token is issued by this API after a Google login (google.ts) for an email in the allowlist, and is checked here
+ * with the API's own secret.
  */
-import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
+import { SignJWT, jwtVerify } from "jose";
 import type { MiddlewareHandler } from "hono";
 
 export interface Identity {
@@ -13,18 +13,32 @@ export interface Identity {
 /** Resolves a bearer token to an identity, or throws. */
 export type VerifyToken = (token: string) => Promise<Identity>;
 
-export interface JwtOptions {
-  /** `https://<ref>.supabase.co/auth/v1` */
-  issuer: string;
-  /** Test seam: a key set instead of the remote JWKS. */
-  keys?: JWTVerifyGetKey;
+export const SESSION_ISSUER = "ehub-api";
+export const SESSION_AUDIENCE = "ehub";
+export const SESSION_TTL = "7d";
+
+const encoder = new TextEncoder();
+
+/** Signs a session token (HS256) for `email`. Issued by the Google login only after the allowlist check. */
+export async function createSession(secret: string, email: string, now = new Date()): Promise<string> {
+  return new SignJWT({ email })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(email)
+    .setIssuer(SESSION_ISSUER)
+    .setAudience(SESSION_AUDIENCE)
+    .setIssuedAt(Math.floor(now.getTime() / 1000))
+    .setExpirationTime(SESSION_TTL)
+    .sign(encoder.encode(secret));
 }
 
-export function jwtVerifier(options: JwtOptions): VerifyToken {
-  const issuer = options.issuer.replace(/\/+$/, "");
-  const keys = options.keys ?? createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks.json`));
+export function sessionVerifier(secret: string): VerifyToken {
+  const key = encoder.encode(secret);
   return async (token) => {
-    const { payload } = await jwtVerify(token, keys, { issuer, audience: "authenticated" });
+    const { payload } = await jwtVerify(token, key, {
+      issuer: SESSION_ISSUER,
+      audience: SESSION_AUDIENCE,
+      algorithms: ["HS256"],
+    });
     const email = typeof payload.email === "string" ? payload.email.toLowerCase() : "";
     if (!email) throw new Error("token without email");
     return { email };

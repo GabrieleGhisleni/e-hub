@@ -1,9 +1,10 @@
 /**
- * The hosted API (docs/hosting.md): one Hono server. With SUPABASE_URL set it mounts the data dirs on Supabase/R2;
+ * The hosted API (docs/hosting.md): one Hono server. With TURSO_DATABASE_URL set it mounts the data dirs on Turso/R2;
  * without, it works on plain files (local use). Secrets come from the environment (systemd EnvironmentFile or
  * .env.local), never from the repo.
  */
 import { serve } from "@hono/node-server";
+import type { Hono } from "hono";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "@ehub/library/config";
@@ -13,10 +14,11 @@ import { createExploreApp } from "@ehub/explore/server";
 import { createNotesApp } from "@ehub/notes/server";
 import { createApp as createPodcastsApp } from "@ehub/podcasts/server";
 import { blobEpubRemote, setEpubRemote } from "@ehub/library/epub-remote";
-import { loadEnvLocal, missingHostedEnv, r2FromEnv, supabaseFromEnv } from "@ehub/store";
+import { loadEnvLocal, missingHostedEnv, r2FromEnv, tursoFromEnv } from "@ehub/store";
 import { mountHosted } from "@ehub/store/hosted";
 import { createApi, passThrough } from "./app.ts";
-import { jwtVerifier, parseAllowedEmails } from "./auth.ts";
+import { parseAllowedEmails, sessionVerifier } from "./auth.ts";
+import { createGoogleLogin } from "./google.ts";
 import { createChat } from "./chat.ts";
 import { dataRoots, readEnv } from "./env.ts";
 
@@ -39,7 +41,7 @@ if (env.EHUB_DATA_ROOT) {
 }
 
 const config = loadConfig();
-const hosted = process.env.SUPABASE_URL !== undefined;
+const hosted = process.env.TURSO_DATABASE_URL !== undefined;
 if (hosted) {
   const missing = missingHostedEnv();
   if (missing.length > 0) throw new Error(`Variabili mancanti: ${missing.join(", ")}`);
@@ -53,21 +55,34 @@ if (hosted) {
     if (!dir) throw new Error(`Cartella dati «${name}» non impostata (EHUB_DATA_ROOT).`);
   }
   const blobs = r2FromEnv()!;
-  mountHosted(dirs, supabaseFromEnv()!, blobs);
+  mountHosted(dirs, tursoFromEnv()!, blobs);
   // EPUBs: the cache is the working copy, R2 the durable one.
   setEpubRemote(blobEpubRemote(blobs));
 }
 
 let auth;
-if (env.SUPABASE_JWT_ISSUER && env.ALLOWED_EMAILS.length > 0) {
-  auth = {
-    verify: jwtVerifier({ issuer: env.SUPABASE_JWT_ISSUER }),
-    allowedEmails: parseAllowedEmails(env.ALLOWED_EMAILS.join(",")),
-  };
+let google: Hono | undefined;
+if (env.SESSION_SECRET && env.ALLOWED_EMAILS.length > 0) {
+  const verify = sessionVerifier(env.SESSION_SECRET);
+  const allowedEmails = parseAllowedEmails(env.ALLOWED_EMAILS.join(","));
+  auth = { verify, allowedEmails };
+  if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.PUBLIC_API_URL) {
+    google = createGoogleLogin({
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      publicUrl: env.PUBLIC_API_URL,
+      sessionSecret: env.SESSION_SECRET,
+      allowedEmails,
+      siteOrigins: env.CORS_ORIGINS,
+      verify,
+    });
+  } else {
+    console.warn("Login Google non configurato (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, PUBLIC_API_URL): le scritture restano chiuse.");
+  }
 } else if (env.API_LOCAL_DEV === "1") {
   auth = { verify: async () => ({ email: "dev@local" }), allowedEmails: new Set(["dev@local"]) };
 } else {
-  throw new Error("Imposta SUPABASE_JWT_ISSUER e ALLOWED_EMAILS (o API_LOCAL_DEV=1 in locale).");
+  throw new Error("Imposta SESSION_SECRET e ALLOWED_EMAILS (o API_LOCAL_DEV=1 in locale).");
 }
 
 const services = createServices(createServiceContext(config));
@@ -78,6 +93,7 @@ const app = createApi({
   auth,
   corsOrigins: env.CORS_ORIGINS,
   modules: [
+    ...(google ? [google] : []),
     createLibraryApp(services, config, { access: passThrough }),
     createExploreApp({ access: passThrough }),
     createNotesApp({ access: passThrough }),
@@ -87,5 +103,5 @@ const app = createApi({
 });
 
 serve({ fetch: app.fetch, hostname: env.HOST, port: env.PORT }, (info) => {
-  console.log(`ehub api on http://${env.HOST}:${info.port} (${hosted ? "Supabase + R2" : "file locali"})`);
+  console.log(`ehub api on http://${env.HOST}:${info.port} (${hosted ? "Turso + R2" : "file locali"})`);
 });

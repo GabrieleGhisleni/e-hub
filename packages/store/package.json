@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Storage seam: file I/O that can be mounted on Supabase (documents) and R2 (blobs), plus in-memory fakes for tests",
+  "description": "Storage seam: file I/O that can be mounted on Turso (documents) and R2 (blobs), plus in-memory fakes for tests",
   "exports": {
     ".": "./src/index.ts",
     "./hosted": "./src/hosted.ts"
@@ -11,9 +11,11 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "migrate": "tsx scripts/migrate.ts"
+    "migrate": "tsx scripts/migrate.ts",
+    "db:migrate": "tsx scripts/db-migrate.ts"
   },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
     "@aws-sdk/client-s3": "^3.1171.0",
     "zod": "^4.6.7"
   },

@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=ehub
 WorkingDirectory=/opt/ehub
-# Secrets (SUPABASE_*, R2_*, EHUB_AI_*, ALLOWED_EMAILS...) live only here, never in the repo.
+# Secrets (TURSO_*, GOOGLE_*, SESSION_SECRET, R2_*, EHUB_AI_*, ALLOWED_EMAILS...) live only here, never in the repo.
 EnvironmentFile=/etc/ehub/env
 ExecStart=/usr/bin/node --max-old-space-size=384 /opt/ehub/ehub-api.mjs
 Restart=on-failure

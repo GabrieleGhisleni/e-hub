@@ -1,6 +1,6 @@
 /**
- * Document tables: `id text primary key, data jsonb, updated_at timestamptz` (supabase/migrations).
- * `SupabaseDocClient` speaks PostgREST with the service key; `MemoryDocClient` is the same thing for tests.
+ * Document tables: `id`, `data` (JSON), `updated_at` (turso/migrations).
+ * `TursoDocClient` talks to Turso (libSQL); `MemoryDocClient` is the same thing for tests.
  */
 export interface Doc {
   id: string;
@@ -51,86 +51,57 @@ export class MemoryDocClient implements DocClient {
   }
 }
 
-export interface SupabaseOptions {
-  /** Project URL, e.g. `https://xyz.supabase.co`. */
-  url: string;
-  serviceRoleKey: string;
-  fetch?: typeof fetch;
+/**
+ * The one method of a libSQL client we use (`@libsql/client` implements it; tests pass `node:sqlite` behind it).
+ * Rows come back as objects keyed by column name.
+ */
+export interface SqlClient {
+  execute(statement: { sql: string; args: (string | number | null)[] }): Promise<{
+    rows: ArrayLike<Record<string, unknown>>[] | Record<string, unknown>[];
+  }>;
 }
 
-interface Row {
-  id: string;
-  data: unknown;
-  updated_at: string;
+type Row = Record<string, unknown>;
+
+function toDoc(row: Row): Doc {
+  return {
+    id: String(row.id),
+    data: JSON.parse(String(row.data)) as unknown,
+    updatedAt: String(row.updated_at),
+  };
 }
 
-const PAGE = 1000;
+/** Documents in Turso (libSQL): `<table>(id TEXT PRIMARY KEY, data TEXT json, updated_at TEXT)`, see turso/migrations. */
+export class TursoDocClient implements DocClient {
+  private readonly db: SqlClient;
 
-export class SupabaseDocClient implements DocClient {
-  private readonly base: string;
-  private readonly key: string;
-  private readonly fetchFn: typeof fetch;
-
-  constructor(options: SupabaseOptions) {
-    this.base = `${options.url.replace(/\/+$/, "")}/rest/v1`;
-    this.key = options.serviceRoleKey;
-    this.fetchFn = options.fetch ?? fetch;
+  // Plain field, no parameter property: this file may be loaded by Node's type stripping.
+  constructor(db: SqlClient) {
+    this.db = db;
   }
 
-  private async request(url: string, init: RequestInit = {}): Promise<Response> {
-    const response = await this.fetchFn(url, {
-      ...init,
-      headers: {
-        apikey: this.key,
-        authorization: `Bearer ${this.key}`,
-        "content-type": "application/json",
-        ...(init.headers as Record<string, string> | undefined),
-      },
-    });
-    if (!response.ok) {
-      // The body of a PostgREST error is safe to show (no secrets); the URL carries only table and id.
-      const detail = await response.text().catch(() => "");
-      throw new Error(`Supabase ${init.method ?? "GET"} ${response.status}: ${detail.slice(0, 300)}`);
-    }
-    return response;
-  }
-
-  private static toDoc(row: Row): Doc {
-    return { id: row.id, data: row.data, updatedAt: row.updated_at };
+  private async rows(sql: string, args: (string | number | null)[] = []): Promise<Row[]> {
+    return (await this.db.execute({ sql, args })).rows as Row[];
   }
 
   async get(table: string, id: string): Promise<Doc | null> {
-    const url = `${this.base}/${assertTable(table)}?id=eq.${encodeURIComponent(id)}&select=id,data,updated_at`;
-    const rows = (await (await this.request(url)).json()) as Row[];
-    return rows[0] ? SupabaseDocClient.toDoc(rows[0]) : null;
+    const rows = await this.rows(`SELECT id, data, updated_at FROM ${assertTable(table)} WHERE id = ?`, [id]);
+    return rows[0] ? toDoc(rows[0]) : null;
   }
 
   async list(table: string): Promise<Doc[]> {
-    const docs: Doc[] = [];
-    for (let from = 0; ; from += PAGE) {
-      const url = `${this.base}/${assertTable(table)}?select=id,data,updated_at&order=id.asc`;
-      const response = await this.request(url, {
-        headers: { range: `${from}-${from + PAGE - 1}`, "range-unit": "items" },
-      });
-      const rows = (await response.json()) as Row[];
-      docs.push(...rows.map(SupabaseDocClient.toDoc));
-      if (rows.length < PAGE) return docs;
-    }
+    return (await this.rows(`SELECT id, data, updated_at FROM ${assertTable(table)} ORDER BY id`)).map(toDoc);
   }
 
   async put(table: string, id: string, data: unknown): Promise<void> {
-    const url = `${this.base}/${assertTable(table)}?on_conflict=id`;
-    await this.request(url, {
-      method: "POST",
-      headers: { prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify({ id, data, updated_at: new Date().toISOString() }),
-    });
+    await this.rows(
+      `INSERT INTO ${assertTable(table)} (id, data, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+      [id, JSON.stringify(data), new Date().toISOString()],
+    );
   }
 
   async delete(table: string, id: string): Promise<void> {
-    await this.request(`${this.base}/${assertTable(table)}?id=eq.${encodeURIComponent(id)}`, {
-      method: "DELETE",
-      headers: { prefer: "return=minimal" },
-    });
+    await this.rows(`DELETE FROM ${assertTable(table)} WHERE id = ?`, [id]);
   }
 }

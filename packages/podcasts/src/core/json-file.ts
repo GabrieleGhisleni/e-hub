@@ -37,7 +37,7 @@ export function toStableJson(value: unknown): string {
 
 /**
  * Writes `content` atomically (through @ehub/store: temp file + rename on disk, one upsert when the data dir is
- * mounted on Supabase). Creates the directory.
+ * mounted on Turso). Creates the directory.
  */
 export async function writeFileAtomic(
   filePath: string,

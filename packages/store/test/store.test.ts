@@ -1,11 +1,14 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   MemoryBlobStore,
   MemoryDocClient,
-  SupabaseDocClient,
+  TursoDocClient,
+  splitStatements,
+  type SqlClient,
   R2BlobStore,
   listDir,
   readTextIfExists,
@@ -91,31 +94,47 @@ describe("hosted mount", () => {
   });
 });
 
-describe("SupabaseDocClient", () => {
-  it("speaks PostgREST", async () => {
-    const calls: { url: string; init: RequestInit }[] = [];
-    const fake = (async (url: string, init: RequestInit) => {
-      calls.push({ url, init });
-      const body = init.method === "POST" || init.method === "DELETE" ? "" : '[{"id":"a","data":{"x":1},"updated_at":"t"}]';
-      return new Response(body, { status: 200 });
-    }) as unknown as typeof fetch;
-    const client = new SupabaseDocClient({ url: "https://p.supabase.co/", serviceRoleKey: "k", fetch: fake });
-    expect(await client.get("books", "a")).toEqual({ id: "a", data: { x: 1 }, updatedAt: "t" });
-    expect(calls[0]!.url).toBe("https://p.supabase.co/rest/v1/books?id=eq.a&select=id,data,updated_at");
-    await client.put("books", "a", { x: 2 });
-    expect(calls[1]!.url).toContain("on_conflict=id");
-    expect(JSON.parse(calls[1]!.init.body as string)).toMatchObject({ id: "a", data: { x: 2 } });
-    await client.delete("books", "a");
-    expect(calls[2]!.init.method).toBe("DELETE");
-    await expect(client.get("books; drop", "a")).rejects.toThrow("invalid table");
+describe("TursoDocClient (SQLite in memory, with the real migration)", () => {
+  async function client() {
+    const db = new DatabaseSync(":memory:");
+    for (const sql of splitStatements(
+      await readFile(new URL("../../../turso/migrations/0001_init.sql", import.meta.url), "utf8"),
+    )) {
+      db.exec(sql);
+    }
+    const sqlClient: SqlClient = {
+      async execute({ sql, args }) {
+        const stmt = db.prepare(sql);
+        const rows = /^\s*select/i.test(sql) ? (stmt.all(...args) as Record<string, unknown>[]) : (stmt.run(...args), []);
+        return { rows };
+      },
+    };
+    return new TursoDocClient(sqlClient);
+  }
+
+  it("puts, gets, lists, replaces and deletes; key order survives", async () => {
+    const docs = await client();
+    expect(await docs.get("books", "a")).toBeNull();
+    await docs.put("books", "b", { z: 1, a: 2 });
+    await docs.put("books", "a", { x: 1 });
+    expect((await docs.list("books")).map((d) => d.id)).toEqual(["a", "b"]);
+    expect(Object.keys((await docs.get("books", "b"))!.data as object)).toEqual(["z", "a"]);
+    await docs.put("books", "a", { x: 2 });
+    expect((await docs.get("books", "a"))?.data).toEqual({ x: 2 });
+    await docs.delete("books", "a");
+    expect(await docs.get("books", "a")).toBeNull();
   });
 
-  it("surfaces errors without the key", async () => {
-    const fake = (async () => new Response("nope", { status: 401 })) as unknown as typeof fetch;
-    const client = new SupabaseDocClient({ url: "https://p.supabase.co", serviceRoleKey: "SECRET", fetch: fake });
-    const error = await client.list("books").catch((e: Error) => e);
-    expect((error as Error).message).toMatch(/401/);
-    expect((error as Error).message).not.toMatch(/SECRET/);
+  it("creates every table of the layouts", async () => {
+    const docs = await client();
+    for (const table of ["books", "book_summaries", "book_highlights", "book_markdown", "topics", "shows", "episodes", "conversations", "notes", "explorations", "chats", "kobo_queue"]) {
+      expect(await docs.list(table)).toEqual([]);
+    }
+  });
+
+  it("refuses odd table names", async () => {
+    const docs = await client();
+    await expect(docs.get("books; drop table books", "a")).rejects.toThrow("invalid table");
   });
 });
 

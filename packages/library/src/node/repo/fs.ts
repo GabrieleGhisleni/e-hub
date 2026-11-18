@@ -1,6 +1,6 @@
 import { readTextIfExists, writeFileAtomic } from "@ehub/store";
 
-// Reads and writes go through @ehub/store: plain files, or Supabase/R2 when the data dir is mounted (docs/hosting.md).
+// Reads and writes go through @ehub/store: plain files, or Turso/R2 when the data dir is mounted (docs/hosting.md).
 export { readTextIfExists, writeFileAtomic };
 
 export function isNotFound(error: unknown): boolean {

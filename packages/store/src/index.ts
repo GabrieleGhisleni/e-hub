@@ -4,3 +4,4 @@ export * from "./blobs.ts";
 export * from "./env.ts";
 export * from "./config.ts";
 export * from "./migrate.ts";
+export * from "./sql.ts";

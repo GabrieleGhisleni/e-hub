@@ -13,9 +13,9 @@ packages/
   notes/          Note su libri ed episodi (usate da entrambi i moduli), in Markdown
   chat/           Chat AI: client LLM, loop dell'agente, server /api/chat, pannello (solo in dev)
   explore/        Esplorazioni: triage di libri prima di leggerli (CLI, skill `explore`, pagina e chat)
-  store/          Strato di storage: file locali o Supabase/R2 (mount), client, migrazione una tantum
+  store/          Strato di storage: file locali o Turso/R2 (mount), client, migrazione una tantum
 deploy/pi/        Unità systemd, env d'esempio e script di deploy del Pi
-supabase/         Migrazioni SQL del database (docs/hosting.md)
+turso/            Migrazioni SQL del database (docs/hosting.md)
 docs/             Questa documentazione
 AGENTS.md         Istruzioni per gli agenti (CLAUDE.md è un link a questo file)
 .github/workflows Deploy su GitHub Pages

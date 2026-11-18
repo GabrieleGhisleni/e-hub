@@ -1,6 +1,6 @@
 /**
  * The storage seam. Every package reads and writes its data through `readTextIfExists`, `writeFileAtomic` & co.
- * When the path lies under a *mounted* root (the hosted API mounts each package's data dir on Supabase/R2) the call
+ * When the path lies under a *mounted* root (the hosted API mounts each package's data dir on Turso/R2) the call
  * goes to that backend; everywhere else (tests with a temp dir, local CLI, caches on disk) it is plain `node:fs`.
  */
 import { randomBytes } from "node:crypto";
