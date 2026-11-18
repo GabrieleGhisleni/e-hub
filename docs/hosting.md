@@ -1,6 +1,6 @@
 # Hosting: e-hub fuori dal laptop
 
-Stato: **visione decisa, da implementare** (2026-11-18). Oggi tutto gira sul laptop: i dati sono JSON in git, le scritture passano dai server Hono di dev e dalle CLI. Questo documento descrive dove va ogni pezzo quando l'app diventa hosted.
+Stato: **in implementazione** (2026-11-18); vedi «Stato delle fasi» in fondo. Oggi tutto gira sul laptop: i dati sono JSON in git, le scritture passano dai server Hono di dev e dalle CLI. Questo documento descrive dove va ogni pezzo quando l'app diventa hosted.
 
 ## Il quadro
 
@@ -87,3 +87,22 @@ Flusso di un libro nuovo: upload dalla UI o da `elib` → il Pi salva l'EPUB su 
 - Dominio per Cloudflare Tunnel, oppure Tailscale Funnel.
 - Sviluppo locale (`pnpm dev`): un secondo progetto Supabase, o il Pi di produzione da loggati.
 - Limiti esatti dei piani gratuiti (Supabase, Groq, R2): verificarli sulle pagine ufficiali prima della fase 1.
+
+## Stato delle fasi
+
+| Fase | Stato | Note |
+| --- | --- | --- |
+| 1. Fondamenta | fatta nel codice, **da eseguire a mano** | `supabase/migrations/0001_init.sql`, `packages/store` (client Supabase, R2, mount), `pnpm --filter @ehub/store migrate` (a secco senza `--apply`). Servono: progetto Supabase con la migrazione applicata, bucket R2, variabili in `.env.local`. |
+| 2. Repository su Supabase | da fare | |
+| 3. Backend sul Pi | da fare | |
+| 4. Kobo | da fare | |
+| 5. Frontend | da fare | |
+| 6. CLI e skill `explore` | da fare | |
+| 7. Podcast | da fare | |
+| 8. Chiusura | da fare | |
+
+## Strato di storage (`@ehub/store`)
+
+Ogni pacchetto legge e scrive i suoi dati con le stesse funzioni di file di prima (`readTextIfExists`, `writeFileAtomic`, `listDir`…), che ora vivono in `@ehub/store`. Se il percorso è dentro una cartella **montata** (`mountHosted`, solo sul Pi) la chiamata va a Supabase (tabelle `id`, `data jsonb`, `updated_at`) o a R2; altrimenti è `node:fs` come sempre. Così i repository non cambiano interfaccia, i test continuano a usare cartelle temporanee (o `MemoryBackend`) e non serve un DB per `pnpm test`. I file che nessuna rotta rivendica (trascrizioni, audio, cache) restano su disco. Le rotte file → tabella sono in `packages/store/src/hosted.ts`.
+
+Nota: `jsonb` non conserva l'ordine delle chiavi; chi legge valida con Zod, ma il controllo «formato canonico» di `elib validate` non ha senso sui dati ospitati.
