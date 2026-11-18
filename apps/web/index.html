@@ -11,6 +11,22 @@
     />
     <title>e-hub</title>
     <!--
+      Hosted site: the admin controls (`__ELIB_ADMIN__`) are gated on a valid login. The Vite dev server reads that
+      flag once, when its client loads, before any module runs; so set it here, ahead of every module. src/session.ts
+      sets it again (same rule) at startup.
+    -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("ehub.session");
+          var p = t && JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+          window.__EHUB_ADMIN__ = !!(p && p.email && p.exp * 1000 > Date.now());
+        } catch (e) {
+          window.__EHUB_ADMIN__ = false;
+        }
+      })();
+    </script>
+    <!--
       No flash of the wrong theme: apply the saved choice (or the system one) before first paint.
       Keep in sync with packages/ui/src/theme.tsx (storage key "ehub-theme", theme colours).
     -->
