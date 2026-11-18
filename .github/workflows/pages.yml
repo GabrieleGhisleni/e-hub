@@ -29,7 +29,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @ehub/web build:hosted
         env:
-          BASE_PATH: /${{ github.event.repository.name }}/
+          BASE_PATH: /
           # Public address of the API (the Pi behind its tunnel): repository variable, not a secret.
           VITE_API_URL: ${{ vars.API_URL }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
