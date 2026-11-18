@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   apiFetch,
   loadSession,
-  loginUrl,
   sessionFromToken,
-  takeTokenFromUrl,
+  storeToken,
+  exchangeCredential,
   type StorageLike,
 } from "../src/session";
 
@@ -33,29 +33,37 @@ describe("session token", () => {
     expect(sessionFromToken("not-a-token", NOW)).toBeNull();
   });
 
-  it("takes the token from the URL fragment, stores it and returns the clean URL", () => {
+  it("stores a valid token and refuses an expired or malformed one", () => {
     const storage = memory();
-    const token = jwt({ email: "me@example.com", exp: soon });
-    const clean = takeTokenFromUrl(`https://u.github.io/e-hub/library?x=1#token=${token}`, storage, NOW);
-    expect(clean).toBe("/e-hub/library?x=1");
+    expect(storeToken(storage, jwt({ email: "me@example.com", exp: soon }), NOW)).toBe(true);
     expect(loadSession(storage, NOW)?.email).toBe("me@example.com");
-    expect(takeTokenFromUrl("https://u.github.io/e-hub/", storage, NOW)).toBeNull();
+    const other = memory();
+    expect(storeToken(other, jwt({ email: "me@example.com", exp: soon - 7200 }), NOW)).toBe(false);
+    expect(storeToken(other, "junk", NOW)).toBe(false);
+    expect(other.data.size).toBe(0);
   });
 
-  it("does not store an expired token and drops one that expired in storage", () => {
+  it("drops an expired token found in storage", () => {
     const storage = memory();
-    const old = jwt({ email: "me@example.com", exp: soon - 7200 });
-    takeTokenFromUrl(`https://u.github.io/#token=${old}`, storage, NOW);
-    expect(storage.data.size).toBe(0);
-    storage.setItem("ehub.session", old);
+    storage.setItem("ehub.session", jwt({ email: "me@example.com", exp: soon - 7200 }));
     expect(loadSession(storage, NOW)).toBeNull();
     expect(storage.data.size).toBe(0);
   });
+});
 
-  it("builds the login URL with an encoded return address", () => {
-    expect(loginUrl("https://api.example.com", "https://u.github.io/e-hub/")).toBe(
-      "https://api.example.com/auth/google?return=https%3A%2F%2Fu.github.io%2Fe-hub%2F",
-    );
+describe("exchangeCredential", () => {
+  it("posts the Google ID token to the API and returns its session token", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ token: "SESSION" }));
+    expect(await exchangeCredential("https://api.example.com", "GOOGLE", fetchMock as unknown as typeof fetch)).toBe("SESSION");
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://api.example.com/auth/google");
+    expect(JSON.parse(init.body as string)).toEqual({ credential: "GOOGLE" });
+  });
+
+  it("explains a refused account and any other failure", async () => {
+    const make = (status: number) => (async () => new Response("{}", { status })) as unknown as typeof fetch;
+    await expect(exchangeCredential("", "x", make(403))).rejects.toThrow("non è autorizzato");
+    await expect(exchangeCredential("", "x", make(500))).rejects.toThrow("Accesso non riuscito");
   });
 });
 

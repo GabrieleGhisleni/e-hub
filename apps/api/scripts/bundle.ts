@@ -12,7 +12,6 @@ await build({
   entryPoints: {
     "ehub-api": path.join(root, "src/main.ts"),
     "ehub-kobo-sync": path.join(root, "src/kobo-drain.ts"),
-    "ehub-backup": path.join(root, "src/backup.ts"),
   },
   outdir: path.join(root, "dist"),
   outExtension: { ".js": ".mjs" },

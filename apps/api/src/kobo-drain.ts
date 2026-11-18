@@ -6,7 +6,7 @@ import { LockBusyError, createServiceContext, drainWithDiscovery } from "@ehub/l
 import { boot } from "./boot.ts";
 
 process.env.ELIB_KOBO_QUEUE = "1";
-const { config } = boot();
+const { config } = await boot();
 const ctx = createServiceContext(config, { queue: true });
 
 try {

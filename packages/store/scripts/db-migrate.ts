@@ -24,10 +24,11 @@ if (!process.argv.includes("--apply")) {
 }
 const url = process.env.TURSO_DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
-if (!url || !authToken) {
+const local = url?.startsWith("file:") || url === ":memory:";
+if (!url || (!authToken && !local)) {
   console.error("Mancano TURSO_DATABASE_URL e/o TURSO_AUTH_TOKEN in .env.local");
   process.exit(1);
 }
-const db = createClient({ url, authToken });
+const db = local ? (await import("@libsql/client")).createClient({ url }) : createClient({ url, authToken: authToken! });
 for (const sql of statements) await db.execute(sql);
 console.log("Fatto.");

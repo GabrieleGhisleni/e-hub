@@ -8,4 +8,6 @@ interface ImportMetaEnv {
   readonly VITE_HOSTED?: string;
   /** Origin of the API (the Pi behind its tunnel), no trailing slash. */
   readonly VITE_API_URL?: string;
+  /** Google OAuth client id for the login button. */
+  readonly VITE_GOOGLE_CLIENT_ID?: string;
 }

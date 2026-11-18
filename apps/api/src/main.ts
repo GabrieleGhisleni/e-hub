@@ -20,7 +20,7 @@ import { createChat } from "./chat.ts";
 import { createGoogleLogin } from "./google.ts";
 import { createStoreRoutes } from "./store-routes.ts";
 
-const { env, config, hosted } = boot();
+const { env, config, hosted } = await boot();
 
 let auth;
 let google: Hono | undefined;
@@ -28,18 +28,15 @@ if (env.SESSION_SECRET && env.ALLOWED_EMAILS.length > 0) {
   const verify = sessionVerifier(env.SESSION_SECRET);
   const allowedEmails = parseAllowedEmails(env.ALLOWED_EMAILS.join(","));
   auth = { verify, allowedEmails };
-  if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.PUBLIC_API_URL) {
+  if (env.GOOGLE_CLIENT_ID) {
     google = createGoogleLogin({
       clientId: env.GOOGLE_CLIENT_ID,
-      clientSecret: env.GOOGLE_CLIENT_SECRET,
-      publicUrl: env.PUBLIC_API_URL,
       sessionSecret: env.SESSION_SECRET,
       allowedEmails,
-      siteOrigins: env.CORS_ORIGINS,
       verify,
     });
   } else {
-    console.warn("Login Google non configurato (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, PUBLIC_API_URL): le scritture restano chiuse.");
+    console.warn("Login Google non configurato (GOOGLE_CLIENT_ID): le scritture restano chiuse.");
   }
 } else if (env.API_LOCAL_DEV === "1") {
   auth = { verify: async () => ({ email: "dev@local" }), allowedEmails: new Set(["dev@local"]) };

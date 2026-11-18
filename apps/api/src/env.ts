@@ -12,10 +12,8 @@ const Env = z.object({
   HOST: z.string().default("127.0.0.1"),
   /** Origins that may call the API from a browser, comma separated (the GitHub Pages origin). */
   CORS_ORIGINS: List,
-  /** Public URL of this API (the Google redirect URI is `<this>/auth/google/callback`). */
-  PUBLIC_API_URL: z.string().url().optional(),
+  /** Google OAuth client id (the same one the site uses with Google Identity Services). */
   GOOGLE_CLIENT_ID: z.string().optional(),
-  GOOGLE_CLIENT_SECRET: z.string().optional(),
   /** Signs the session tokens: at least 32 random characters. */
   SESSION_SECRET: z.string().min(32).optional(),
   /** Emails allowed to write, comma separated. */

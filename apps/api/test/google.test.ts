@@ -1,106 +1,78 @@
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from "jose";
 import { describe, expect, it } from "vitest";
+import { createApi } from "../src/app.ts";
 import { parseAllowedEmails, sessionVerifier } from "../src/auth.ts";
 import { createGoogleLogin } from "../src/google.ts";
 
 const SECRET = "s".repeat(40);
-const SITE = "https://user.github.io";
 const CLIENT = "client-id.apps.googleusercontent.com";
+const NOW = new Date("2026-11-18T10:00:00Z");
 
-async function setup(emailVerified = true) {
+async function setup() {
   const pair = await generateKeyPair("RS256");
   const jwk = { ...(await exportJWK(pair.publicKey)), kid: "g1", alg: "RS256", use: "sig" };
-  const calls: { url: string; body: string }[] = [];
-  const idToken = (email: string, aud = CLIENT) =>
-    new SignJWT({ email, email_verified: emailVerified })
+  const idToken = (claims: { email?: string; aud?: string; verified?: boolean; iss?: string } = {}) =>
+    new SignJWT({ email: claims.email ?? "me@example.com", email_verified: claims.verified ?? true })
       .setProtectedHeader({ alg: "RS256", kid: "g1" })
-      .setIssuer("https://accounts.google.com")
-      .setAudience(aud)
+      .setIssuer(claims.iss ?? "https://accounts.google.com")
+      .setAudience(claims.aud ?? CLIENT)
       .setExpirationTime("5m")
       .sign(pair.privateKey);
-  const make = (email: string, aud?: string) =>
-    createGoogleLogin({
-      clientId: CLIENT,
-      clientSecret: "shh",
-      publicUrl: "https://api.example.com",
-      sessionSecret: SECRET,
-      allowedEmails: parseAllowedEmails("me@example.com"),
-      siteOrigins: [SITE],
-      verify: sessionVerifier(SECRET),
-      googleKeys: createLocalJWKSet({ keys: [jwk] }),
-      fetch: (async (url: string, init: RequestInit) => {
-        calls.push({ url: String(url), body: String(init.body) });
-        return Response.json({ id_token: await idToken(email, aud) });
-      }) as unknown as typeof fetch,
+  const verify = sessionVerifier(SECRET);
+  const login = createGoogleLogin({
+    clientId: CLIENT,
+    sessionSecret: SECRET,
+    allowedEmails: parseAllowedEmails("me@example.com"),
+    verify,
+    googleKeys: createLocalJWKSet({ keys: [jwk] }),
+    now: () => NOW,
+  });
+  // Through the real API wrapper: the login is the one POST that needs no session.
+  const app = createApi({
+    corsOrigins: ["https://user.github.io"],
+    auth: { verify, allowedEmails: parseAllowedEmails("me@example.com") },
+    modules: [login],
+  });
+  const post = (credential: string) =>
+    app.request("/auth/google", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://user.github.io" },
+      body: JSON.stringify({ credential }),
     });
-  return { make, calls };
+  return { app, idToken, post };
 }
 
-async function start(app: ReturnType<typeof createGoogleLogin>) {
-  const res = await app.request(`/auth/google?return=${encodeURIComponent(`${SITE}/e-hub/`)}`);
-  const location = new URL(res.headers.get("location")!);
-  const cookie = res.headers.get("set-cookie")!.split(";")[0]!;
-  return { res, location, cookie };
-}
-
-describe("Google login", () => {
-  it("sends the browser to Google with PKCE and a state", async () => {
-    const { make } = await setup();
-    const { res, location } = await start(make("me@example.com"));
-    expect(res.status).toBe(302);
-    expect(location.origin + location.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
-    expect(location.searchParams.get("redirect_uri")).toBe("https://api.example.com/auth/google/callback");
-    expect(location.searchParams.get("code_challenge_method")).toBe("S256");
-    expect(location.searchParams.get("scope")).toBe("openid email");
-  });
-
-  it("refuses a return address outside the site origins", async () => {
-    const { make } = await setup();
-    const res = await make("me@example.com").request(`/auth/google?return=${encodeURIComponent("https://evil.example/")}`);
-    expect(res.status).toBe(400);
-  });
-
-  it("completes the login for an allowed email and puts the token in the fragment", async () => {
-    const { make, calls } = await setup();
-    const app = make("Me@Example.com");
-    const { location, cookie } = await start(app);
-    const cb = await app.request(`/auth/google/callback?code=abc&state=${location.searchParams.get("state")}`, {
-      headers: { cookie },
-    });
-    expect(cb.status).toBe(302);
-    const back = new URL(cb.headers.get("location")!);
-    expect(back.origin + back.pathname).toBe(`${SITE}/e-hub/`);
-    const token = new URLSearchParams(back.hash.slice(1)).get("token")!;
-    expect(await sessionVerifier(SECRET)(token)).toEqual({ email: "me@example.com" });
-    expect(calls[0]!.body).toContain("code_verifier=");
-    const me = await app.request("/auth/me", { headers: { authorization: `Bearer ${token}` } });
+describe("Google login (ID token)", () => {
+  it("exchanges a valid Google ID token for a 30-day session token", async () => {
+    const { app, idToken, post } = await setup();
+    const res = await post(await idToken({ email: "Me@Example.com" }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("access-control-allow-origin")).toBe("https://user.github.io");
+    const body = (await res.json()) as { token: string; email: string; expiresAt: string };
+    expect(body.email).toBe("me@example.com");
+    expect(body.expiresAt).toBe("2026-12-18T10:00:00.000Z");
+    expect(await sessionVerifier(SECRET)(body.token)).toEqual({ email: "me@example.com" });
+    const me = await app.request("/auth/me", { headers: { authorization: `Bearer ${body.token}` } });
     expect(await me.json()).toEqual({ email: "me@example.com" });
   });
 
-  it("refuses an email outside the allowlist", async () => {
-    const { make } = await setup();
-    const app = make("stranger@example.com");
-    const { location, cookie } = await start(app);
-    const cb = await app.request(`/auth/google/callback?code=abc&state=${location.searchParams.get("state")}`, { headers: { cookie } });
-    expect(cb.status).toBe(403);
+  it("refuses an email outside the allowlist (403)", async () => {
+    const { idToken, post } = await setup();
+    expect((await post(await idToken({ email: "stranger@example.com" }))).status).toBe(403);
   });
 
-  it("refuses a callback without the cookie of the browser that started the login", async () => {
-    const { make } = await setup();
-    const app = make("me@example.com");
-    const { location } = await start(app);
-    const cb = await app.request(`/auth/google/callback?code=abc&state=${location.searchParams.get("state")}`);
-    expect(cb.status).toBe(400);
+  it("refuses a token for another client, another issuer, an unverified email or garbage (401)", async () => {
+    const { idToken, post } = await setup();
+    expect((await post(await idToken({ aud: "other-client" }))).status).toBe(401);
+    expect((await post(await idToken({ iss: "https://evil.example" }))).status).toBe(401);
+    expect((await post(await idToken({ verified: false }))).status).toBe(401);
+    expect((await post("x".repeat(40))).status).toBe(401);
   });
 
-  it("refuses an id token for another client and an unverified email", async () => {
-    const wrongAud = await setup();
-    const a = wrongAud.make("me@example.com", "other-client");
-    const s1 = await start(a);
-    expect((await a.request(`/auth/google/callback?code=x&state=${s1.location.searchParams.get("state")}`, { headers: { cookie: s1.cookie } })).status).toBe(400);
-    const unverified = await setup(false);
-    const b = unverified.make("me@example.com");
-    const s2 = await start(b);
-    expect((await b.request(`/auth/google/callback?code=x&state=${s2.location.searchParams.get("state")}`, { headers: { cookie: s2.cookie } })).status).toBe(400);
+  it("refuses a malformed body (400) and /auth/me without a token (401)", async () => {
+    const { app } = await setup();
+    const bad = await app.request("/auth/google", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    expect(bad.status).toBe(400);
+    expect((await app.request("/auth/me")).status).toBe(401);
   });
 });

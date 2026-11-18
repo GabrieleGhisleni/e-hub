@@ -1,6 +1,6 @@
 /**
- * Access rules of the hosted API (docs/hosting.md): reads are public, everything else needs a session token. The
- * token is issued by this API after a Google login (google.ts) for an email in the allowlist, and is checked here
+ * Access rules of the hosted API (docs/hosting.md): reads are public, everything else needs a session token (30 days).
+ * The token is issued by this API after a Google login (google.ts) for an email in the allowlist, and is checked here
  * with the API's own secret.
  */
 import { SignJWT, jwtVerify } from "jose";
@@ -15,7 +15,7 @@ export type VerifyToken = (token: string) => Promise<Identity>;
 
 export const SESSION_ISSUER = "ehub-api";
 export const SESSION_AUDIENCE = "ehub";
-export const SESSION_TTL = "7d";
+export const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 const encoder = new TextEncoder();
 
@@ -27,7 +27,7 @@ export async function createSession(secret: string, email: string, now = new Dat
     .setIssuer(SESSION_ISSUER)
     .setAudience(SESSION_AUDIENCE)
     .setIssuedAt(Math.floor(now.getTime() / 1000))
-    .setExpirationTime(SESSION_TTL)
+    .setExpirationTime(Math.floor(now.getTime() / 1000) + SESSION_TTL_SECONDS)
     .sign(encoder.encode(secret));
 }
 
@@ -69,6 +69,8 @@ export const PRIVATE_GETS: readonly RegExp[] = [
 ];
 
 const PUBLIC_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+/** The login itself: the caller has no session yet. */
+const PUBLIC_POSTS = new Set(["/auth/google"]);
 
 export interface AuthOptions {
   verify: VerifyToken;
@@ -84,6 +86,7 @@ export function authMiddleware(options: AuthOptions): MiddlewareHandler {
   const privateGets = options.privateGets ?? PRIVATE_GETS;
   return async (c, next) => {
     const path = new URL(c.req.url).pathname;
+    if (c.req.method === "POST" && PUBLIC_POSTS.has(path)) return next();
     if (PUBLIC_METHODS.has(c.req.method) && !privateGets.some((re) => re.test(path))) {
       return next();
     }

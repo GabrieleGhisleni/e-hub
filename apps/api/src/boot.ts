@@ -6,11 +6,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { blobEpubRemote, setEpubRemote } from "@ehub/library/epub-remote";
 import { loadConfig } from "@ehub/library/config";
-import { loadEnvLocal, missingHostedEnv, r2FromEnv, tursoFromEnv } from "@ehub/store";
+import { loadEnvLocal, localDbFromEnv, missingHostedEnv, r2FromEnv, tursoFromEnv } from "@ehub/store";
 import { mountHosted } from "@ehub/store/hosted";
 import { dataRoots, readEnv } from "./env.ts";
 
-export function boot() {
+export async function boot() {
   loadEnvLocal(process.cwd());
   loadEnvLocal(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.."));
   const env = readEnv();
@@ -44,7 +44,7 @@ export function boot() {
       if (!dir) throw new Error(`Cartella dati «${name}» non impostata (EHUB_DATA_ROOT).`);
     }
     const blobs = r2FromEnv()!;
-    mountHosted(dirs, tursoFromEnv()!, blobs);
+    mountHosted(dirs, (await localDbFromEnv()) ?? tursoFromEnv()!, blobs);
     // EPUBs: the cache is the working copy, R2 the durable one.
     setEpubRemote(blobEpubRemote(blobs));
   }

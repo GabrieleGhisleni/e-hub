@@ -11,12 +11,12 @@ pnpm --dir "$ROOT" --filter @ehub/api bundle
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
-cp "$ROOT/apps/api/dist/ehub-api.mjs" "$ROOT/apps/api/dist/ehub-kobo-sync.mjs" "$ROOT/apps/api/dist/ehub-backup.mjs" "$STAGE/"
+cp "$ROOT/apps/api/dist/ehub-api.mjs" "$ROOT/apps/api/dist/ehub-kobo-sync.mjs" "$STAGE/"
 cp "$ROOT/deploy/pi/elib.config.json" "$STAGE/"
 # sharp is native: fetch its linux-arm64 build (no compiling, no pnpm on the Pi).
 ( cd "$STAGE" && npm init -y >/dev/null && npm install --omit=dev --os=linux --cpu=arm64 "sharp@$SHARP_VERSION" >/dev/null )
 
 ssh "$TARGET" 'mkdir -p /tmp/ehub-release/units'
-rsync -az --delete --exclude units "$STAGE/ehub-api.mjs" "$STAGE/ehub-kobo-sync.mjs" "$STAGE/ehub-backup.mjs" "$STAGE/elib.config.json" "$STAGE/node_modules" "$TARGET:/tmp/ehub-release/"
+rsync -az --delete --exclude units "$STAGE/ehub-api.mjs" "$STAGE/ehub-kobo-sync.mjs" "$STAGE/elib.config.json" "$STAGE/node_modules" "$TARGET:/tmp/ehub-release/"
 rsync -az "$ROOT/deploy/pi/"*.service "$ROOT/deploy/pi/"*.timer "$TARGET:/tmp/ehub-release/units/"
-ssh "$TARGET" 'sudo install -d /opt/ehub && sudo rsync -a --delete /tmp/ehub-release/ /opt/ehub/ && sudo cp /opt/ehub/units/* /etc/systemd/system/ 2>/dev/null; sudo systemctl daemon-reload && sudo systemctl restart ehub-api; sudo systemctl enable --now ehub-kobo-sync.timer ehub-backup.timer'
+ssh "$TARGET" 'sudo install -d /opt/ehub && sudo rsync -a --delete /tmp/ehub-release/ /opt/ehub/ && sudo cp /opt/ehub/units/* /etc/systemd/system/ 2>/dev/null; sudo systemctl daemon-reload && sudo systemctl restart ehub-api; sudo systemctl enable --now ehub-kobo-sync.timer'

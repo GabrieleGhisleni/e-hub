@@ -1,12 +1,14 @@
 /**
- * Login of the hosted site. The API runs the Google login and sends the browser back with a session token in the URL
- * fragment (`#token=...`); we keep it in localStorage and attach it to the calls to the API. Admin controls show up
+ * Login of the hosted site. Google Identity Services gives the browser an ID token, the API trades it for its own
+ * session token (30 days); we keep it in localStorage and attach it to the calls to the API (no cookies). Admin controls show up
  * only with a valid session: logging in and out reload the page, so the flag is read once at startup
  * (`globalThis.__EHUB_ADMIN__`, which vite.config.ts wires to the admin gates).
  */
 
 export const HOSTED = import.meta.env.VITE_HOSTED === "1";
 /** Origin of the API (the Pi, behind its tunnel). Empty = same origin (local dev with the Vite proxy). */
+/** Google OAuth client id (public): the same one the API checks the ID token against. */
+export const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) ?? "";
 export const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/+$/, "");
 
 const KEY = "ehub.session";
@@ -66,25 +68,33 @@ export function clearSession(storage: StorageLike): void {
   }
 }
 
-/** Takes `#token=...` from the URL (after the Google login) into storage. Returns the URL without the fragment, or null. */
-export function takeTokenFromUrl(href: string, storage: StorageLike, nowMs = Date.now()): string | null {
-  const url = new URL(href);
-  const token = new URLSearchParams(url.hash.slice(1)).get("token");
-  if (!token) return null;
-  if (sessionFromToken(token, nowMs)) {
-    try {
-      storage.setItem(KEY, token);
-    } catch {
-      /* storage blocked: the session lasts until the next page load only */
-    }
+/** Keeps a session token (after the login); false when it is not a valid, unexpired token. */
+export function storeToken(storage: StorageLike, token: string, nowMs = Date.now()): boolean {
+  if (!sessionFromToken(token, nowMs)) return false;
+  try {
+    storage.setItem(KEY, token);
+  } catch {
+    /* storage blocked: the session lasts until the next page load only */
   }
-  url.hash = "";
-  return `${url.pathname}${url.search}`;
+  return true;
 }
 
-/** Where the "Accedi" button goes: the API starts the Google login and returns to `returnTo`. */
-export function loginUrl(apiUrl: string, returnTo: string): string {
-  return `${apiUrl}/auth/google?return=${encodeURIComponent(returnTo)}`;
+/** Trades the Google ID token (from Google Identity Services) for the API's session token. */
+export async function exchangeCredential(
+  apiUrl: string,
+  credential: string,
+  fetchImpl: typeof fetch,
+): Promise<string> {
+  const response = await fetchImpl(`${apiUrl}/auth/google`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ credential }),
+  });
+  if (response.status === 403) throw new Error("Questo account non è autorizzato.");
+  if (!response.ok) throw new Error("Accesso non riuscito.");
+  const body = (await response.json()) as { token?: unknown };
+  if (typeof body.token !== "string") throw new Error("Accesso non riuscito.");
+  return body.token;
 }
 
 /**
@@ -108,12 +118,10 @@ export function apiFetch(
   };
 }
 
-/** Startup: takes the token from the URL, sets the admin flag and wraps `fetch`. Import this before anything else. */
+/** Startup: sets the admin flag and wraps `fetch`. Import this before anything else. */
 export function bootSession(): Session | null {
   if (!HOSTED) return null;
   const storage = window.localStorage;
-  const clean = takeTokenFromUrl(window.location.href, storage);
-  if (clean !== null) window.history.replaceState(null, "", clean);
   const session = loadSession(storage);
   (globalThis as { __EHUB_ADMIN__?: boolean }).__EHUB_ADMIN__ = session !== null;
   window.fetch = apiFetch(API_URL, () => loadSession(storage)?.token ?? null, window.fetch.bind(window), () => {
@@ -124,8 +132,11 @@ export function bootSession(): Session | null {
 
 export const currentSession: Session | null = bootSession();
 
-export function login(): void {
-  window.location.assign(loginUrl(API_URL, `${window.location.origin}${import.meta.env.BASE_URL}`));
+/** Called by the Google button with the ID token: exchanges it, stores the session and reloads. */
+export async function completeLogin(credential: string): Promise<void> {
+  const token = await exchangeCredential(API_URL, credential, window.fetch);
+  if (!storeToken(window.localStorage, token)) throw new Error("Accesso non riuscito.");
+  window.location.reload();
 }
 
 export function logout(): void {
