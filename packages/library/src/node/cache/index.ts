@@ -14,6 +14,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import { isMounted, readBytesIfExists } from "@ehub/store";
 import { assertBookId } from "../repo/paths.ts";
 
 export const CACHE_BOOKS_DIR = "books";
@@ -110,6 +111,8 @@ export function assertUploadId(value: string): void {
 
 /** True when `file` exists, is a regular file and is not empty. */
 export async function isNonEmptyFile(file: string): Promise<boolean> {
+  // A file of a mounted (hosted) data dir is not on disk: ask the store.
+  if (isMounted(file)) return ((await readBytesIfExists(file))?.length ?? 0) > 0;
   try {
     const info = await stat(file);
     return info.isFile() && info.size > 0;

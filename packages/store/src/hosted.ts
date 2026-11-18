@@ -43,11 +43,16 @@ export interface Layout {
 const JSON_TEXT = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
 
 export class HostedBackend implements Backend {
-  constructor(
-    private readonly docs: DocClient,
-    private readonly blobs: BlobStore,
-    private readonly layout: Layout,
-  ) {}
+  private readonly docs: DocClient;
+  private readonly blobs: BlobStore;
+  private readonly layout: Layout;
+
+  // Plain fields, no parameter properties: this file may be loaded by Node's type stripping.
+  constructor(docs: DocClient, blobs: BlobStore, layout: Layout) {
+    this.docs = docs;
+    this.blobs = blobs;
+    this.layout = layout;
+  }
 
   private route(key: string): { route: Route; m: RegExpMatchArray } | null {
     for (const route of this.layout.routes) {

@@ -2,10 +2,9 @@
  * Notes on disk (Node only): `<dataDir>/<module>/<itemId>.json`, one file per book or episode, notes oldest first.
  * Writes are atomic (temp file + rename) and serialised per file, so two quick edits never lose each other.
  */
-import { randomBytes } from "node:crypto";
-import { mkdir, open, readFile, readdir, rename, unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { listDir, readTextIfExists, removeFile, writeFileAtomic } from "@ehub/store";
 import { ZodError } from "zod";
 import type { Note, NoteItemRef, NoteModule } from "../types.ts";
 import { ItemId, NoteModule as ModuleSchema, NotesFile, formatIssues } from "../schema.ts";
@@ -43,13 +42,8 @@ function filePath(module: NoteModule, itemId: string): string {
 }
 
 async function readNotesFile(file: string): Promise<NotesFile | undefined> {
-  let text: string;
-  try {
-    text = await readFile(file, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw error;
-  }
+  const text = await readTextIfExists(file);
+  if (text === null) return undefined;
   try {
     return NotesFile.parse(JSON.parse(text));
   } catch (error) {
@@ -64,27 +58,10 @@ async function readNotesFile(file: string): Promise<NotesFile | undefined> {
 
 async function writeNotesFile(file: string, content: NotesFile | null): Promise<void> {
   if (content === null || content.notes.length === 0) {
-    await unlink(file).catch((error: NodeJS.ErrnoException) => {
-      if (error.code !== "ENOENT") throw error;
-    });
+    await removeFile(file);
     return;
   }
-  const dir = path.dirname(file);
-  await mkdir(dir, { recursive: true });
-  const temp = path.join(dir, `.${path.basename(file)}.${randomBytes(6).toString("hex")}.tmp`);
-  try {
-    const handle = await open(temp, "wx");
-    try {
-      await handle.writeFile(`${JSON.stringify(content, null, 2)}\n`);
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-    await rename(temp, file);
-  } catch (error) {
-    await unlink(temp).catch(() => {});
-    throw error;
-  }
+  await writeFileAtomic(file, `${JSON.stringify(content, null, 2)}\n`);
 }
 
 const locks = new Map<string, Promise<unknown>>();
@@ -110,13 +87,9 @@ const toNote = (file: NotesFile, stored: NotesFile["notes"][number]): Note => ({
 export async function listAllNotes(): Promise<Note[]> {
   const notes: Note[] = [];
   for (const module of ModuleSchema.options) {
-    let names: string[];
-    try {
-      names = await readdir(path.join(notesDataDir(), module));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
-      throw error;
-    }
+    const names = (await listDir(path.join(notesDataDir(), module)))
+      .filter((e) => !e.isDirectory)
+      .map((e) => e.name);
     for (const name of names.filter((n) => n.endsWith(".json") && !n.startsWith(".")).sort()) {
       const file = await readNotesFile(path.join(notesDataDir(), module, name));
       if (file) notes.push(...file.notes.map((stored) => toNote(file, stored)));

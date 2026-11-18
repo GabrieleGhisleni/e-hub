@@ -1,13 +1,15 @@
-import { readFile } from "node:fs/promises";
 import { type Topic, TopicsFileSchema } from "../../shared/schema.ts";
 import { InvalidDataError } from "./errors.ts";
-import { formatJson, writeFileAtomic } from "./fs.ts";
+import { formatJson, readTextIfExists, writeFileAtomic } from "./fs.ts";
 import { topicsPath } from "./paths.ts";
 
 /** Reads and validates `data/topics.json`. Throws `InvalidDataError` when invalid. */
 export async function readTopics(dataDir: string): Promise<Topic[]> {
   const file = topicsPath(dataDir);
-  const text = await readFile(file, "utf8");
+  const text = await readTextIfExists(file);
+  if (text === null) {
+    throw Object.assign(new Error(`ENOENT: no such file or directory, open '${file}'`), { code: "ENOENT" });
+  }
   let raw: unknown;
   try {
     raw = JSON.parse(text);

@@ -5,7 +5,8 @@
  * Kobo with the same ID is renamed and updated, reading progress kept). The explore summary, if any, moves to the
  * book's summary.json. The explore cache folder is removed at the end.
  */
-import { copyFile, rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
+import { writeFileAtomic } from "@ehub/store";
 import path from "node:path";
 import type { BookWriteResponse, CoverSource } from "../../shared/api.ts";
 import { UNSORTED_TOPIC_ID } from "../../shared/labels.ts";
@@ -81,7 +82,10 @@ export async function promoteExploreBook(
   // library cache now).
   const exploreSummary = path.join(exploreDir, "summary.json");
   if (await isNonEmptyFile(exploreSummary)) {
-    await copyFile(exploreSummary, summaryPath(ctx.dataDir, input.id)).catch(() => undefined);
+    // Through the store, so a hosted data dir gets the summary too.
+    await readFile(exploreSummary)
+      .then((bytes) => writeFileAtomic(summaryPath(ctx.dataDir, input.id), bytes))
+      .catch(() => undefined);
   }
   await rm(exploreDir, { recursive: true, force: true });
   ctx.logger.info(`explore book ${input.id} promoted to the library: ${result.book.title}`);

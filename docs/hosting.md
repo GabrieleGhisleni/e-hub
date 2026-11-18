@@ -93,7 +93,7 @@ Flusso di un libro nuovo: upload dalla UI o da `elib` → il Pi salva l'EPUB su 
 | Fase | Stato | Note |
 | --- | --- | --- |
 | 1. Fondamenta | fatta nel codice, **da eseguire a mano** | `supabase/migrations/0001_init.sql`, `packages/store` (client Supabase, R2, mount), `pnpm --filter @ehub/store migrate` (a secco senza `--apply`). Servono: progetto Supabase con la migrazione applicata, bucket R2, variabili in `.env.local`. |
-| 2. Repository su Supabase | da fare | |
+| 2. Repository su Supabase | **fatta** | I repository di libreria, esplorazioni, note e podcast passano da `@ehub/store`; test con mount in memoria in `*/hosted.test.ts`. Le CLI di validazione (`elib validate`, `site-data`) leggono ancora file locali: spariscono in fase 5/8. |
 | 3. Backend sul Pi | da fare | |
 | 4. Kobo | da fare | |
 | 5. Frontend | da fare | |

@@ -1,5 +1,5 @@
 /** Helpers shared by the service modules (not exported from the barrel). */
-import { readdir } from "node:fs/promises";
+import { listDir } from "@ehub/store";
 import path from "node:path";
 import { z } from "zod";
 import { isBookId } from "../../shared/ids.ts";
@@ -91,13 +91,7 @@ export function normalizeForMatch(text: string): string {
 
 /** Names of the folders directly inside `dir` (empty when it does not exist). */
 export async function listDirNames(dir: string): Promise<string[]> {
-  try {
-    const entries = await readdir(dir, { withFileTypes: true });
-    return entries.filter((e) => e.isDirectory()).map((e) => e.name);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw error;
-  }
+  return (await listDir(dir)).filter((e) => e.isDirectory).map((e) => e.name);
 }
 
 /**

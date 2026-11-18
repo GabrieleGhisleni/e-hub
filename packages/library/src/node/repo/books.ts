@@ -1,9 +1,9 @@
-import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
+import { listDir, removeFile, removeTree } from "@ehub/store";
 import { isBookId } from "../../shared/ids.ts";
 import { BOOK_KEY_ORDER, type Book, BookSchema } from "../../shared/schema.ts";
 import { BookNotFoundError, InvalidDataError } from "./errors.ts";
-import { formatJson, isNotFound, readTextIfExists, writeFileAtomic } from "./fs.ts";
+import { formatJson, readTextIfExists, writeFileAtomic } from "./fs.ts";
 import {
   BOOK_JSON,
   type BookMarkdownKind,
@@ -32,15 +32,9 @@ export interface ReadAllBooksResult {
 
 /** Every folder name under data/books, incomplete ones included (use it for ID uniqueness). Sorted. */
 export async function listBookIds(dataDir: string): Promise<string[]> {
-  let entries;
-  try {
-    entries = await readdir(booksDir(dataDir), { withFileTypes: true });
-  } catch (error) {
-    if (isNotFound(error)) return [];
-    throw error;
-  }
+  const entries = await listDir(booksDir(dataDir));
   return entries
-    .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+    .filter((e) => e.isDirectory && !e.name.startsWith("."))
     .map((e) => e.name)
     .sort();
 }
@@ -131,7 +125,7 @@ export async function writeBook(dataDir: string, book: Book): Promise<Book> {
 
 /** Removes `data/books/<id>/` and everything in it (book.json, cover, notes). No-op if missing. */
 export async function deleteBookDir(dataDir: string, id: string): Promise<void> {
-  await rm(bookDir(dataDir, id), { recursive: true, force: true });
+  await removeTree(bookDir(dataDir, id));
 }
 
 /** notes.md / recall.md / study.md contents, or null when the file does not exist. */
@@ -153,7 +147,7 @@ export async function writeBookMarkdown(
   assertBookId(id);
   const file = markdownPath(dataDir, id, kind);
   if (text.trim() === "") {
-    await rm(file, { force: true });
+    await removeFile(file);
     return;
   }
   await writeFileAtomic(file, text.endsWith("\n") ? text : `${text}\n`);

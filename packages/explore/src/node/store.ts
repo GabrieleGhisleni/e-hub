@@ -4,10 +4,9 @@
  *
  * This module does not import the library: the Vite build guard (vite.ts) loads it from the web app's config.
  */
-import { randomBytes } from "node:crypto";
-import { mkdir, open, readFile, readdir, rename, unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { listDir, readTextIfExists, writeFileAtomic } from "@ehub/store";
 import { ZodError } from "zod";
 import { Exploration, ExplorationId, formatIssues } from "../schema.ts";
 import type { Exploration as ExplorationT } from "../schema.ts";
@@ -47,13 +46,8 @@ export function explorationFile(id: string, dataDir = exploreDataDir()): string 
 
 /** Reads and validates one file. Throws `invalid-file` with the reasons when it does not match the schema. */
 export async function readExplorationFile(file: string): Promise<ExplorationT | undefined> {
-  let text: string;
-  try {
-    text = await readFile(file, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw error;
-  }
+  const text = await readTextIfExists(file);
+  if (text === null) return undefined;
   const name = path.basename(file);
   let parsed: ExplorationT;
   try {
@@ -71,22 +65,7 @@ export async function readExplorationFile(file: string): Promise<ExplorationT | 
 }
 
 export async function writeExplorationFile(file: string, content: ExplorationT): Promise<void> {
-  const dir = path.dirname(file);
-  await mkdir(dir, { recursive: true });
-  const temp = path.join(dir, `.${path.basename(file)}.${randomBytes(6).toString("hex")}.tmp`);
-  try {
-    const handle = await open(temp, "wx");
-    try {
-      await handle.writeFile(`${JSON.stringify(Exploration.parse(content), null, 2)}\n`);
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-    await rename(temp, file);
-  } catch (error) {
-    await unlink(temp).catch(() => {});
-    throw error;
-  }
+  await writeFileAtomic(file, `${JSON.stringify(Exploration.parse(content), null, 2)}\n`);
 }
 
 const locks = new Map<string, Promise<unknown>>();
@@ -105,13 +84,7 @@ export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T>
 
 /** Every exploration file in the data dir, sorted by ID. Invalid files are reported, never skipped. */
 export async function listExplorationFiles(dataDir = exploreDataDir()): Promise<string[]> {
-  let names: string[];
-  try {
-    names = await readdir(dataDir);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw error;
-  }
+  const names = (await listDir(dataDir)).filter((e) => !e.isDirectory).map((e) => e.name);
   return names
     .filter((name) => name.endsWith(".json") && !name.startsWith("."))
     .sort()

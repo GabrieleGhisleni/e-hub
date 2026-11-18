@@ -333,6 +333,9 @@ importers:
       '@ehub/notes':
         specifier: workspace:*
         version: link:../notes
+      '@ehub/store':
+        specifier: workspace:*
+        version: link:../store
       '@ehub/ui':
         specifier: workspace:*
         version: link:../ui
@@ -397,6 +400,9 @@ importers:
       '@ehub/notes':
         specifier: workspace:*
         version: link:../notes
+      '@ehub/store':
+        specifier: workspace:*
+        version: link:../store
       '@ehub/ui':
         specifier: workspace:*
         version: link:../ui
@@ -515,6 +521,9 @@ importers:
 
   packages/notes:
     dependencies:
+      '@ehub/store':
+        specifier: workspace:*
+        version: link:../store
       '@ehub/ui':
         specifier: workspace:*
         version: link:../ui
@@ -573,6 +582,9 @@ importers:
       '@ehub/notes':
         specifier: workspace:*
         version: link:../notes
+      '@ehub/store':
+        specifier: workspace:*
+        version: link:../store
       '@ehub/ui':
         specifier: workspace:*
         version: link:../ui

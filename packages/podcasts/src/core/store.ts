@@ -7,7 +7,7 @@
  * Prefer the higher-level helpers (episodes.ts, shows.ts, save.ts,
  * transcripts.ts) over the raw writers here.
  */
-import { readdir } from "node:fs/promises";
+import { listDir } from "@ehub/store";
 import path from "node:path";
 import type { z } from "zod";
 import { NotFoundError, ValidationError } from "./errors";
@@ -53,13 +53,7 @@ async function readEntity<S extends z.ZodType>(
 
 /** Slugs of the `*.json` files in a data subdirectory (invalid names ignored), sorted. */
 async function listSlugs(dir: string): Promise<string[]> {
-  let names: string[];
-  try {
-    names = await readdir(dir);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw error;
-  }
+  const names = (await listDir(dir)).filter((e) => !e.isDirectory).map((e) => e.name);
   return names
     .filter((name) => name.endsWith(".json") && !name.startsWith("."))
     .map((name) => path.basename(name, ".json"))

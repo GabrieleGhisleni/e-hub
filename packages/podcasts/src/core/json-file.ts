@@ -1,9 +1,7 @@
 /**
  * JSON file I/O (Node only): stable, readable output and atomic writes.
  */
-import { randomBytes } from "node:crypto";
-import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
-import path from "node:path";
+import { readTextIfExists, writeFileAtomic as storeWrite } from "@ehub/store";
 import { ValidationError } from "./errors";
 
 /**
@@ -38,33 +36,14 @@ export function toStableJson(value: unknown): string {
 }
 
 /**
- * Writes `content` atomically: a hidden temp file in the same directory
- * (`.<name>.<random>.tmp`), fsync, then rename over the target. Readers see
- * either the old or the new file, never a partial one. Creates the directory.
+ * Writes `content` atomically (through @ehub/store: temp file + rename on disk, one upsert when the data dir is
+ * mounted on Supabase). Creates the directory.
  */
 export async function writeFileAtomic(
   filePath: string,
   content: string | Uint8Array,
 ): Promise<void> {
-  const dir = path.dirname(filePath);
-  await mkdir(dir, { recursive: true });
-  const tempPath = path.join(
-    dir,
-    `.${path.basename(filePath)}.${randomBytes(6).toString("hex")}.tmp`,
-  );
-  try {
-    const handle = await open(tempPath, "wx");
-    try {
-      await handle.writeFile(content);
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-    await rename(tempPath, filePath);
-  } catch (error) {
-    await unlink(tempPath).catch(() => {});
-    throw error;
-  }
+  await storeWrite(filePath, content);
 }
 
 export async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> {
@@ -73,13 +52,8 @@ export async function writeJsonAtomic(filePath: string, value: unknown): Promise
 
 /** Reads and parses a JSON file; `undefined` if it does not exist. */
 export async function readJsonIfExists(filePath: string): Promise<unknown> {
-  let text: string;
-  try {
-    text = await readFile(filePath, "utf8");
-  } catch (error) {
-    if (isNotFound(error)) return undefined;
-    throw error;
-  }
+  const text = await readTextIfExists(filePath);
+  if (text === null) return undefined;
   try {
     return JSON.parse(text) as unknown;
   } catch (error) {
