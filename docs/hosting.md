@@ -58,7 +58,7 @@ Ogni persona che fa login vede e modifica **solo i propri dati**. L'isolamento s
 - **Chat e trascrizioni** lavorano sui dati dell'utente della richiesta (stesso contesto). Il router freeway e la chiave Groq sono condivisi: le quote sono di tutti.
 - **Frontend**: nel build hosted, senza sessione il sito mostra la demo (sezione sotto); una risposta 401 a una sessione esistente la cancella e ricarica la pagina.
 - **CLI** (`explore`): con `EHUB_API_URL` + `EHUB_API_TOKEN` (il token si copia dal sito dopo il login) lavorano sui dati di quell'utente. `elib` e `episode` restano strumenti del Pi.
-- **Non per utente** (ancora): lo stato di Z-Library (`zlibrary-session.json`) è un unico account del Pi; la sua sezione resta raggiungibile da chiunque sia in allowlist. Se si aprisse a più persone va limitata al proprietario come il Kobo.
+- **Z-Library è per utente**: ogni utente collega il proprio account dal pannello di ricerca (email e password, inviate una volta). Il server tiene solo la chiave di sessione in `<cache>/users/<sub>/zlibrary-session.json` (permessi 600), mai la password; «Esci» la cancella. Le variabili `ZLIBRARY_*` valgono solo senza utente (sviluppo locale senza login).
 
 ### La demo per chi non è loggato
 

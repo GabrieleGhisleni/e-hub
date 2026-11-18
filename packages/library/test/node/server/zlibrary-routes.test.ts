@@ -20,6 +20,10 @@ describe("Z-Library routes", () => {
   let cacheDir: string;
   let client: {
     configured: boolean;
+    accountEmail: string | null;
+    restore: ReturnType<typeof vi.fn>;
+    connect: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
     baseUrl: string;
     quota: ReturnType<typeof vi.fn>;
     search: ReturnType<typeof vi.fn>;
@@ -32,6 +36,10 @@ describe("Z-Library routes", () => {
     cacheDir = await mkdtemp(path.join(tmpdir(), "zlib-routes-"));
     client = {
       configured: false,
+      accountEmail: null,
+      restore: vi.fn(async () => {}),
+      connect: vi.fn(async () => {}),
+      disconnect: vi.fn(async () => {}),
       baseUrl: "https://z-library.example",
       quota: vi.fn(),
       search: vi.fn(),
@@ -72,11 +80,41 @@ describe("Z-Library routes", () => {
     const body = ZlibraryStatusResponseSchema.parse(await res.json());
     expect(body).toEqual({
       configured: false,
+      account: null,
       baseUrl: "https://z-library.example",
       quota: null,
       error: null,
     });
     expect(client.quota).not.toHaveBeenCalled();
+  });
+
+  it("session: POST signs in with the credentials, DELETE forgets the session", async () => {
+    client.accountEmail = "me@example.com";
+    const login = await app.request(`http://127.0.0.1:8787${zlibraryPaths.session}`, {
+      method: "POST",
+      headers: { ...HEADERS, "content-type": "application/json" },
+      body: JSON.stringify({ email: "me@example.com", password: "pw" }),
+    });
+    expect(login.status).toBe(200);
+    expect(client.connect).toHaveBeenCalledWith("me@example.com", "pw");
+    expect(JSON.stringify(await login.json())).not.toContain("pw");
+    const out = await app.request(`http://127.0.0.1:8787${zlibraryPaths.session}`, {
+      method: "DELETE",
+      headers: HEADERS,
+    });
+    expect(out.status).toBe(200);
+    expect(client.disconnect).toHaveBeenCalled();
+  });
+
+  it("session: a wrong login is a 502 and the password is not in the answer", async () => {
+    client.connect.mockRejectedValue(new ZlibraryError("auth", "Accesso a Z-Library non riuscito: no."));
+    const res = await app.request(`http://127.0.0.1:8787${zlibraryPaths.session}`, {
+      method: "POST",
+      headers: { ...HEADERS, "content-type": "application/json" },
+      body: JSON.stringify({ email: "me@example.com", password: "segreto" }),
+    });
+    expect(res.status).toBe(502);
+    expect(await res.text()).not.toContain("segreto");
   });
 
   it("status when configured but the quota call fails: 200 with the error message", async () => {
@@ -88,6 +126,7 @@ describe("Z-Library routes", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       configured: true,
+      account: null,
       baseUrl: "https://z-library.example",
       quota: null,
       error: "Sessione rifiutata.",

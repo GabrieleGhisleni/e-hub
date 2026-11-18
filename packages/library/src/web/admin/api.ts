@@ -204,6 +204,15 @@ export const adminApi = {
     return request("GET", zlibraryPaths.status, ZlibraryStatusResponseSchema);
   },
 
+  /** Signs in to Z-Library once with the user's own account; the server keeps only the session key. */
+  zlibraryConnect(email: string, password: string): Promise<ZlibraryStatusResponse> {
+    return request("POST", zlibraryPaths.session, ZlibraryStatusResponseSchema, { email, password });
+  },
+
+  async zlibraryDisconnect(): Promise<void> {
+    await send("DELETE", zlibraryPaths.session);
+  },
+
   zlibrarySearch(
     req: ZlibrarySearchRequest,
     signal?: AbortSignal,

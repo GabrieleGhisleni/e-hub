@@ -3,7 +3,7 @@
  * the hashed covers), built on demand from the data store. Public (GET); cached for a few seconds and dropped on every
  * write, so an edit shows up at once.
  */
-import { readBytesIfExists } from "@ehub/store";
+import { currentUserId, readBytesIfExists } from "@ehub/store";
 import type { Hono } from "hono";
 import { type SiteData, buildSiteData } from "../site-data/build.ts";
 
@@ -23,17 +23,20 @@ export interface SiteCache {
 
 export function registerSiteRoutes(app: Hono, options: SiteRoutesOptions): SiteCache {
   const now = options.now ?? Date.now;
-  let cached: { at: number; origin: string; data: SiteData } | undefined;
+  // One entry per user: the data (and cover paths) of one user must never be served to another.
+  const cache = new Map<string, { at: number; origin: string; data: SiteData }>();
   let generation = 0;
 
   const load = async (origin: string): Promise<SiteData> => {
+    const owner = currentUserId() ?? "";
+    const cached = cache.get(owner);
     if (cached && cached.origin === origin && now() - cached.at < TTL_MS) return cached.data;
     const started = generation;
     const data = await buildSiteData(options.dataDir, {
       basePath: "/",
       coverBase: `${origin}${SITE}/covers/`,
     });
-    if (started === generation) cached = { at: now(), origin, data };
+    if (started === generation) cache.set(owner, { at: now(), origin, data });
     return data;
   };
   const originOf = (url: string) => (options.publicUrl ?? new URL(url).origin).replace(/\/+$/, "");
@@ -60,7 +63,7 @@ export function registerSiteRoutes(app: Hono, options: SiteRoutesOptions): SiteC
   return {
     invalidate() {
       generation += 1;
-      cached = undefined;
+      cache.clear();
     },
   };
 }

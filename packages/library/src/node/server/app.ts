@@ -23,6 +23,7 @@ import { InvalidUploadIdError } from "../cache/index.ts";
 import { InvalidBookIdError } from "../repo/index.ts";
 import { ServiceError, type Services, startSummaryInBackground } from "../services/index.ts";
 import { ZlibraryClient, zlibraryEnvFrom } from "../zlibrary/index.ts";
+import { currentUserId, userScopedDir } from "@ehub/store";
 import { apiError, jsonBody } from "./http.ts";
 import { securityConfig, securityMiddleware } from "./security.ts";
 import { registerSiteRoutes } from "./site-routes.ts";
@@ -172,7 +173,7 @@ export function createApp(
   registerZlibraryRoutes(
     app,
     services,
-    options.zlibrary ?? new ZlibraryClient(zlibraryEnvFrom(), services.ctx.cacheDir),
+    options.zlibrary ?? perUserZlibrary(services.ctx.cacheDir),
     jsonLimit,
   );
 
@@ -267,4 +268,25 @@ function jsonBodyFrom<T extends z.ZodType>(schema: T, raw: unknown): z.output<T>
     );
   }
   return parsed.data;
+}
+
+/**
+ * Z-Library client per request. Without a user (local dev) it is the one from the environment; with one (hosted) each
+ * user has their own, with the session file under their cache folder and no shared credentials from the environment.
+ */
+function perUserZlibrary(cacheDir: string): () => ZlibraryClient {
+  const clients = new Map<string, ZlibraryClient>();
+  return () => {
+    const dir = userScopedDir(cacheDir);
+    let client = clients.get(dir);
+    if (!client) {
+      const env = zlibraryEnvFrom();
+      client = new ZlibraryClient(
+        currentUserId() === null ? env : { baseUrl: env.baseUrl },
+        dir,
+      );
+      clients.set(dir, client);
+    }
+    return client;
+  };
 }

@@ -123,16 +123,19 @@ export async function buildSiteData(
   const details = new Map<string, BookDetail>();
   const covers = new Map<string, string>();
 
-  for (const book of books) {
+  // Books are built in parallel (each read is a round trip to the hosted database); the order of `books` is kept.
+  const built = await Promise.all(
+    books.map(async (book) => {
     if (!topicIds.has(book.topic)) {
       problems.push({ id: book.id, message: `unknown topic "${book.topic}"` });
-      continue;
+      return null;
     }
     let coverUrl: string | null = null;
+    let coverEntry: [string, string] | null = null;
     const bytes = await readCover(dataDir, book.id);
     if (bytes !== null) {
       const fileName = coverFileName(book.id, coverHash(bytes));
-      covers.set(fileName, coverPath(dataDir, book.id));
+      coverEntry = [fileName, coverPath(dataDir, book.id)];
       coverUrl = options.coverBase === undefined ? urls.coverUrl(fileName) : `${options.coverBase}${fileName}`;
     }
 
@@ -173,9 +176,16 @@ export async function buildSiteData(
       summary,
       ...(highlights ? { highlights } : {}),
     });
-    cards.push(card);
-    details.set(book.id, detail);
+    return { card, detail, coverEntry };
+    }),
+  );
+  for (const item of built) {
+    if (!item) continue;
+    cards.push(item.card);
+    details.set(item.card.id, item.detail);
+    if (item.coverEntry) covers.set(item.coverEntry[0], item.coverEntry[1]);
   }
+
 
   const collator = new Intl.Collator("it", { sensitivity: "base" });
   cards.sort((a, b) => collator.compare(a.title, b.title) || a.id.localeCompare(b.id));

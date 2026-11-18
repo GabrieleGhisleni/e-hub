@@ -62,9 +62,10 @@ export interface DownloadedFile {
 }
 
 export class ZlibraryClient {
-  private readonly env: ZlibraryEnv;
+  private env: ZlibraryEnv;
   private readonly sessionFile: string;
   private session: Session | null = null;
+  private savedEmail: string | undefined;
   private loginInFlight: Promise<Session> | null = null;
 
   constructor(env: ZlibraryEnv, cacheDir: string) {
@@ -74,7 +75,54 @@ export class ZlibraryClient {
   }
 
   get configured(): boolean {
-    return Boolean((this.env.userId && this.env.userKey) || (this.env.email && this.env.password));
+    return Boolean(
+      this.session ||
+        (this.env.userId && this.env.userKey) ||
+        (this.env.email && this.env.password),
+    );
+  }
+
+  /**
+   * Loads the saved session from disk (per-user hosted setup: no credentials in the environment, the user signed in
+   * once with `connect`). Call before reading `configured`.
+   */
+  async restore(): Promise<void> {
+    if (this.session) return;
+    try {
+      const saved = JSON.parse(await readFile(this.sessionFile, "utf8")) as Partial<Session> & { email?: string };
+      if (!saved.userId || !saved.userKey) return;
+      // With credentials in the environment the saved session must belong to the same account.
+      if (this.env.email && saved.email !== this.env.email) return;
+      this.session = { userId: saved.userId, userKey: saved.userKey };
+      this.savedEmail = saved.email;
+    } catch {
+      // no saved session
+    }
+  }
+
+  /** The Z-Library account of the saved session (never the password). */
+  get accountEmail(): string | null {
+    return this.savedEmail ?? this.env.email ?? null;
+  }
+
+  /** Signs in with the user's own credentials and keeps only the session key; the password is not stored. */
+  async connect(email: string, password: string): Promise<void> {
+    const previous = this.env;
+    this.env = { ...previous, userId: undefined, userKey: undefined, email, password };
+    this.session = null;
+    try {
+      await this.login();
+      this.savedEmail = email;
+    } finally {
+      this.env = { ...previous, userId: undefined, userKey: undefined, email: undefined, password: undefined };
+    }
+  }
+
+  /** Forgets the saved session. */
+  async disconnect(): Promise<void> {
+    this.session = null;
+    this.savedEmail = undefined;
+    await rm(this.sessionFile, { force: true });
   }
 
   get baseUrl(): string {
@@ -85,10 +133,12 @@ export class ZlibraryClient {
 
   private async getSession(): Promise<Session> {
     if (this.session) return this.session;
+    await this.restore();
+    if (this.session) return this.session;
     if (!this.configured) {
       throw new ZlibraryError(
         "not-configured",
-        "Z-Library non è configurata: imposta ZLIBRARY_EMAIL e ZLIBRARY_PASSWORD (oppure ZLIBRARY_USER_ID e ZLIBRARY_USER_KEY) in packages/library/.env.",
+        "Z-Library non è collegata: accedi con il tuo account Z-Library (oppure imposta ZLIBRARY_EMAIL e ZLIBRARY_PASSWORD in packages/library/.env).",
       );
     }
     try {
@@ -161,7 +211,7 @@ export class ZlibraryClient {
   private async saveSession(session: Session): Promise<void> {
     try {
       await mkdir(path.dirname(this.sessionFile), { recursive: true });
-      await writeFile(this.sessionFile, JSON.stringify({ ...session, email: this.env.email }), { mode: 0o600 });
+      await writeFile(this.sessionFile, JSON.stringify({ ...session, email: this.env.email }), { mode: 0o600 }); // never the password
       await chmod(this.sessionFile, 0o600);
     } catch {
       // best effort: the in-memory session still works

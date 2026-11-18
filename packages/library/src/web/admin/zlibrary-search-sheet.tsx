@@ -54,7 +54,7 @@ import {
   listExplorations,
   type ExplorationSummary,
 } from "./explore-client";
-import { ApiRequestError, friendlyMessage } from "./lib/errors";
+import { friendlyMessage } from "./lib/errors";
 import type { ExplorationsState } from "./zlibrary-explore-menu";
 import {
   ZlibraryResultCard,
@@ -68,9 +68,6 @@ const PAGE_SIZE = 30;
 const EXPANDED_KEY = "elib:zlibrary-search-expanded";
 
 const ALL = "all";
-const NOT_CONFIGURED_HINT = friendlyMessage(
-  new ApiRequestError({ status: 0, code: "zlibrary-not-configured", message: "" }),
-);
 
 const SIZE_OPTIONS = [
   { value: "any", label: "Qualsiasi" },
@@ -225,6 +222,37 @@ export function ZlibrarySearchSheet({
   const [creating, setCreating] = useState(false);
 
   const searchAbort = useRef<AbortController | null>(null);
+
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  async function connect(email: string, password: string) {
+    setConnecting(true);
+    setConnectError(null);
+    try {
+      setStatus(await adminApi.zlibraryConnect(email, password));
+      setStatusError(null);
+      adminApi
+        .zlibraryStatus()
+        .then(setStatus)
+        .catch(() => {});
+    } catch (error) {
+      setConnectError(friendlyMessage(error));
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  async function disconnect() {
+    try {
+      await adminApi.zlibraryDisconnect();
+      setStatus((prev) => (prev ? { ...prev, configured: false, account: null, quota: null, error: null } : prev));
+      setResult(null);
+      setActive(null);
+    } catch (error) {
+      toast.error(friendlyMessage(error));
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -418,9 +446,7 @@ export function ZlibrarySearchSheet({
     );
   } else if (status && !status.configured) {
     resultsBody = (
-      <Alert>
-        <AlertDescription>{NOT_CONFIGURED_HINT}</AlertDescription>
-      </Alert>
+      <ZlibraryConnectForm onConnect={connect} busy={connecting} error={connectError} />
     );
   } else if (status?.error) {
     resultsBody = (
@@ -514,6 +540,17 @@ export function ZlibrarySearchSheet({
                   Trova un EPUB e aggiungilo alla biblioteca o a un&apos;esplorazione.
                 </SheetDescription>
               </div>
+              {status?.configured && status.account ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void disconnect()}
+                  title={`Collegato come ${status.account}`}
+                  className="mt-0.5 shrink-0 text-xs"
+                >
+                  Esci
+                </Button>
+              ) : null}
               {quota && quota.limit > 0 ? (
                 <span
                   className={cn(
@@ -784,5 +821,64 @@ export function ZlibrarySearchSheet({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Z-Library sign-in, shown until the user connects their own account: the password is sent once and never kept. */
+function ZlibraryConnectForm({
+  onConnect,
+  busy,
+  error,
+}: {
+  onConnect: (email: string, password: string) => Promise<void>;
+  busy: boolean;
+  error: string | null;
+}) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    void onConnect(email.trim(), password).then(() => setPassword(""));
+  }
+
+  return (
+    <form onSubmit={submit} className="mx-auto flex w-full max-w-sm flex-col gap-3 py-6">
+      <p className="text-sm text-muted-foreground">
+        Collega il tuo account Z-Library. La password serve solo per questo accesso: l&apos;app conserva soltanto la
+        chiave di sessione.
+      </p>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="zlibrary-email">Email</Label>
+        <Input
+          id="zlibrary-email"
+          type="email"
+          autoComplete="username"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="zlibrary-password">Password</Label>
+        <Input
+          id="zlibrary-password"
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+      </div>
+      {error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+      <Button type="submit" disabled={busy || email.trim() === "" || password === ""}>
+        {busy ? <Loader2Icon className="animate-spin" /> : null}
+        Collega
+      </Button>
+    </form>
   );
 }

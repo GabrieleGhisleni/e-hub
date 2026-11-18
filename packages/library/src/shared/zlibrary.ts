@@ -7,6 +7,8 @@ import { z } from "zod";
 
 export const zlibraryPaths = {
   status: "/api/library/zlibrary/status",
+  /** POST {email, password}: signs in once; only the session key is kept. DELETE: forgets it. */
+  session: "/api/library/zlibrary/session",
   search: "/api/library/zlibrary/search",
   /** POST: the original EPUB (attachment), e.g. for the browser to upload into an exploration. */
   epub: (id: string, hash: string) =>
@@ -88,9 +90,17 @@ export type ZlibrarySearchResponse = z.infer<typeof ZlibrarySearchResponseSchema
 
 export const ZlibraryStatusResponseSchema = z.object({
   configured: z.boolean(),
+  /** The connected Z-Library account (null if unknown). */
+  account: z.string().nullable().default(null),
   baseUrl: z.string().nullable(),
   /** Downloads used / allowed today, when the session works. */
   quota: z.object({ today: z.number(), limit: z.number() }).nullable(),
   error: z.string().nullable(),
 });
 export type ZlibraryStatusResponse = z.infer<typeof ZlibraryStatusResponseSchema>;
+
+export const ZlibraryLoginRequestSchema = z.object({
+  email: z.string().trim().min(3).max(200),
+  password: z.string().min(1).max(500),
+});
+export type ZlibraryLoginRequest = z.infer<typeof ZlibraryLoginRequestSchema>;

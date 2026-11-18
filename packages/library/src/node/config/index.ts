@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -75,7 +75,8 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
   const cacheDir = envCache
     ? path.resolve(expandHome(envCache))
     : path.resolve(path.dirname(configPath), expandHome(config.cache.dir));
-  if (isInsideDir(cacheDir, REPO_ROOT)) {
+  // Only from sources (package.json is there): the bundled API on the Pi runs from /opt/ehub, where "../../.." is just `/`.
+  if (existsSync(path.join(REPO_ROOT, "package.json")) && isInsideDir(cacheDir, REPO_ROOT)) {
     throw new ConfigError(
       `cache.dir (${cacheDir}) is inside the repository (${REPO_ROOT}): cached EPUBs could end up in the public repo. ` +
         "Use a folder outside it, e.g. ~/.cache/e-library.",
