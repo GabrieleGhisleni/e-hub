@@ -42,6 +42,30 @@ export interface Layout {
 
 const JSON_TEXT = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
 
+/** The route of `key` in a layout, if any (shared by the hosted backend, the remote client and the API). */
+export function routeFor(layout: Layout, key: string): { route: Route; m: RegExpMatchArray } | null {
+  for (const route of layout.routes) {
+    const m = key.match(route.match);
+    if (m) return { route, m };
+  }
+  return null;
+}
+
+export const LAYOUTS: Record<keyof DataRoots, Layout> = {
+  get library() {
+    return libraryLayout;
+  },
+  get explore() {
+    return exploreLayout;
+  },
+  get notes() {
+    return notesLayout;
+  },
+  get podcasts() {
+    return podcastsLayout;
+  },
+};
+
 export class HostedBackend implements Backend {
   private readonly docs: DocClient;
   private readonly blobs: BlobStore;
@@ -55,11 +79,7 @@ export class HostedBackend implements Backend {
   }
 
   private route(key: string): { route: Route; m: RegExpMatchArray } | null {
-    for (const route of this.layout.routes) {
-      const m = key.match(route.match);
-      if (m) return { route, m };
-    }
-    return null;
+    return routeFor(this.layout, key);
   }
 
   handles(key: string): boolean {

@@ -8,7 +8,9 @@
     "./vite": "./scripts/static-pages.ts",
     "./server": "./src/server/index.ts",
     "./note-guard": "./src/core/note-guard.ts",
-    "./chat-context": "./src/core/chat-context.ts"
+    "./chat-context": "./src/core/chat-context.ts",
+    "./schema": "./src/core/schema.ts",
+    "./paths": "./src/core/paths.ts"
   },
   "scripts": {
     "test": "vitest run",

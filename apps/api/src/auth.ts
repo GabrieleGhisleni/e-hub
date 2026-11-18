@@ -59,6 +59,7 @@ export function parseAllowedEmails(value: string | undefined): Set<string> {
  * candidates, the Z-Library status and the exploration summaries (derived from book text).
  */
 export const PRIVATE_GETS: readonly RegExp[] = [
+  /^\/api\/store(\/|$)/,
   /^\/api\/podcasts\/episodes\/[^/]+\/transcript/,
   /^\/api\/library\/uploads(\/|$)/,
   /^\/api\/library\/books\/[^/]+\/cover-candidates/,

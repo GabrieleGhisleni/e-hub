@@ -13,7 +13,9 @@
     "./explore": "./src/node/explore/index.ts",
     "./server": "./src/node/server/app.ts",
     "./services": "./src/node/services/index.ts",
-    "./epub-remote": "./src/node/cache/remote.ts"
+    "./epub-remote": "./src/node/cache/remote.ts",
+    "./schema": "./src/shared/schema.ts",
+    "./kobo": "./src/node/kobo/index.ts"
   },
   "scripts": {
     "dev": "pnpm server",

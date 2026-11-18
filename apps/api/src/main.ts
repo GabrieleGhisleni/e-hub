@@ -10,11 +10,15 @@ import { createApp as createLibraryApp } from "@ehub/library/server";
 import { createExploreApp } from "@ehub/explore/server";
 import { createNotesApp } from "@ehub/notes/server";
 import { createApp as createPodcastsApp } from "@ehub/podcasts/server";
+import { exploreDataDir } from "@ehub/explore/node";
+import { notesDataDir } from "@ehub/notes/node";
+import { dataDir as podcastsDataDir } from "@ehub/podcasts/paths";
 import { createApi, passThrough } from "./app.ts";
 import { parseAllowedEmails, sessionVerifier } from "./auth.ts";
 import { boot } from "./boot.ts";
 import { createChat } from "./chat.ts";
 import { createGoogleLogin } from "./google.ts";
+import { createStoreRoutes } from "./store-routes.ts";
 
 const { env, config, hosted } = boot();
 
@@ -56,6 +60,12 @@ const app = createApi({
     createExploreApp({ access: passThrough }),
     createNotesApp({ access: passThrough }),
     createPodcastsApp({ access: passThrough }),
+    createStoreRoutes({
+      library: config.dataDir,
+      explore: process.env.EHUB_EXPLORE_DATA_DIR ?? exploreDataDir(),
+      notes: process.env.EHUB_NOTES_DATA_DIR ?? notesDataDir(),
+      podcasts: process.env.E_PODCASTS_DATA_DIR ?? podcastsDataDir(),
+    }),
     createChat(),
   ],
 });

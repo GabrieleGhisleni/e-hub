@@ -89,3 +89,9 @@ pnpm --silent explore validate
 - La voce di **diario** va scritta a ogni fine sessione, anche senza verdetti: è ciò che la chat dell'app legge per continuare.
 - `pnpm --silent explore close <id>` solo se l'utente dice che l'esplorazione è finita (`reopen` per riaprirla).
 - Alla fine ricorda all'utente che l'esplorazione si vede su `/explore/<id>` (e, dopo commit e push, sul sito pubblicato).
+
+## Dati hosted (API del Pi)
+
+Quando l'app è in hosting, le esplorazioni vivono su Turso e la CLI le raggiunge con il token dell'utente. Imposta nell'ambiente (in `.env.local` non basta: la CLI legge l'ambiente della shell) `EHUB_API_URL` (indirizzo dell'API) ed `EHUB_API_TOKEN` (nell'app, dopo l'accesso, il pulsante «Token CLI» lo copia; dura una settimana). Con le due variabili `pnpm --silent explore list|show|new|verdict|note|journal|summary` lavorano sui dati veri; senza, sui file locali. Il token è dell'utente: non stamparlo, non scriverlo in file, non metterlo in un comando visibile.
+
+Restano locali al laptop i comandi che servono EPUB o Kobo (`prepare`, `kobo`, `add --epub`): il testo dei libri sta nella cache del Pi (`/var/cache/ehub/e-library`) e il Kobo si raggiunge solo da lì. Se servono, chiedi all'utente di lanciarli sul Pi o di usare la pagina dell'esplorazione nell'app.
