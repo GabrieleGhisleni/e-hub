@@ -7,7 +7,13 @@ import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
 import { isValidSlug } from "../core/schema";
 import { listSpeakers, type SpeakerInfo } from "../core/speakers";
-import { readEpisode, listEpisodes, readTranscriptIfExists } from "../core/store";
+import {
+  listEpisodes,
+  listShows,
+  readConversations,
+  readEpisode,
+  readTranscriptIfExists,
+} from "../core/store";
 import { saveEpisode } from "../core/save";
 import { countTags } from "../core/tags";
 import { exportTranscriptMarkdown } from "../core/transcript-export";
@@ -102,6 +108,16 @@ export function createApp(
   });
 
   app.get("/api/podcasts/health", (c) => c.json({ ok: true }));
+
+  // Read side of the hosted site: the whole catalog (shows and episodes) and the conversations of one episode.
+  app.get("/api/podcasts/catalog", async (c) =>
+    c.json({ shows: await listShows(), episodes: await listEpisodes() }),
+  );
+  app.get("/api/podcasts/episodes/:slug/conversations", async (c) => {
+    const slug = c.req.param("slug");
+    await readEpisode(slug);
+    return c.json({ conversations: await readConversations(slug) });
+  });
 
   // Existing tags with counts (suggestions in the editor).
   app.get("/api/podcasts/tags", async (c) => c.json(countTags(await listEpisodes())));

@@ -1,3 +1,4 @@
+import "./session"; // first: takes the login token and sets the admin flag before any module reads it
 import "@ehub/ui/fonts";
 import "./index.css";
 import { StrictMode } from "react";

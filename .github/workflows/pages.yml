@@ -27,9 +27,11 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+      - run: pnpm --filter @ehub/web build:hosted
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
+          # Public address of the API (the Pi behind its tunnel): repository variable, not a secret.
+          VITE_API_URL: ${{ vars.API_URL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

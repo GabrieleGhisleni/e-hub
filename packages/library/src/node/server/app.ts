@@ -25,6 +25,7 @@ import { ServiceError, type Services, startSummaryInBackground } from "../servic
 import { ZlibraryClient, zlibraryEnvFrom } from "../zlibrary/index.ts";
 import { apiError, jsonBody } from "./http.ts";
 import { securityConfig, securityMiddleware } from "./security.ts";
+import { registerSiteRoutes } from "./site-routes.ts";
 import { registerZlibraryRoutes } from "./zlibrary-routes.ts";
 
 export interface AppOptions {
@@ -34,6 +35,8 @@ export interface AppOptions {
   zlibrary?: ZlibraryClient;
   /** Request check (default: the local Host/Origin checks). The hosted server passes its own (docs/hosting.md). */
   access?: MiddlewareHandler;
+  /** Public URL of the API, used for the absolute cover URLs of the site data (default: the request origin). */
+  publicUrl?: string;
 }
 
 /** Room for the multipart envelope around the file. */
@@ -66,6 +69,16 @@ export function createApp(
         ),
     });
   const jsonLimit = limit(limits.jsonMaxBytes);
+
+  // ---- site data (hosted: the site reads it at runtime). Any write drops the cache.
+  const site = registerSiteRoutes(app, {
+    dataDir: services.ctx.dataDir,
+    ...(options.publicUrl ? { publicUrl: options.publicUrl } : {}),
+  });
+  app.use("/api/library/*", async (c, next) => {
+    await next();
+    if (!["GET", "HEAD", "OPTIONS"].includes(c.req.method)) site.invalidate();
+  });
 
   app.get("/api/library/health", (c) => c.json({ ok: true } satisfies HealthResponse));
 

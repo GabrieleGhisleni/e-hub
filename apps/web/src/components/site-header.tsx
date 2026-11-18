@@ -1,5 +1,6 @@
 import { Link, NavLink } from "react-router";
 import { cn, Container, Logo, ThemeToggle } from "@ehub/ui";
+import { AccountButton } from "./account-button";
 
 const NAV_ITEMS = [
   { to: "/library", label: "Libreria" },
@@ -43,7 +44,10 @@ export function SiteHeader() {
             </ul>
           </nav>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-1">
+          <AccountButton />
+          <ThemeToggle />
+        </div>
       </Container>
     </header>
   );

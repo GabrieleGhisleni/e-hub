@@ -16,6 +16,7 @@ import { Button } from "@ehub/ui/components/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@ehub/ui/components/popover";
 import { useLibrarySelection } from "@library/selection";
 import { BulkEditDialog } from "./bulk-edit-dialog";
+import { KoboQueueStatus } from "./kobo-queue-status";
 import { ZlibrarySearchSheet } from "./zlibrary-search-sheet";
 import { collectTags } from "./lib/tags";
 import { ADMIN_BUNDLE_MARKER } from "./marker";
@@ -60,6 +61,7 @@ export function LibraryAdminBar({ index, visibleBooks }: LibraryAdminBarProps) {
           </p>
         </PopoverContent>
       </Popover>
+      <KoboQueueStatus />
       {selection.selecting ? (
         <>
           <span className="tabular-nums text-muted-foreground" aria-live="polite">

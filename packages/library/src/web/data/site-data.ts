@@ -27,7 +27,15 @@ export class HttpError extends Error {
   }
 }
 
-const urls = siteDataUrls(import.meta.env.BASE_URL);
+// Hosted build: the API serves the same documents (and absolute cover URLs) at runtime; otherwise static files.
+const HOSTED = import.meta.env.VITE_HOSTED === "1";
+const urls = HOSTED
+  ? {
+      indexUrl: "/api/library/site/index.json",
+      bookUrl: (id: string) => `/api/library/site/books/${id}.json`,
+      coverUrl: (fileName: string) => `/api/library/site/covers/${fileName}`,
+    }
+  : siteDataUrls(import.meta.env.BASE_URL);
 
 const IDLE = { status: "idle" } as const;
 let indexState: Resource<SiteIndex> = IDLE;

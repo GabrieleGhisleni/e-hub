@@ -3,6 +3,7 @@
  * - dev: the local notes API (/api/notes, files in packages/notes/data, editable);
  * - build: the notes files bundled at build time, read-only (the build already validated them).
  */
+import { HOSTED } from "./session";
 import { type NotesStore, createHttpNotesStore, createStaticNotesStore } from "@ehub/notes";
 
 interface NotesFileModule {
@@ -11,7 +12,7 @@ interface NotesFileModule {
 }
 
 export function createAppNotesStore(): NotesStore {
-  if (import.meta.env.DEV) return createHttpNotesStore();
+  if (HOSTED || import.meta.env.DEV) return createHttpNotesStore();
   const files = import.meta.glob<NotesFileModule>("../../../packages/notes/data/*/*.json", {
     eager: true,
     import: "default",

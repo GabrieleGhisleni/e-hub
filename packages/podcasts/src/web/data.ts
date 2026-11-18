@@ -46,6 +46,24 @@ function toConversations(value: unknown): Conversation[] {
   );
 }
 
+/** Hosted build: shows and episodes come from the API at runtime (one request), conversations per episode. */
+export async function loadRemoteSiteData(): Promise<SiteData> {
+  const response = await fetch("/api/podcasts/catalog", { headers: { Accept: "application/json" } });
+  if (!response.ok) throw new Error(`GET /api/podcasts/catalog → HTTP ${response.status}`);
+  const { shows, episodes } = (await response.json()) as { shows: unknown[]; episodes: unknown[] };
+  return {
+    catalog: buildCatalog(shows, episodes),
+    conversations: {
+      has: () => true,
+      load: async (slug) => {
+        const res = await fetch(`/api/podcasts/episodes/${encodeURIComponent(slug)}/conversations`);
+        if (!res.ok) return [];
+        return toConversations(((await res.json()) as { conversations?: unknown }).conversations);
+      },
+    },
+  };
+}
+
 export const siteData: SiteData = {
   catalog: buildCatalog(Object.values(showModules), Object.values(episodeModules)),
   conversations: {

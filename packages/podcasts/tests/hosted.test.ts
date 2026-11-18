@@ -23,3 +23,21 @@ describe("podcast data on a hosted data dir", () => {
     expect((await listEpisodes()).map((e) => e.slug)).toEqual(["demo-show-first-episode"]);
   });
 });
+
+describe("read endpoints for the hosted site", () => {
+  it("serve the catalog and the conversations", async () => {
+    const { createApp } = await import("../src/server/app");
+    const docs = new MemoryDocClient();
+    process.env[DATA_DIR_ENV] = "/nonexistent/hosted-podcasts-api";
+    mountBackend("/nonexistent/hosted-podcasts-api", new HostedBackend(docs, new MemoryBlobStore(), podcastsLayout));
+    await writeShow(SHOW);
+    await writeEpisode(episodeFixture());
+    const app = createApp({ access: async (_c, next) => next() });
+    const catalog = (await (await app.request("/api/podcasts/catalog")).json()) as { shows: unknown[]; episodes: { slug: string }[] };
+    expect(catalog.shows).toHaveLength(1);
+    expect(catalog.episodes.map((e) => e.slug)).toEqual(["demo-show-first-episode"]);
+    const res = await app.request("/api/podcasts/episodes/demo-show-first-episode/conversations");
+    expect(await res.json()).toEqual({ conversations: [] });
+    expect((await app.request("/api/podcasts/episodes/missing-one/conversations")).status).toBe(404);
+  });
+});

@@ -11,12 +11,38 @@ import { staticPages } from "@ehub/podcasts/vite";
 
 const repo = (path: string) => fileURLToPath(new URL(`../../packages/${path}`, import.meta.url));
 
+/**
+ * Hosted build (`VITE_HOSTED=1`, docs/hosting.md): the site is only code, data comes from the API at runtime and the
+ * admin controls appear after the Google login. The admin gates (`__ELIB_ADMIN__`, `import.meta.env.DEV`) become one
+ * runtime flag, set at startup by src/session.ts before any module reads it.
+ */
+const HOSTED = process.env.VITE_HOSTED === "1";
+const ADMIN_FLAG = "(globalThis.__EHUB_ADMIN__ === true)";
+
 export default defineConfig(({ command }) => {
   const libraryConfig = loadConfig();
   return {
     // Single app served at the root by default; GitHub Pages project sites set BASE_PATH=/<repo>/.
     base: process.env.BASE_PATH ?? "/",
-    plugins: [
+    plugins: HOSTED
+      ? [
+          react(),
+          tailwindcss(),
+          {
+            // GitHub Pages serves 404.html for unknown paths: the same shell, so deep links reach the SPA router.
+            name: "ehub-spa-404",
+            generateBundle: {
+              order: "post",
+              handler(_options, bundle) {
+                const html = bundle["index.html"];
+                if (html?.type === "asset") {
+                  this.emitFile({ type: "asset", fileName: "404.html", source: html.source });
+                }
+              },
+            },
+          },
+        ]
+      : [
       react(),
       tailwindcss(),
       // Library site data: dev serves + watches data/; build validates, emits data files + 404.html.
@@ -56,7 +82,7 @@ export default defineConfig(({ command }) => {
             }),
           ]
         : []),
-    ],
+      ],
     resolve: {
       alias: {
         "@library": repo("library/src/web"),
@@ -65,10 +91,12 @@ export default defineConfig(({ command }) => {
         "@core": repo("podcasts/src/core"),
       },
     },
-    define: {
-      // Admin controls exist only in the local dev UI; the static build is read-only.
-      __ELIB_ADMIN__: JSON.stringify(command === "serve"),
-    },
+    define: HOSTED
+      ? { __ELIB_ADMIN__: ADMIN_FLAG, "import.meta.env.DEV": ADMIN_FLAG }
+      : {
+          // Admin controls exist only in the local dev UI; the static build is read-only.
+          __ELIB_ADMIN__: JSON.stringify(command === "serve"),
+        },
     server: {
       host: "127.0.0.1",
       port: 5173,

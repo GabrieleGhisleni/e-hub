@@ -96,7 +96,7 @@ Flusso di un libro nuovo: upload dalla UI o da `elib` → il Pi salva l'EPUB su 
 | 2. Repository su Turso | **fatta** | I repository di libreria, esplorazioni, note e podcast passano da `@ehub/store`; test con mount in memoria in `*/hosted.test.ts`. Le CLI di validazione (`elib validate`, `site-data`) leggono ancora file locali: spariscono in fase 5/8. |
 | 3. Backend sul Pi | fatta nel codice, **da installare a mano** | `apps/api` (Hono unico: CORS, login Google gestito dall'API + token di sessione + allowlist, GET pubbliche), EPUB su R2 (`cache/remote.ts`), bundle esbuild, `deploy/pi/` (unità systemd, env, `deploy.sh`). Vedi «Installazione sul Pi». |
 | 4. Kobo | fatta nel codice, **da attivare sul Pi** | Coda `kobo_queue` (`kobo/queue.ts`): con `ELIB_KOBO_QUEUE=1` i servizi mettono in coda invece di fallire; `ehub-kobo-sync.timer` ogni 5 minuti svuota la coda con `reconcile` (mai `--prune`); ricerca dell'IP sulla `/24` come riserva (`kobo/discovery.ts`); host, porta e alias da `ELIB_KOBO_*`; rotte `GET /api/library/kobo/queue` e `POST /api/library/kobo/sync` («sincronizza ora»). La UI arriva in fase 5. |
-| 5. Frontend | da fare | |
+| 5. Frontend | fatta nel codice | Build «hosted» (`pnpm --filter @ehub/web build:hosted`, `VITE_HOSTED=1`, `VITE_API_URL`): niente dati nel bundle, tutto dall'API (`/api/library/site/*`, `/api/podcasts/catalog`, `/api/notes`, `/api/explore`); login con Google (`apps/web/src/session.ts`); coda del Kobo con «Sincronizza ora» nella barra admin della libreria; workflow Pages aggiornato. `site-data/build.ts` resta, ma ora lo usa l'API a runtime. |
 | 6. CLI e skill `explore` | da fare | |
 | 7. Podcast | da fare | |
 | 8. Chiusura | da fare | |
@@ -124,3 +124,11 @@ Rotte private anche se `GET`: trascrizioni dei podcast, area di staging degli up
 - Prenotazione DHCP sul router per il MAC del Kobo (la via principale). Se l'indirizzo cambia lo stesso, `ehub-kobo-sync` cerca la porta SSH sulla `/24` del Pi e accetta solo un dispositivo che passa il login con `StrictHostKeyChecking=yes` sotto l'alias `ELIB_KOBO_HOST_KEY_ALIAS` (senza alias la ricerca è disattivata). L'indirizzo trovato è ricordato in `<cache>/kobo-host`.
 - Una tantum, a mano: copiare sul Pi la chiave SSH del Kobo (`~ehub/.ssh/`) e aggiungere a `known_hosts` la chiave del Kobo con l'alias (`ssh-keyscan -p 2222 <ip>` poi sostituire l'host con `ehub-kobo`; controllare l'impronta a mano).
 - Le sync fatte mentre il Kobo dorme escono come avviso `queued` nel resoconto. Le cancellazioni di libri restano dirette (falliscono se il Kobo è spento, come oggi) e non passano dalla coda.
+
+## Frontend hosted
+
+- **Build**: `VITE_HOSTED=1 VITE_API_URL=https://<api> pnpm --filter @ehub/web build:hosted` (il workflow di Pages lo fa; `API_URL` è una *variabile* del repository GitHub, non un segreto). Emette anche `404.html` per i link diretti.
+- **Admin dopo il login**: i controlli di scrittura (`__ELIB_ADMIN__` e `import.meta.env.DEV`) nel build hosted diventano un unico flag a runtime (`globalThis.__EHUB_ADMIN__`), impostato da `src/session.ts` prima che qualsiasi modulo lo legga. Accedere e uscire ricarica la pagina. Il codice admin è nel bundle (il repo è pubblico: non c'è nulla da nascondere); a proteggere le scritture è l'API.
+- **Login**: «Accedi» porta a `<API>/auth/google?return=<sito>`; l'API rimanda al sito con `#token=…`, che finisce in `localStorage`. `fetch` è avvolta (`apiFetch`) e manda il token solo alle chiamate `/api/…` e `/auth/…`.
+- **Se il Pi è spento** le chiamate falliscono e il sito mostra gli errori di rete già gestiti dai moduli (nessun dato in cache: scelta fatta).
+- Il build non hosted (`pnpm build`) resta com'è finché non si chiude la fase 8.

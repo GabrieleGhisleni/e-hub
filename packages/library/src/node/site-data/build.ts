@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readBytesIfExists } from "@ehub/store";
 import { coverFileName, siteDataUrls } from "../../shared/site-urls.ts";
 import { bookSlug } from "../../shared/slug.ts";
 import {
@@ -39,19 +39,16 @@ export interface SiteData {
 
 export interface BuildSiteDataOptions {
   basePath: string;
+  /** Absolute prefix of the cover URLs (the hosted API serves them): `<coverBase><file>`. Default: under `basePath`. */
+  coverBase?: string;
 }
 
 function coverHash(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex").slice(0, 8);
 }
 
-async function readCover(dataDir: string, id: string): Promise<Buffer | null> {
-  try {
-    return await readFile(coverPath(dataDir, id));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw error;
-  }
+async function readCover(dataDir: string, id: string): Promise<Uint8Array | null> {
+  return readBytesIfExists(coverPath(dataDir, id));
 }
 
 /** The public part of `summary.json` (no version, no bookId, no `words`). Null when the book has no summary. */
@@ -136,7 +133,7 @@ export async function buildSiteData(
     if (bytes !== null) {
       const fileName = coverFileName(book.id, coverHash(bytes));
       covers.set(fileName, coverPath(dataDir, book.id));
-      coverUrl = urls.coverUrl(fileName);
+      coverUrl = options.coverBase === undefined ? urls.coverUrl(fileName) : `${options.coverBase}${fileName}`;
     }
 
     const card = BookCardSchema.parse({
