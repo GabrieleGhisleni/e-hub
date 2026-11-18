@@ -1,6 +1,6 @@
 /**
  * Hosted setup: the Kobo sleeps, so syncs wait in a queue (docs/hosting.md). Shows how many books are waiting and
- * lets you try the sync right away. Renders nothing when the queue is empty or the API does not answer.
+ * lets you try the sync right away (the only way: the Pi no longer polls the Kobo). Renders nothing when the queue is empty or the API does not answer.
  */
 import { RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -39,7 +39,7 @@ export function KoboQueueStatus() {
       const response = await fetch(SYNC_URL, { method: "POST" });
       const body = (await response.json()) as { status?: string };
       if (!response.ok) toast.error("Sincronizzazione non riuscita.");
-      else if (body.status === "asleep") toast.info("Il Kobo è spento: riproverò da solo ogni 5 minuti.");
+      else if (body.status === "asleep") toast.info("Il Kobo è spento o senza SSH: accendilo e premi di nuovo «Sincronizza ora».");
       else toast.success("Kobo sincronizzato.");
     } catch {
       toast.error("Non riesco a raggiungere il server.");

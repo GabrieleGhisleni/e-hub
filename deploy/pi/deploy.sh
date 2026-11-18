@@ -21,4 +21,4 @@ cp "$ROOT/deploy/pi/elib.config.json" "$STAGE/"
 ssh $SSH_OPTS "$TARGET" 'mkdir -p /tmp/ehub-release/units'
 rsync -e "ssh $SSH_OPTS" -az --delete --exclude units "$STAGE/ehub-api.mjs" "$STAGE/ehub-kobo-sync.mjs" "$STAGE/elib.config.json" "$STAGE/node_modules" "$TARGET:/tmp/ehub-release/"
 rsync -e "ssh $SSH_OPTS" -az "$ROOT/deploy/pi/"*.service "$ROOT/deploy/pi/"*.timer "$TARGET:/tmp/ehub-release/units/"
-ssh $SSH_OPTS "$TARGET" 'sudo install -d /opt/ehub && sudo rsync -a --delete /tmp/ehub-release/ /opt/ehub/ && sudo cp /opt/ehub/units/* /etc/systemd/system/ 2>/dev/null; sudo systemctl daemon-reload && sudo systemctl restart ehub-api; sudo systemctl enable --now ehub-kobo-sync.timer'
+ssh $SSH_OPTS "$TARGET" 'sudo install -d /opt/ehub && sudo rsync -a --delete /tmp/ehub-release/ /opt/ehub/ && sudo cp /opt/ehub/units/* /etc/systemd/system/ 2>/dev/null; sudo systemctl daemon-reload && sudo systemctl restart ehub-api; sudo systemctl disable --now ehub-kobo-sync.timer 2>/dev/null || true'  # the Kobo is synced by hand ("Sincronizza ora")

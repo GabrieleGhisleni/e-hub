@@ -1,7 +1,7 @@
-import { KeyRound, LogOut } from "lucide-react";
+import { KeyRound, LogOut, Wrench } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@ehub/ui/components/button";
-import { GOOGLE_CLIENT_ID, HOSTED, completeLogin, currentSession, logout } from "../session";
+import { GOOGLE_CLIENT_ID, HOSTED, adminView, completeLogin, currentSession, logout, setAdminView } from "../session";
 
 interface GoogleIdentity {
   accounts: {
@@ -74,6 +74,16 @@ export function AccountButton() {
   if (!session) return null; // the demo banner has the login button
   return (
     <>
+      <Button
+        variant={adminView ? "secondary" : "ghost"}
+        size="sm"
+        aria-pressed={adminView}
+        title={adminView ? "Vista admin attiva: clicca per tornare alla vista lettore" : "Attiva la vista admin (modifica, upload, Kobo, Z-Library)"}
+        onClick={() => setAdminView(!adminView)}
+      >
+        <Wrench aria-hidden className="size-4" />
+        <span className="hidden sm:inline">{adminView ? "Admin attivo" : "Admin"}</span>
+      </Button>
       <Button
         variant="ghost"
         size="sm"

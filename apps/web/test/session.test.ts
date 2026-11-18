@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  adminPreference,
   apiFetch,
   loadSession,
   sessionFromToken,
@@ -24,6 +25,17 @@ function memory(): StorageLike & { data: Map<string, string> } {
     removeItem: (k) => void data.delete(k),
   };
 }
+
+describe("admin view preference", () => {
+  it("is on by default and off only when switched off", () => {
+    const storage = memory();
+    expect(adminPreference(storage)).toBe(true);
+    storage.setItem("ehub.admin", "off");
+    expect(adminPreference(storage)).toBe(false);
+    storage.removeItem("ehub.admin");
+    expect(adminPreference(storage)).toBe(true);
+  });
+});
 
 describe("session token", () => {
   it("reads email and expiry; refuses expired or malformed tokens", () => {
