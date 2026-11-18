@@ -96,7 +96,13 @@ export function registerZlibraryRoutes(
       "caricati",
     );
     const fileName = `${safeFileStem(book.displayName)}.epub`;
-    return c.json(await services.analyzeUpload({ fileName, bytes: book.bytes }));
+    const pages = Number(c.req.query("pages"));
+    return c.json(
+      await services.analyzeUpload(
+        { fileName, bytes: book.bytes },
+        Number.isInteger(pages) && pages >= 1 && pages <= 100000 ? { pages } : {},
+      ),
+    );
   });
 }
 

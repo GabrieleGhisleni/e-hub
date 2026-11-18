@@ -99,6 +99,11 @@ function BookDetails({ book }: { book: BookDetail }) {
           <span className="tabular-nums">{book.year}</span>
         </Detail>
       ) : null}
+      {book.pages ? (
+        <Detail term="Pagine">
+          <span className="tabular-nums">{book.pages}</span>
+        </Detail>
+      ) : null}
       {book.startedAt ? <Detail term="Iniziato">{formatDate(book.startedAt)}</Detail> : null}
       {book.finishedAt ? <Detail term="Finito">{formatDate(book.finishedAt)}</Detail> : null}
       {book.publisher ? <Detail term="Editore">{book.publisher}</Detail> : null}

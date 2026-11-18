@@ -165,6 +165,7 @@ export async function buildSiteData(
         "openLibraryCoverId",
         "publisher",
         "year",
+        "pages",
         "translators",
         "language",
         "description",

@@ -20,6 +20,8 @@ export interface BookFormState {
   publisher: string;
   /** Year as typed ("" when unknown). */
   year: string;
+  /** Pages as typed ("" when unknown). */
+  pages: string;
   translators: string[];
   language: string;
   description: string;
@@ -37,6 +39,7 @@ export interface FormSourceBook {
   isbn?: string;
   publisher?: string;
   year?: number;
+  pages?: number;
   translators?: readonly string[];
   language?: string;
   description?: string;
@@ -54,6 +57,7 @@ export function bookToFormState(book: FormSourceBook): BookFormState {
     isbn: book.isbn ?? "",
     publisher: book.publisher ?? "",
     year: book.year === undefined ? "" : String(book.year),
+    pages: book.pages === undefined ? "" : String(book.pages),
     translators: [...(book.translators ?? [])],
     language: book.language ?? "",
     description: book.description ?? "",
@@ -84,6 +88,7 @@ export function formStateFromMetadata(
     isbn: metadata.isbn ?? "",
     publisher: metadata.publisher ?? "",
     year: metadata.year === undefined ? "" : String(metadata.year),
+    pages: metadata.pages === undefined ? "" : String(metadata.pages),
     translators: [...(metadata.translators ?? [])],
     language: metadata.language ?? "",
     description: metadata.description ?? "",
@@ -97,6 +102,13 @@ export function normalizeIsbn(raw: string): string {
 
 function cleanList(list: readonly string[]): string[] {
   return list.map(normalizeTag).filter((s) => s !== "");
+}
+
+/** The page count typed in the form, or undefined when blank or not a positive whole number. */
+export function parsePages(text: string): number | undefined {
+  if (!/^\d+$/.test(text.trim())) return undefined;
+  const pages = Number(text);
+  return pages >= 1 && pages <= 100000 ? pages : undefined;
 }
 
 /** The year typed in the form, or undefined when blank or not a plausible year. */
@@ -151,6 +163,8 @@ export function diffToPatch(initial: BookFormState, current: BookFormState): Boo
   }
   const year = parseYear(current.year);
   if (year !== parseYear(initial.year)) patch.year = year ?? null;
+  const pages = parsePages(current.pages);
+  if (pages !== parsePages(initial.pages)) patch.pages = pages ?? null;
 
   for (const key of OPTIONAL_TEXT_KEYS) {
     const now = cleanOptional(key, current[key]);
@@ -197,6 +211,9 @@ export function validateForm(state: BookFormState): FormErrors {
   if (state.year.trim() !== "" && parseYear(state.year) === undefined) {
     errors.year = "Anno non valido.";
   }
+  if (state.pages.trim() !== "" && parsePages(state.pages) === undefined) {
+    errors.pages = "Numero di pagine non valido.";
+  }
   if (started !== "" && !validDate(started)) errors.startedAt = "Data non valida.";
   if (finished !== "" && !validDate(finished)) errors.finishedAt = "Data non valida.";
   if (
@@ -227,6 +244,8 @@ export function toNewBook(state: BookFormState, subjects: readonly string[] = []
   }
   const year = parseYear(state.year);
   if (year !== undefined) book.year = year;
+  const pages = parsePages(state.pages);
+  if (pages !== undefined) book.pages = pages;
   const translators = cleanList(state.translators);
   if (translators.length > 0) book.translators = translators;
   const cleanSubjects = subjects.map((s) => s.trim()).filter((s) => s !== "");

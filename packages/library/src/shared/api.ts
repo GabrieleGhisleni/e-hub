@@ -228,6 +228,7 @@ export const ExtractedMetadataSchema = z.object({
   language: z.string().optional(),
   publisher: z.string().optional(),
   year: z.number().int().optional(),
+  pages: z.number().int().optional(),
   translators: z.array(z.string()).optional(),
   description: z.string().optional(),
 });
@@ -325,6 +326,7 @@ export const BookPatchSchema = z.strictObject({
   openLibraryCoverId: z.number().int().positive().nullable().optional(),
   publisher: z.string().nullable().optional(),
   year: z.number().int().min(1).max(2200).nullable().optional(),
+  pages: z.number().int().min(1).max(100000).nullable().optional(),
   translators: z.array(NonBlankStringSchema).nullable().optional(),
   language: z.string().nullable().optional(),
   description: z.string().nullable().optional(),

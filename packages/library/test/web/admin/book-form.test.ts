@@ -191,6 +191,18 @@ describe("frozen baseline (R1-09)", () => {
   });
 });
 
+describe("pages", () => {
+  it("round-trips through the form, the patch and the new book", () => {
+    const initial = bookToFormState({ ...book, pages: 320 });
+    expect(initial.pages).toBe("320");
+    expect(diffToPatch(initial, { ...initial, pages: "" })).toEqual({ pages: null });
+    expect(diffToPatch(initial, { ...initial, pages: "412" })).toEqual({ pages: 412 });
+    expect(NewBookSchema.parse(toNewBook(initial))).toMatchObject({ pages: 320 });
+    expect(validateForm({ ...initial, pages: "12x" }).pages).toBeDefined();
+    expect(formStateFromMetadata({ authors: [], subjects: [], pages: 99 }, { title: "T", topic: "x" }).pages).toBe("99");
+  });
+});
+
 describe("year and translators", () => {
   it("round-trips through the form, the patch and a new book", () => {
     const initial = bookToFormState({ ...book, year: 2011, translators: ["Laura Serra"] });

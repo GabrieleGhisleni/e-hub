@@ -88,6 +88,8 @@ export interface AnalyzeUploadOptions {
   openLibrary?: "always" | "never" | "if-no-epub-cover";
   /** MD5 check against the EPUBs of the cache (default true; `elib import` indexes the cache once for the batch). */
   checkMd5?: boolean;
+  /** Page count known from outside the EPUB (Z-Library search result). */
+  pages?: number;
 }
 
 /**
@@ -150,6 +152,7 @@ export async function analyzeUpload(
       ...(metadata.language ? { language: metadata.language } : {}),
       ...(metadata.publisher ? { publisher: metadata.publisher } : {}),
       ...(metadata.year !== undefined ? { year: metadata.year } : {}),
+      ...(options.pages !== undefined ? { pages: options.pages } : {}),
       ...(metadata.translators ? { translators: metadata.translators } : {}),
       ...(metadata.description ? { description: metadata.description } : {}),
     };

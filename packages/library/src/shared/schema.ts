@@ -53,6 +53,8 @@ export const BookSchema = z.looseObject({
   publisher: z.string().optional(),
   /** Year of publication (of this edition), e.g. 2011. */
   year: z.number().int().min(1).max(2200).optional(),
+  /** Number of pages of the printed edition, when known (Z-Library reports it; EPUBs do not). */
+  pages: z.number().int().min(1).max(100000).optional(),
   /** Translators, display form, when the book is a translation. */
   translators: z.array(NonBlankStringSchema).optional(),
   /** BCP 47 tag as found in the EPUB (e.g. "it", "en-US"). */
@@ -78,6 +80,7 @@ export const BOOK_KEY_ORDER = [
   "openLibraryCoverId",
   "publisher",
   "year",
+  "pages",
   "translators",
   "language",
   "description",
@@ -230,6 +233,7 @@ export const BookDetailSchema = BookCardSchema.extend({
   openLibraryCoverId: z.number().int().positive().optional(),
   publisher: z.string().optional(),
   year: z.number().int().optional(),
+  pages: z.number().int().optional(),
   translators: z.array(z.string()).optional(),
   language: z.string().optional(),
   description: z.string().optional(),

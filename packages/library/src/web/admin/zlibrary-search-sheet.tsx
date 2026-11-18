@@ -362,7 +362,7 @@ export function ZlibrarySearchSheet({
   async function stageBook(book: ZlibraryBook) {
     setRowBusy(book, "stage");
     try {
-      const upload = await adminApi.zlibraryStage(book.id, book.hash);
+      const upload = await adminApi.zlibraryStage(book.id, book.hash, book.pages);
       onOpenChange(false);
       navigate(libraryPath("admin/upload"), { state: { zlibraryUpload: upload } });
     } catch (error) {

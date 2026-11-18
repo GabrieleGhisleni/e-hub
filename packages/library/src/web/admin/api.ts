@@ -221,8 +221,8 @@ export const adminApi = {
   },
 
   /** The book staged like an upload: pass the result to the "Aggiungi libro" form. */
-  zlibraryStage(id: string, hash: string): Promise<UploadResponse> {
-    return request("POST", zlibraryPaths.stage(id, hash), UploadResponseSchema);
+  zlibraryStage(id: string, hash: string, pages?: number | null): Promise<UploadResponse> {
+    return request("POST", zlibraryPaths.stage(id, hash, pages), UploadResponseSchema);
   },
 
   /** The original EPUB, as downloaded from Z-Library; the file name comes from Content-Disposition. */

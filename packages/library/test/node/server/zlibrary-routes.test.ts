@@ -221,10 +221,18 @@ describe("Z-Library routes", () => {
     const res = await post(zlibraryPaths.stage("123", "abc"), {});
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ uploadId: "u1", fileName: "Autore Titolo Lungo.epub" });
-    expect(analyzeUpload).toHaveBeenCalledWith({
-      fileName: "Autore Titolo Lungo.epub",
-      bytes: new Uint8Array([1, 2, 3]),
-    });
+    expect(analyzeUpload).toHaveBeenCalledWith(
+      { fileName: "Autore Titolo Lungo.epub", bytes: new Uint8Array([1, 2, 3]) },
+      {},
+    );
+  });
+
+  it("stage passes the page count of the search result on, ignoring a bad one", async () => {
+    client.download.mockResolvedValue({ bytes: new Uint8Array([1]), extension: "epub", displayName: "Libro" });
+    await post(zlibraryPaths.stage("123", "abc", 312), {});
+    expect(analyzeUpload).toHaveBeenLastCalledWith(expect.anything(), { pages: 312 });
+    await post(`${zlibraryPaths.stage("123", "abc")}?pages=abc`, {});
+    expect(analyzeUpload).toHaveBeenLastCalledWith(expect.anything(), {});
   });
 
   it("a client failure (e.g. invalid book id) becomes 502 zlibrary-failed", async () => {

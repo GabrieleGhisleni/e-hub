@@ -27,6 +27,25 @@ L'app gira su http://127.0.0.1:5173.
 | `pnpm typecheck` | Typecheck di tutti i pacchetti                   |
 | `pnpm test`      | Test di tutti i pacchetti                        |
 
+## CLI `elib`
+
+`elib` non è un comando globale: si lancia dalla radice del repo con pnpm. Per scriverlo come `elib`, aggiungi in `~/.zshrc`: `alias elib='pnpm --dir ~/projects/e-hub --filter @ehub/library elib'`.
+
+```bash
+pnpm --filter @ehub/library elib <comando> [opzioni]
+pnpm --filter @ehub/library elib --help          # elenco dei comandi
+```
+
+| Comando | Cosa fa |
+| --- | --- |
+| `import <cartella> [--dry-run] [--limit n] [--openlibrary]` | Importa gli `*.epub` della cartella (ricorsivo) in "Da smistare"; i `*.kepub.epub` si saltano |
+| `sync [--dry-run] [--prune] [--no-highlights]` | Allinea il Kobo al repo e riporta le sottolineature. `--prune` cancella i file orfani dal Kobo (irreversibile, prima `--dry-run`) |
+| `summarize [id] [--missing] [--lang it] [--force]` | Scrive `summary.json` con l'LLM, per un libro o per tutti quelli senza |
+| `text <id> [--force]` | Estrae il testo del libro in Markdown, un file per capitolo (cache locale) |
+| `validate [--json]` | Controlla `data/` (schemi, argomenti, file ammessi) |
+
+Gli ID dei libri sono di 8 caratteri. Il Kobo spesso dorme: un timeout SSH vuol dire "spento".
+
 ## Aggiungere un libro
 
 Si fa in locale, con `pnpm dev`:

@@ -300,6 +300,7 @@ async function importOne(
         ...(m.isbn ? { isbn: m.isbn } : {}),
         ...(m.publisher ? { publisher: m.publisher } : {}),
         ...(m.year !== undefined ? { year: m.year } : {}),
+        ...(m.pages !== undefined ? { pages: m.pages } : {}),
         ...(m.translators ? { translators: m.translators } : {}),
         ...(m.language ? { language: m.language } : {}),
         ...(m.description ? { description: m.description } : {}),

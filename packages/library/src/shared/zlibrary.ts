@@ -13,9 +13,14 @@ export const zlibraryPaths = {
   /** POST: the original EPUB (attachment), e.g. for the browser to upload into an exploration. */
   epub: (id: string, hash: string) =>
     `/api/library/zlibrary/books/${encodeURIComponent(id)}/${encodeURIComponent(hash)}/epub`,
-  /** POST: the EPUB is downloaded and staged like an upload (`UploadResponse`). */
-  stage: (id: string, hash: string) =>
-    `/api/library/zlibrary/books/${encodeURIComponent(id)}/${encodeURIComponent(hash)}/stage`,
+  /**
+   * POST: the EPUB is downloaded and staged like an upload (`UploadResponse`). `pages` (from the search result) ends
+   * up in the extracted metadata, since the EPUB itself does not carry a page count.
+   */
+  stage: (id: string, hash: string, pages?: number | null) =>
+    `/api/library/zlibrary/books/${encodeURIComponent(id)}/${encodeURIComponent(hash)}/stage${
+      pages ? `?pages=${pages}` : ""
+    }`,
 } as const;
 
 export const ZLIBRARY_ORDERS = [

@@ -299,6 +299,17 @@ export function BookFormFields({
           onChange={(e) => set("year", e.target.value)}
         />
       </Field>
+      <Field label="Pagine" htmlFor={id("pages")} error={errors.pages}>
+        <Input
+          id={id("pages")}
+          value={value.pages}
+          disabled={disabled}
+          inputMode="numeric"
+          maxLength={5}
+          aria-invalid={errors.pages ? true : undefined}
+          onChange={(e) => set("pages", e.target.value)}
+        />
+      </Field>
       <Field label="Traduttore" htmlFor={id("translators")} hint="Invio per aggiungerne un altro.">
         <TokenInput
           id={id("translators")}
