@@ -129,7 +129,10 @@ export function adminPreference(storage: StorageLike): boolean {
   }
 }
 
-/** Switches the admin view on or off and reloads (the flag is read once at startup). */
+/**
+ * Switches the admin view on or off and reloads (the flag is read once at startup). Turning it on lands on the
+ * library, where the admin bar lives (Sincronizza ora, Z-Library, upload); turning it off stays on the same page.
+ */
 export function setAdminView(on: boolean): void {
   try {
     if (on) window.localStorage.removeItem(ADMIN_KEY);
@@ -137,7 +140,8 @@ export function setAdminView(on: boolean): void {
   } catch {
     // no storage: the view stays as it is
   }
-  window.location.reload();
+  if (on) window.location.assign(`${import.meta.env.BASE_URL}library`);
+  else window.location.reload();
 }
 
 /** Startup: sets the admin flag and wraps `fetch`. Import this before anything else. */
