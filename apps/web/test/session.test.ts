@@ -62,7 +62,7 @@ describe("exchangeCredential", () => {
 
   it("explains a refused account and any other failure", async () => {
     const make = (status: number) => (async () => new Response("{}", { status })) as unknown as typeof fetch;
-    await expect(exchangeCredential("", "x", make(403))).rejects.toThrow("non è autorizzato");
+    await expect(exchangeCredential("", "x", make(403))).rejects.toThrow("Account non abilitato");
     await expect(exchangeCredential("", "x", make(500))).rejects.toThrow("Accesso non riuscito");
   });
 });

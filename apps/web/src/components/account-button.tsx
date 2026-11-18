@@ -71,7 +71,7 @@ export function AccountButton() {
   const [copied, setCopied] = useState<"idle" | "ok" | "error">("idle");
   if (!HOSTED) return null;
   const session = currentSession;
-  if (!session) return <GoogleSignIn />;
+  if (!session) return null; // the demo banner has the login button
   return (
     <>
       <Button

@@ -23,7 +23,7 @@ Stato: **in implementazione** (2026-11-18). Dal ramo `per-user-data` l'app è **
 | --- | --- | --- |
 | Frontend | **GitHub Pages** | Solo codice statico. Tutti i dati arrivano a runtime dall'API del Pi. |
 | Database | **Turso** (libSQL/SQLite, piano gratuito) | Unica fonte dei dati: libri, podcast, note, esplorazioni, chat, coda del Kobo. |
-| Login | **Google OAuth gestito dall'API Hono** | Chiunque abbia un account Google verificato (o solo la allowlist, se impostata). L'API crea l'utente e emette un proprio token di sessione con lo `sub`. |
+| Login | **Google OAuth gestito dall'API Hono** | Solo le email della allowlist obbligatoria (`ALLOWED_EMAILS`). L'API crea l'utente e emette un proprio token di sessione con lo `sub`. |
 | File | **Cloudflare R2**, bucket privato | EPUB (unica copia). 10 GB gratis, niente costi di egress, API S3. |
 | Backend | **Raspberry Pi 3** dietro un tunnel HTTPS | Unico punto d'accesso ai dati; l'unico che raggiunge il Kobo; freeway ci gira già. |
 | Cache di lavoro | Disco del Pi | KEPUB, audio e trascrizioni dei podcast, testo dei libri: tutto ricostruibile. |
@@ -32,7 +32,7 @@ Stato: **in implementazione** (2026-11-18). Dal ramo `per-user-data` l'app è **
 ## Regole
 
 - **Il frontend parla solo con il Pi.** Nessuna chiave del database nel browser, solo il token di sessione; nessuna policy da mantenere. Il Pi accede al DB con il token di Turso. Se il Pi è spento, il sito non mostra dati: è accettato.
-- **Niente rotte pubbliche.** Tutte le rotte dell'API, `GET` incluse, richiedono il token di sessione (senza: 401); fanno eccezione solo `POST /auth/google`, `GET /api/health` e il preflight CORS. Il token lo emette l'API dopo il login con Google (Google Identity Services: il browser ottiene l'ID token di Google e lo posta a `POST /auth/google`; `apps/api/src/google.ts` ne verifica firma, `aud` e email verificata, crea o aggiorna l'utente e controlla l'allowlist, se c'è). La risposta è un token firmato HS256 con `SESSION_SECRET`, valido 30 giorni, con lo `sub` di Google come soggetto, che il sito manda come `Authorization: Bearer`. Niente cookie e niente redirect: sito e API stanno su domini diversi.
+- **Niente rotte pubbliche, tranne la demo.** Tutte le rotte dell'API, `GET` incluse, richiedono il token di sessione (senza: 401); fanno eccezione `POST /auth/google`, `GET /api/health`, il preflight CORS e le letture della demo (sezione sotto). Il token lo emette l'API dopo il login con Google (Google Identity Services: il browser ottiene l'ID token di Google e lo posta a `POST /auth/google`; `apps/api/src/google.ts` ne verifica firma, `aud` e email verificata, crea o aggiorna l'utente e controlla l'allowlist, se c'è). La risposta è un token firmato HS256 con `SESSION_SECRET`, valido 30 giorni, con lo `sub` di Google come soggetto, che il sito manda come `Authorization: Bearer`. Niente cookie e niente redirect: sito e API stanno su domini diversi.
 - **Le chiavi stanno solo sul Pi**: token di Turso, segreto del client Google e `SESSION_SECRET`, chiavi R2, token di freeway e Groq, chiave SSH del Kobo. Le CLI del laptop (`elib`, `explore`) chiamano l'API del Pi con il token dell'utente.
 - **Validazione invariata**: gli schemi Zod di oggi validano ogni scrittura, sul Pi.
 - **I dati escono da git.** Dopo la migrazione `packages/*/data` sparisce dal repo pubblico: i dati non vengono più pubblicati con il sito. Resta la regola per ciò che il sito mostra: citazioni di al massimo due frasi, testo dei libri mai esposto.
@@ -50,15 +50,22 @@ Stato: **in implementazione** (2026-11-18). Dal ramo `per-user-data` l'app è **
 Ogni persona che fa login vede e modifica **solo i propri dati**. L'isolamento sta nello strato di storage, non nelle rotte.
 
 - **Tabella `users`** (`turso/migrations/0002_per_user.sql`): `id` = `sub` di Google, `email` (unica), `name`, `created_at`. Il login (`POST /auth/google`) crea o aggiorna la riga; il token di sessione porta lo `sub`.
-- **Allowlist facoltativa**: `ALLOWED_EMAILS` **vuota = può entrare chiunque abbia un account Google verificato**; con valori, solo quelle email (controllate a ogni richiesta: togliere un'email blocca subito la persona). Se l'app deve restare privata, va impostata.
+- **Allowlist obbligatoria**: `ALLOWED_EMAILS` elenca le email che possono entrare; **vuota = non entra nessuno** (l'API non parte senza). Un'email fuori lista riceve 403 («Account non abilitato.», mostrato nel banner del sito) e non crea nessun utente; l'elenco è controllato a ogni richiesta, quindi togliere un'email blocca subito la persona.
 - **Tutte le tabelle di dati** hanno `user_id` e chiave primaria `(user_id, id)`; `topics` ('all') è una riga per utente. `0002` ricrea le tabelle copiando le righe esistenti sotto l'utente `legacy` (un database appena creato non ne ha).
 - **Impossibile dimenticare il filtro**: `DocClient` espone solo `forUser(userId)`, e ogni query del handle restituito porta `WHERE user_id = ?` (o lo scrive in INSERT). Non esiste una lettura o scrittura senza proprietario. Il middleware di autenticazione esegue ogni richiesta dentro `runAsUser(sub, …)` (`AsyncLocalStorage`); il backend montato (`HostedBackend`) legge l'utente da lì a **ogni** operazione e **lancia `NoUserError`** se non c'è. Quindi i repository dei pacchetti (che chiamano `readTextIfExists` & co.) non cambiano e non possono uscire dal perimetro dell'utente. Le rotte `/api/store/…` delle CLI passano dallo stesso percorso.
 - **File**: R2 `users/<sub>/books/<id>.epub` e `users/<sub>/covers/<id>.webp` (`scopedBlobs` aggiunge il prefisso e rifiuta `..`). Cache su disco del Pi in `<cache>/users/<sub>/…` (EPUB, KEPUB, testo, upload, esplorazioni; trascrizioni dei podcast in `<dati>/podcasts/users/<sub>/transcripts`), tramite `userScopedDir`. Cache e stato in memoria (riassunti in corso) sono per utente.
 - **Kobo**: un solo dispositivo, nella LAN del proprietario. `KOBO_OWNER_EMAIL` decide chi lo usa: per tutti gli altri ogni operazione Kobo (sync, coda, evidenziazioni, cancellazioni) è un no-op silenzioso e la sezione non compare (`/auth/me` e il login rispondono `kobo: true|false`; la coda è vuota). Host, porta e chiave SSH (`ELIB_KOBO_*`) valgono solo per lui. Il timer `ehub-kobo-sync` svuota la coda del proprietario; finché non ha fatto login non fa nulla.
 - **Chat e trascrizioni** lavorano sui dati dell'utente della richiesta (stesso contesto). Il router freeway e la chiave Groq sono condivisi: le quote sono di tutti.
-- **Frontend**: nel build hosted, senza sessione compare solo la pagina di login e non parte nessuna richiesta; una risposta 401 cancella la sessione e riporta al login.
+- **Frontend**: nel build hosted, senza sessione il sito mostra la demo (sezione sotto); una risposta 401 a una sessione esistente la cancella e ricarica la pagina.
 - **CLI** (`explore`): con `EHUB_API_URL` + `EHUB_API_TOKEN` (il token si copia dal sito dopo il login) lavorano sui dati di quell'utente. `elib` e `episode` restano strumenti del Pi.
-- **Non per utente** (ancora): lo stato di Z-Library (`zlibrary-session.json`) è un unico account del Pi; la sua sezione resta raggiungibile da chiunque abbia un account. Se si aprisse a più persone va limitata al proprietario come il Kobo.
+- **Non per utente** (ancora): lo stato di Z-Library (`zlibrary-session.json`) è un unico account del Pi; la sua sezione resta raggiungibile da chiunque sia in allowlist. Se si aprisse a più persone va limitata al proprietario come il Kobo.
+
+### La demo per chi non è loggato
+
+- **Utente riservato `demo`** (`DEMO_USER_ID`): non è un account Google. Il login rifiuta `sub = demo`, il verificatore dei token non accetta mai una sessione per lui, e la sua email (`demo@demo.invalid`) non è in allowlist.
+- **Solo letture**: una richiesta `GET`/`HEAD` **senza header `Authorization`** a una delle rotte di `DEMO_GETS` (`apps/api/src/auth.ts`: indice, schede e copertine del sito della libreria, argomenti, catalogo e tag dei podcast, note, esplorazioni con il loro id) viene servita come `demo`. Tutto il resto senza token è 401: scritture, chat, Kobo, upload, trascrizioni, riassunti, `/api/store`, Z-Library. Un token sbagliato non ricade mai sulla demo (401).
+- **Contenuto**: `demo/seed/` (stessa struttura delle cartelle dati): 4 libri di pubblico dominio con copertina generata e argomento, 2 note, 1 esplorazione, 1 podcast inventato con un episodio. Testi scritti per la demo; nessun dato reale dell'utente. Si carica con `pnpm --filter @ehub/store seed-demo` (serve `.env.local` come per la migrazione): cancella e riscrive **solo** righe e file di `demo` (`users/demo/…` su R2), quindi si può rilanciare quando si cambia la fixture.
+- **UI**: banner «Stai guardando una demo» con il pulsante «Accedi con Google»; i controlli di modifica, la chat e il Kobo non compaiono (stesso flag admin del sito, spento senza sessione).
 
 ### Il proprietario e la migrazione dei dati esistenti
 
@@ -134,9 +141,9 @@ Il JSON è salvato come testo: l'ordine delle chiavi si conserva. Il test di `Tu
 4. Dal laptop: `deploy/pi/deploy.sh ggabry@<pi>` costruisce il bundle (`pnpm --filter @ehub/api bundle`), scarica `sharp` per linux-arm64 e copia tutto in `/opt/ehub`, poi riavvia `ehub-api`. `sudo systemctl enable --now ehub-api` la prima volta.
 5. Tunnel (da decidere): l'API ascolta su `127.0.0.1:8788`; `cloudflared` o Tailscale Funnel puntano lì. Il dominio e l'origine di Pages stanno in `CORS_ORIGINS`, nessun valore è scritto nel codice.
 
-Variabili di login sul Pi: `GOOGLE_CLIENT_ID`, `SESSION_SECRET`, `ALLOWED_EMAILS` (facoltativa: vuota = chiunque), `KOBO_OWNER_EMAIL`. Nella console Google il client OAuth (tipo «Web») ha come «Origini JavaScript autorizzate» l'origine di Pages; non servono URI di reindirizzamento né il segreto del client.
+Variabili di login sul Pi: `GOOGLE_CLIENT_ID`, `SESSION_SECRET`, `ALLOWED_EMAILS` (obbligatoria), `KOBO_OWNER_EMAIL`. Nella console Google il client OAuth (tipo «Web») ha come «Origini JavaScript autorizzate» l'origine di Pages; non servono URI di reindirizzamento né il segreto del client.
 
-Nessuna rotta è pubblica (nemmeno i `GET`). Cancellare un libro non cancella l'EPUB su R2 (è l'unica copia: si toglie a mano).
+Nessuna rotta è pubblica (nemmeno i `GET`), salvo le letture della demo. Cancellare un libro non cancella l'EPUB su R2 (è l'unica copia: si toglie a mano).
 
 ## Kobo sul Pi
 
@@ -158,10 +165,11 @@ Nell'ordine in cui conviene farlo:
 
 1. **Turso**: creare il database, un token con scrittura, mettere `TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN` in `.env.local` (e in `/etc/ehub/env` sul Pi), poi `pnpm --filter @ehub/store db:migrate --apply`. Un token incollato in chat va considerato compromesso: revocarlo e crearne uno nuovo.
 2. **R2**: bucket privato e token S3 (`R2_*`).
-3. **Google**: client OAuth «Web» con l'origine di Pages tra le origini JavaScript autorizzate; `GOOGLE_CLIENT_ID`, `SESSION_SECRET`, `ALLOWED_EMAILS` (se l'app deve restare privata), `KOBO_OWNER_EMAIL`, e la variabile GitHub `GOOGLE_CLIENT_ID` per il build.
-4. **Migrazione dei dati**: prima `db:migrate --apply` (applica 0001 e 0002), poi `pnpm --filter @ehub/store migrate --owner-email <la tua email>` (a secco), poi `--apply` solo dopo aver controllato l'elenco; confrontare i conti con la UI.
-5. **Pi**: installazione una tantum (sezione sopra), `deploy/pi/deploy.sh`, chiave SSH e `known_hosts` del Kobo, `kepubify`, `ffmpeg`, `yt-dlp`, `GROQ_API_KEY`.
-6. **Tunnel**: Cloudflare Tunnel (serve un dominio) o Tailscale Funnel verso `127.0.0.1:8788`; poi `CORS_ORIGINS` e la variabile `API_URL` del repository GitHub.
-7. **Chiusura (fase 8)**, solo dopo la conferma: togliere `packages/*/data` dal repo e dal build, e i server `*-dev.ts` una volta scelto come si sviluppa in locale (`API_LOCAL_DEV=1 pnpm --filter @ehub/api start` è già un'opzione: stessa API su file locali, senza login).
+3. **Demo**: dopo `db:migrate --apply`, `pnpm --filter @ehub/store seed-demo`.
+4. **Google**: client OAuth «Web» con l'origine di Pages tra le origini JavaScript autorizzate; `GOOGLE_CLIENT_ID`, `SESSION_SECRET`, `ALLOWED_EMAILS` (obbligatoria), `KOBO_OWNER_EMAIL`, e la variabile GitHub `GOOGLE_CLIENT_ID` per il build.
+5. **Migrazione dei dati**: prima `db:migrate --apply` (applica 0001 e 0002), poi `pnpm --filter @ehub/store migrate --owner-email <la tua email>` (a secco), poi `--apply` solo dopo aver controllato l'elenco; confrontare i conti con la UI.
+6. **Pi**: installazione una tantum (sezione sopra), `deploy/pi/deploy.sh`, chiave SSH e `known_hosts` del Kobo, `kepubify`, `ffmpeg`, `yt-dlp`, `GROQ_API_KEY`.
+7. **Tunnel**: Cloudflare Tunnel (serve un dominio) o Tailscale Funnel verso `127.0.0.1:8788`; poi `CORS_ORIGINS` e la variabile `API_URL` del repository GitHub.
+8. **Chiusura (fase 8)**, solo dopo la conferma: togliere `packages/*/data` dal repo e dal build, e i server `*-dev.ts` una volta scelto come si sviluppa in locale (`API_LOCAL_DEV=1 pnpm --filter @ehub/api start` è già un'opzione: stessa API su file locali, senza login).
 
 Da sapere: il build non hosted (`pnpm build`) e i server di dev funzionano ancora come prima; `elib` e `episode` restano strumenti del Pi (servono cache EPUB, Kobo, trascrizioni).

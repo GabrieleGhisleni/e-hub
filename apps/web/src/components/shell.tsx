@@ -1,6 +1,7 @@
 import { Outlet, ScrollRestoration, useLocation } from "react-router";
 import { ExplorationBadges } from "@ehub/explore";
 import { SidePanelProvider, type SourceExtraRef, SourceExtrasProvider } from "@ehub/ui";
+import { DemoBanner } from "./demo-banner";
 import { SiteFooter, SiteHeader } from "./site-header";
 
 /** Which module the current URL belongs to: it selects the accent (data-module) for the whole shell. */
@@ -34,6 +35,7 @@ export function Shell() {
           >
             Vai al contenuto
           </a>
+          <DemoBanner />
           <SiteHeader />
           <main id="main" tabIndex={-1} className="flex-1 outline-none">
             <Outlet />

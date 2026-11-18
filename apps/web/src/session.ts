@@ -90,7 +90,7 @@ export async function exchangeCredential(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ credential }),
   });
-  if (response.status === 403) throw new Error("Questo account non è autorizzato.");
+  if (response.status === 403) throw new Error("Account non abilitato.");
   if (!response.ok) throw new Error("Accesso non riuscito.");
   const body = (await response.json()) as { token?: unknown };
   if (typeof body.token !== "string") throw new Error("Accesso non riuscito.");
