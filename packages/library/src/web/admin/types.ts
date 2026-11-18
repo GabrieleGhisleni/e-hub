@@ -34,4 +34,6 @@ export interface AdminModule {
   AdminChrome: () => ReactNode;
   LibraryAdminBar: (props: LibraryAdminBarProps) => ReactNode;
   BookAdminActions: (props: BookAdminActionsProps) => ReactNode;
+  /** "+" to add a topic (next to the topic filters). */
+  NewTopicButton: (props: { onCreated?: (topic: { id: string; label: string }) => void }) => ReactNode;
 }

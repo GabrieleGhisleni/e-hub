@@ -13,6 +13,7 @@ import { BOOK_STATUSES, type BookStatus } from "@shared/schema";
 import { statusLabel } from "@shared/labels";
 import type { BookFormState, FormErrors } from "./lib/book-form";
 import { addItem, addTags, suggestTags, type TagUsage } from "./lib/tags";
+import { NewTopicButton } from "./new-topic-button";
 import { TokenInput } from "./token-input";
 
 export function Field({
@@ -207,14 +208,19 @@ export function BookFormFields({
       </Field>
 
       <Field label="Argomento" htmlFor={id("topic")} error={errors.topic}>
-        <TopicSelect
-          id={id("topic")}
-          value={value.topic}
-          onChange={(v) => set("topic", v)}
-          topics={topics}
-          disabled={disabled}
-          invalid={!!errors.topic}
-        />
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <TopicSelect
+              id={id("topic")}
+              value={value.topic}
+              onChange={(v) => set("topic", v)}
+              topics={topics}
+              disabled={disabled}
+              invalid={!!errors.topic}
+            />
+          </div>
+          <NewTopicButton disabled={disabled} onCreated={(topic) => set("topic", topic.id)} />
+        </div>
       </Field>
 
       <Field label="Stato" htmlFor={id("status")}>

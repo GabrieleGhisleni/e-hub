@@ -10,6 +10,7 @@ import {
   FacetStack,
   ShowMoreButton,
 } from "@ehub/ui";
+import { NewTopicSlot } from "@library/admin-slots";
 import { StatusDot } from "@library/components/status-badge";
 import {
   type Facets,
@@ -35,7 +36,8 @@ export function FilterPanel({
 }) {
   const [showAllTags, setShowAllTags] = useState(false);
   const usedTopics = new Set(index.books.map((b) => b.topic));
-  const topics = index.topics.filter((t) => usedTopics.has(t.id) || t.id === query.topic);
+  // Admin: every topic is listed (a new one has no books yet); readers only see topics in use.
+  const topics = index.topics.filter((t) => __ELIB_ADMIN__ || usedTopics.has(t.id) || t.id === query.topic);
   const tags = facets.tags;
   const visibleTags =
     showAllTags || tags.length <= TAG_PREVIEW
@@ -44,7 +46,7 @@ export function FilterPanel({
 
   return (
     <FacetStack>
-      <FacetSection title="Argomento">
+      <FacetSection title="Argomento" action={__ELIB_ADMIN__ ? <NewTopicSlot /> : undefined}>
         <FacetList>
           <FacetOption
             kind="single"

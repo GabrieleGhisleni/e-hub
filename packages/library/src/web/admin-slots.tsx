@@ -12,6 +12,7 @@ let AdminApp: ComponentType | null = null;
 let AdminChrome: ComponentType | null = null;
 let LibraryAdminBar: ComponentType<LibraryAdminBarProps> | null = null;
 let BookAdminActions: ComponentType<BookAdminActionsProps> | null = null;
+let NewTopicButton: ComponentType | null = null;
 
 if (__ELIB_ADMIN__) {
   const load = (): Promise<AdminModule> => import("./admin/index.tsx");
@@ -19,6 +20,7 @@ if (__ELIB_ADMIN__) {
   AdminChrome = lazy(() => load().then((m) => ({ default: m.AdminChrome })));
   LibraryAdminBar = lazy(() => load().then((m) => ({ default: m.LibraryAdminBar })));
   BookAdminActions = lazy(() => load().then((m) => ({ default: m.BookAdminActions })));
+  NewTopicButton = lazy(() => load().then((m) => ({ default: m.NewTopicButton as ComponentType })));
 }
 
 /** Element for the `admin/*` route (only registered when `__ELIB_ADMIN__`). */
@@ -57,6 +59,16 @@ export function BookAdminActionsSlot(props: BookAdminActionsProps) {
   return (
     <Suspense fallback={null}>
       <BookAdminActions {...props} />
+    </Suspense>
+  );
+}
+
+/** "+" next to the topic filters: adds a topic. */
+export function NewTopicSlot() {
+  if (!NewTopicButton) return null;
+  return (
+    <Suspense fallback={null}>
+      <NewTopicButton />
     </Suspense>
   );
 }

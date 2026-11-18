@@ -4,6 +4,7 @@
  */
 export { AdminApp, adminRoutes } from "./routes";
 export { LibraryAdminBar } from "./library-admin-bar";
+export { NewTopicButton } from "./new-topic-button";
 export { BookAdminActions } from "./book-admin-actions";
 export { ADMIN_BUNDLE_MARKER } from "./marker";
 export { AdminChrome } from "./admin-chrome";
