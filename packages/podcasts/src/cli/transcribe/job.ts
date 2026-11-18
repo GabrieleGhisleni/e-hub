@@ -8,7 +8,8 @@ import type { Episode, Show } from "../../core/schema";
 import type { FeedMatch } from "./feed-audio";
 
 export const JOB_VERSION = 1;
-export const DEFAULT_MODEL = "small.en";
+/** Groq-hosted Whisper (docs/hosting.md). */
+export const DEFAULT_MODEL = "whisper-large-v3-turbo";
 export const DEFAULT_CPU_THREADS = 8;
 export const CHUNK_SECONDS = 600;
 export const DIARIZERS = ["diarize", "pyannote"] as const;

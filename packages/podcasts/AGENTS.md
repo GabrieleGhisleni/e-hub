@@ -62,7 +62,7 @@ Pass `--expected-updated-at <updatedAt>` with the `updatedAt` you read from the 
 | `pnpm episode save <slug> --input <file\|-> [--expected-updated-at T]`   | Apply summary/notes/tags/guests/conversations                             |
 | `pnpm tags [--json]`                                                     | Existing tags with episode counts (read-only)                             |
 | `pnpm transcript export <slug> [--out f]`                                | Whole transcript as compact markdown for an agent (read-only)             |
-| `pnpm transcribe <slug> [--model M] [--force] [--keep-audio]`            | Local Whisper transcription; long (~15–30 min for 2 h); resumes if re-run |
+| `pnpm transcribe <slug> [--model M] [--force] [--keep-audio]`            | Whisper via Groq (needs `GROQ_API_KEY`, `ffmpeg`, `yt-dlp`); no speakers; resumes if re-run |
 
 Exit codes for `episode` commands: 0 ok, 1 unexpected, 2 usage, 3 validation, 4 not found, 5 conflict, 6 transcript guard, 7 duplicate, 8 already exists. `pnpm episode add` without a TTY and without `--feed` or `--no-feed` exits 2 for a new show: ask the user which feed to confirm, never choose it yourself.
 

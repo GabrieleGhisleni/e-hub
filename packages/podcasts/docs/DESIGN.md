@@ -78,7 +78,7 @@ Il `.gitignore` da solo non basta: una trascrizione può rientrare dentro una co
 - Validazione: **Zod**.
 - Test: **Vitest** — parser delle fonti, merge di `episode save`, export markdown, controllo delle trascrizioni (§5.1).
 - Ricerca: **MiniSearch**, lato client, indice costruito in memoria al caricamento. Pagefind (indice statico a build time) era stato considerato quando si pensava di cercare anche nelle trascrizioni; scartato perché sul sito ci sono solo metadati e appunti di < 100 episodi.
-- Trascrizione: **Python gestito con uv** (faster-whisper, diarize, yt-dlp).
+- Trascrizione: **Python gestito con uv** (faster-whisper, diarize, yt-dlp). _Superato (2026-11): `pnpm transcribe` usa Groq `whisper-large-v3-turbo` da TypeScript (`src/cli/transcribe/groq.ts`, `docs/hosting.md`); la cartella `transcriber/` è stata rimossa e le trascrizioni non hanno più speaker._
 - Lint/format: **oxlint** e **oxfmt** (già configurati nel repo).
 
 ### 3.1 Struttura del repo

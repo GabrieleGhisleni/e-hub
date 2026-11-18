@@ -1,8 +1,7 @@
 /**
- * `pnpm transcribe <slug> [flags]` — local Whisper transcription of an episode
- * (DESIGN.md §7). Audio: yt-dlp on the episode's YouTube video (timebase
- * youtube), else the show feed's MP3 (timebase feed). Resumable: interrupting
- * and relaunching continues from the next ~10-minute chunk.
+ * `pnpm transcribe <slug> [flags]` — Whisper transcription of an episode through Groq (docs/hosting.md; needs
+ * GROQ_API_KEY, `ffmpeg`, and `yt-dlp` for YouTube audio). Audio: yt-dlp on the episode's YouTube video (timebase
+ * youtube), else the show feed's MP3 (timebase feed). Resumable: finished parts are cached and a re-run skips them.
  *
  * Exit codes: 0 ok, 1 transcriber failed/unexpected, 2 usage, 3 invalid
  * output, 4 episode/show/audio not found, 8 transcript already present
@@ -13,8 +12,8 @@ import { CoreError, EXIT_CODES, exitCodeFor } from "../core/errors";
 import { createHttp } from "../core/ingest/http";
 import { files } from "../core/paths";
 import { DIARIZERS, type Diarizer, type TranscribeOptions } from "./transcribe/job";
+import { nodeExec, runGroqTranscriber } from "./transcribe/groq";
 import {
-  spawnTranscriber,
   transcribeEpisode,
   TranscriberFailedError,
   type TranscribeResult,
@@ -24,17 +23,13 @@ const USAGE = `Usage:
   pnpm transcribe <slug> [options]
 
 Options:
-  --model <name>         faster-whisper model (default small.en; e.g. medium.en, distil-large-v3)
-  --num-speakers <n>     speakers for diarization (default 1 + number of guests, 2 if none)
-  --diarizer <name>      diarize (default) | pyannote (optional extra, needs HF_TOKEN)
-  --keep-audio           keep data/audio/<slug>.wav (+ the diarization cache) for a later re-run
+  --model <name>         Groq model (default whisper-large-v3-turbo)
+  --keep-audio           keep the downloaded audio in data/audio for a later re-run
   --limit-minutes <n>    transcribe only the first n minutes (testing)
-  --threads <n>          CPU threads for Whisper (default 8)
   --force                replace an existing transcript (e.g. an official one)
 
-Long run (~15–20 min for 2 h of audio): run it in the background with a log, e.g.
-  pnpm transcribe <slug> > data/cache/transcribe-<slug>.log 2>&1 &
-Stopping it (Ctrl-C / kill) keeps finished chunks; the same command resumes.`;
+Groq returns no speakers: segments have none (the speakers dialog can still label them). A 2 h episode is a few
+minutes of API time; stopping it keeps the finished parts and the same command resumes.`;
 
 class UsageError extends Error {}
 
@@ -126,7 +121,13 @@ async function main(argv: string[]): Promise<number> {
     const { slug, options } = parse(argv);
     const result = await transcribeEpisode(slug, options, {
       http: createHttp(),
-      runTranscriber: spawnTranscriber,
+      runTranscriber: (job) =>
+        runGroqTranscriber(job, {
+          fetch,
+          exec: nodeExec,
+          apiKey: process.env.GROQ_API_KEY,
+          log: (line) => console.error(`[transcribe] ${line}`),
+        }),
       log: (line) => console.error(`[transcribe] ${line}`),
     });
     console.log(describe(result, Date.now() - started));
