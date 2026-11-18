@@ -34,3 +34,15 @@ export const DevNewExplorationPage = import.meta.env.DEV
 export const DevNotebookEditor = import.meta.env.DEV
   ? lazy(() => import("./dev/notebook-editor.tsx").then((m) => ({ default: m.NotebookDevEditor })))
   : null;
+
+export const DevTagsEditor = import.meta.env.DEV
+  ? lazy(() => import("./dev/dev-tools.tsx").then((m) => ({ default: m.TagsDevEditor })))
+  : null;
+
+export const DevKoboButton = import.meta.env.DEV
+  ? lazy(() => import("./dev/dev-tools.tsx").then((m) => ({ default: m.KoboDevButton })))
+  : null;
+
+export const DevKoboSelectBox = import.meta.env.DEV
+  ? lazy(() => import("./dev/dev-tools.tsx").then((m) => ({ default: m.KoboSelectBox })))
+  : null;

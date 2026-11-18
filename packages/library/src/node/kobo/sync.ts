@@ -11,6 +11,8 @@
  * data/books (incomplete uploads, invalid book.json) are never removed.
  */
 import { createHash } from "node:crypto";
+import { readdir } from "node:fs/promises";
+import path from "node:path";
 import {
   type ReconcileAction,
   type ReconcileMessage,
@@ -25,7 +27,12 @@ import {
   parseKoboFileName,
 } from "../../shared/naming.ts";
 import type { Book, Topic } from "../../shared/schema.ts";
-import { cachedEpubPath, cachedKepubPath, isNonEmptyFile } from "../cache/index.ts";
+import {
+  CACHE_EXPLORE_DIR,
+  cachedEpubPath,
+  cachedKepubPath,
+  isNonEmptyFile,
+} from "../cache/index.ts";
 import { KepubifyError, convertToKepub } from "../kepub/index.ts";
 import {
   BookNotFoundError,
@@ -70,6 +77,19 @@ interface RunInput {
   orphans?: { knownIds: ReadonlySet<string>; incompleteIds: ReadonlySet<string> };
 }
 
+/** IDs of the books imported for explorations (folders of `<cache>/explore/books`); [] when there are none. */
+export async function listExploreBookIds(cacheDir: string): Promise<string[]> {
+  try {
+    const entries = await readdir(path.join(cacheDir, CACHE_EXPLORE_DIR, "books"), {
+      withFileTypes: true,
+    });
+    return entries.filter((e) => e.isDirectory() && isBookId(e.name)).map((e) => e.name);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+}
+
 /**
  * Reconciles the given book IDs (read from the repo), or the whole library with `"all"` (= `elib sync`, which also
  * reports orphans and unrecognized files). One listing of the Kobo per call.
@@ -101,6 +121,8 @@ export async function reconcile(
         ...all.books.map((b) => b.id),
         ...all.incomplete,
         ...all.invalid.map((i) => i.id),
+        // Books imported for explorations may be on the Kobo too: never orphans.
+        ...(await listExploreBookIds(ctx.cacheDir)),
       ]),
       incompleteIds: new Set(all.incomplete),
     };

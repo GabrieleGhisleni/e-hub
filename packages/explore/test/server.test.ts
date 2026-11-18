@@ -399,3 +399,59 @@ describe("explore API: summaries", () => {
     expect(deps.summaryStarts).toEqual([]);
   });
 });
+
+describe("explore API: tags and Kobo", () => {
+  it("saves tags through PATCH (normalised) and rejects bad ones", async () => {
+    const { app } = setup();
+    const created = await create(app);
+    const ok = await call(app, "PATCH", `/api/explore/${created.id}`, { tags: ["Filosofia", "etica", "filosofia"] });
+    expect(ok.status).toBe(200);
+    expect((await body(ok)).tags).toEqual(["etica", "filosofia"]);
+    expect((await call(app, "PATCH", `/api/explore/${created.id}`, { tags: ["a,b"] })).status).toBe(400);
+  });
+
+  it("plans, then adds the explore books of the chosen explorations to the library (same ID)", async () => {
+    const promoted: { id: string; topic: string }[] = [];
+    const deps = {
+      ...fakeLibrary(),
+      listLibraryTopics: async () => [{ id: "filosofia", label: "Filosofia" }],
+      promoteExploreBook: async (input: { id: string; topic: string }) => {
+        promoted.push(input);
+        return { book: {}, report: { dryRun: false, actions: [], warnings: [], errors: [] } } as never;
+      },
+    };
+    const app = createExploreApp({ deps: deps as never });
+    const created = await create(app, "Prova", ["78w462eb"]);
+    await app.request(`/api/explore/${created.id}/epub`, {
+      method: "POST",
+      headers: {
+        host: HOST,
+        origin: ORIGIN,
+        "content-type": "application/epub+zip",
+        "x-file-name": "g.epub",
+      },
+      body: FAKE_EPUB,
+    });
+    await call(app, "PATCH", `/api/explore/${created.id}`, { tags: ["filosofia"] });
+
+    expect((await body(await call(app, "GET", "/api/explore/topics"))).topics).toEqual([
+      { id: "filosofia", label: "Filosofia" },
+    ]);
+
+    const dry = await body(await call(app, "POST", "/api/explore/kobo", { tags: ["filosofia"], dryRun: true }));
+    expect(dry.plan.books).toHaveLength(1);
+    expect(dry.plan.skippedLibrary).toBe(1);
+    expect(promoted).toEqual([]);
+
+    expect((await call(app, "POST", "/api/explore/kobo", { ids: [created.id] })).status).toBe(422); // no topic
+    expect((await call(app, "POST", "/api/explore/kobo", { ids: [created.id], topic: "storia" })).status).toBe(422);
+
+    const real = await call(app, "POST", "/api/explore/kobo", { ids: [created.id], topic: "filosofia" });
+    expect(real.status).toBe(200);
+    expect(promoted).toEqual([{ id: "ex000001", topic: "filosofia" }]);
+    const after = await body(await call(app, "GET", `/api/explore/${created.id}`));
+    expect(after.sources.find((s: { id: string }) => s.id === "ex000001").origin).toBe("library");
+
+    expect((await call(app, "POST", "/api/explore/kobo", {})).status).toBe(422);
+  });
+});

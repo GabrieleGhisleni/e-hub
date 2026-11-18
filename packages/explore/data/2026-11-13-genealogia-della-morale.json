@@ -5,7 +5,7 @@
   "question": "Il rapporto con il cristianesimo secondo nizstche.",
   "status": "open",
   "createdAt": "2026-11-13T19:07:56.033Z",
-  "updatedAt": "2026-11-13T19:07:57.896Z",
+  "updatedAt": "2026-11-17T19:58:45.643Z",
   "sources": [
     {
       "kind": "book",
@@ -22,7 +22,12 @@
         "bytes": 839228
       },
       "addedAt": "2026-11-13T19:07:57.896Z",
-      "verdict": null
+      "verdict": {
+        "decision": "all",
+        "reason": "1",
+        "decidedAt": "2026-11-17T19:58:45.643Z",
+        "via": "app"
+      }
     }
   ],
   "summary": null,

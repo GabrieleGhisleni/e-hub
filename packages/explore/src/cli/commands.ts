@@ -16,7 +16,11 @@ import {
   createExploration,
   exploreDataDir,
   listExplorations,
+  addBooksToLibraryAndKobo,
+  planKoboBooks,
   prepareExploration,
+  removeBooksFromKobo,
+  withLibraryDeps,
   readExploration,
   removeBook,
   setNotebook,
@@ -107,9 +111,13 @@ export function registerCommands(program: Command, ctx: CliContext): void {
   program
     .command("list")
     .description("elenca le esplorazioni, la più recente per prima")
+    .option("--tag <tag>", "solo le esplorazioni con questo tag (ripetibile)", collect, [])
     .option("--json", "stampa JSON")
-    .action(async (options: { json?: boolean }) => {
-      const all = await listExplorations();
+    .action(async (options: { tag: string[]; json?: boolean }) => {
+      const wanted = options.tag.map((t) => t.trim().toLowerCase());
+      const all = (await listExplorations()).filter(
+        (e) => wanted.length === 0 || (e.tags ?? []).some((tag) => wanted.includes(tag)),
+      );
       if (options.json) {
         ctx.out(JSON.stringify(all, null, 2));
         return;
@@ -123,12 +131,137 @@ export function registerCommands(program: Command, ctx: CliContext): void {
         e.status === "open" ? "aperta" : "chiusa",
         String(e.sources.length),
         formatDate(e.updatedAt),
+        (e.tags ?? []).join(", "),
         e.title,
       ]);
-      for (const line of formatTable(["ID", "Stato", "Fonti", "Aggiornata", "Titolo"], rows)) {
+      for (const line of formatTable(["ID", "Stato", "Fonti", "Aggiornata", "Tag", "Titolo"], rows)) {
         ctx.out(line);
       }
     });
+
+  program
+    .command("tag <id>")
+    .description("mostra o cambia i tag di un'esplorazione (es. filosofia)")
+    .option("--add <tag>", "aggiunge un tag (ripetibile)", collect, [])
+    .option("--remove <tag>", "toglie un tag (ripetibile)", collect, [])
+    .option("--set <tag>", "sostituisce tutti i tag (ripetibile; --set '' li toglie)", collect)
+    .option("--json", "stampa JSON")
+    .action(
+      async (
+        id: string,
+        options: { add: string[]; remove: string[]; set?: string[]; json?: boolean },
+      ) => {
+        const current = await readExploration(id);
+        const changing = options.add.length > 0 || options.remove.length > 0 || options.set !== undefined;
+        if (!changing) {
+          if (options.json) ctx.out(JSON.stringify(current.tags ?? [], null, 2));
+          else ctx.out((current.tags ?? []).join(", ") || "Nessun tag.");
+          return;
+        }
+        if (options.set !== undefined && (options.add.length > 0 || options.remove.length > 0)) {
+          throw new UsageError("--set non si combina con --add o --remove");
+        }
+        const norm = (t: string) => t.trim().toLowerCase();
+        const base =
+          options.set !== undefined
+            ? options.set.map(norm).filter((t) => t !== "")
+            : (current.tags ?? []).filter((t) => !options.remove.map(norm).includes(t));
+        const exploration = await updateExploration(id, {
+          tags: options.set !== undefined ? base : [...base, ...options.add],
+        });
+        reportChange(ctx, exploration, `Tag: ${(exploration.tags ?? []).join(", ") || "nessuno"}.`, options.json);
+      },
+    );
+
+  program
+    .command("kobo")
+    .description(
+      "aggiunge alla libreria (stesso ID) i libri esplorati delle esplorazioni scelte per ID o tag, con un argomento, e li manda sul Kobo; con --remove li toglie dal Kobo",
+    )
+    .option("--id <id>", "esplorazione (ripetibile)", collect, [])
+    .option("--tag <tag>", "tutte le esplorazioni con questo tag (ripetibile)", collect, [])
+    .option(
+      "--verdict <decisione>",
+      "solo libri con questo verdetto: all, parts, undecided, skip (ripetibile; default: tutti tranne skip)",
+      collect,
+      [],
+    )
+    .option("--topic <argomento>", "argomento della libreria (ID o nome, es. filosofia): diventa la serie sul Kobo")
+    .option("--dry-run", "mostra cosa farebbe, senza scrivere")
+    .option("--remove", "invece di aggiungere, toglie dal Kobo i libri non ancora in libreria (irreversibile: il Kobo non ha cestino)")
+    .option("--json", "stampa JSON")
+    .action(
+      async (options: {
+        id: string[];
+        tag: string[];
+        verdict: string[];
+        topic?: string;
+        dryRun?: boolean;
+        remove?: boolean;
+        json?: boolean;
+      }) => {
+        const decisions = options.verdict.map((raw) => {
+          const parsed = VerdictDecisionSchema.safeParse(raw);
+          if (!parsed.success) throw new UsageError(`Verdetto non valido: «${raw}» (all, parts, undecided, skip)`);
+          return parsed.data;
+        });
+        const library = withLibraryDeps(deps);
+        const plan = planKoboBooks(await listExplorations(), {
+          ids: options.id,
+          tags: options.tag,
+          ...(decisions.length > 0 ? { decisions } : {}),
+        });
+        const dryRun = options.dryRun === true;
+
+        let topicId: string | undefined;
+        if (!options.remove && plan.books.length > 0) {
+          if (!options.topic) throw new UsageError("indica l'argomento della libreria con --topic (es. --topic filosofia)");
+          const topics = await library.listLibraryTopics();
+          const wanted = options.topic.trim().toLowerCase();
+          const found = topics.find((t) => t.id === wanted || t.label.toLowerCase() === wanted);
+          if (!found) {
+            throw new UsageError(
+              `Argomento «${options.topic}» non trovato (disponibili: ${topics.map((t) => t.id).join(", ")})`,
+            );
+          }
+          topicId = found.id;
+        }
+
+        if (!options.json) {
+          ctx.err(`Esplorazioni: ${plan.explorations.join(", ") || "nessuna"}`);
+          ctx.err(
+            `Libri: ${plan.books.length} (già in libreria: ${plan.skippedLibrary}, esclusi dal verdetto: ${plan.skippedVerdict})`,
+          );
+          for (const book of plan.books) ctx.err(`  ${book.id}  ${book.title}`);
+          if (topicId) ctx.err(`Argomento in libreria (serie sul Kobo): ${topicId}`);
+        }
+        if (plan.books.length === 0) {
+          if (options.json) ctx.out(JSON.stringify({ plan, reports: [], failures: [] }, null, 2));
+          else ctx.out("Nessun libro da aggiungere.");
+          return;
+        }
+        if (dryRun && !options.remove) {
+          if (options.json) ctx.out(JSON.stringify({ plan, reports: [], failures: [] }, null, 2));
+          else ctx.out("Dry run: nessuna scrittura. Senza --dry-run i libri entrano in libreria e vanno sul Kobo.");
+          return;
+        }
+
+        let reports;
+        let failures: { id: string; message: string }[] = [];
+        if (options.remove) {
+          reports = await removeBooksFromKobo(plan, { dryRun }, deps);
+        } else {
+          ({ reports, failures } = await addBooksToLibraryAndKobo(plan, topicId!, deps));
+        }
+        if (options.json) {
+          ctx.out(JSON.stringify({ plan, reports, failures }, null, 2));
+        } else {
+          for (const report of reports) for (const line of library.formatKoboReport(report)) ctx.out(line);
+          for (const failure of failures) ctx.err(`errore: ${failure.id}: ${failure.message}`);
+        }
+        if (failures.length > 0 || reports.some((r) => r.errors.length > 0)) throw new ExitWith(1);
+      },
+    );
 
   program
     .command("show <id>")

@@ -2,7 +2,16 @@
  * Local-only explorations UI (the dev server): chat, proposals, verdicts, sources, notes, EPUB uploads. Loaded
  * lazily through `../dev-slots.tsx`, so none of this code is in the static build.
  */
-import { CheckIcon, CompassIcon, PencilIcon, PlusIcon, Trash2Icon, UploadIcon } from "lucide-react";
+import {
+  CheckIcon,
+  CompassIcon,
+  PencilIcon,
+  PlusIcon,
+  TabletSmartphoneIcon,
+  Trash2Icon,
+  UploadIcon,
+  XIcon,
+} from "lucide-react";
 import { type FormEvent, useEffect, useId, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -27,7 +36,9 @@ import type { BookSource, Exploration } from "../../schema.ts";
 import { explorationHref } from "../format.ts";
 import {
   type ExploreStore,
+  type KoboResult,
   type LibraryBookRef,
+  type LibraryTopic,
   type VerdictInput,
 } from "../store.ts";
 import { PROPOSAL_TOOL, parseChapterText, readProposal } from "../proposal-input.ts";
@@ -875,5 +886,303 @@ export function NewExplorationPage({ store }: { store: ExploreStore }) {
         </div>
       </form>
     </Container>
+  );
+}
+
+
+// ---------------------------------------------------------------------------------------------
+// Tags and Kobo.
+
+/** The tags of an exploration as removable chips, plus a field to add one (Enter). */
+export function TagsDevEditor({
+  exploration,
+  store,
+}: {
+  exploration: Exploration;
+  store: ExploreStore;
+}) {
+  const { busy, run } = useRun();
+  const [draft, setDraft] = useState("");
+  const tags = exploration.tags ?? [];
+  const save = (next: string[], success?: string) =>
+    run(() => store.update(exploration.id, { tags: next }), success);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2" aria-label="Tag">
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-1 text-sm"
+        >
+          {tag}
+          <button
+            type="button"
+            aria-label={`Togli il tag ${tag}`}
+            disabled={busy}
+            className="rounded-full p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-50"
+            onClick={() =>
+              void save(tags.filter((t) => t !== tag))
+            }
+          >
+            <XIcon aria-hidden className="size-3" />
+          </button>
+        </span>
+      ))}
+      <form
+        className="flex items-center gap-1"
+        onSubmit={(event: FormEvent) => {
+          event.preventDefault();
+          const tag = draft.trim().toLowerCase();
+          if (tag === "" || tags.includes(tag)) {
+            setDraft("");
+            return;
+          }
+          void save([...tags, tag]).then((ok) => {
+            if (ok) setDraft("");
+          });
+        }}
+      >
+        <Input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder="Aggiungi un tag"
+          aria-label="Nuovo tag"
+          maxLength={40}
+          disabled={busy}
+          className="h-8 w-40"
+        />
+      </form>
+    </div>
+  );
+}
+
+/** Checkbox on an exploration card of the list (the card itself is a link, so it sits beside it). */
+export function KoboSelectBox({
+  checked,
+  onChange,
+  title,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  title: string;
+}) {
+  return (
+    <Checkbox
+      checked={checked}
+      onCheckedChange={(value) => onChange(value === true)}
+      aria-label={`Seleziona «${title}» per il Kobo`}
+      className="bg-background"
+    />
+  );
+}
+
+const KOBO_ERROR_HINTS: Record<string, string> = {
+  "listing-failed":
+    "Il Kobo non è raggiungibile (spento, fuori dal Wi-Fi o IP cambiato): i libri sono in libreria, lancia «elib sync» quando è acceso.",
+  "missing-in-cache": "L'EPUB non è più nella cache locale: ricaricalo nell'esplorazione.",
+};
+
+/**
+ * "Aggiungi alla libreria e al Kobo": the books imported only for the explorations become library books (same ID,
+ * under the chosen topic, which is their series on the Kobo) and the library uploads them. The dialog first shows
+ * the plan (nothing is written), then does it.
+ */
+export function KoboDevButton({
+  ids,
+  store,
+  label = "Aggiungi alla libreria",
+}: {
+  ids: string[];
+  store: ExploreStore;
+  label?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState<KoboResult | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [result, setResult] = useState<KoboResult | null>(null);
+  const [skipRejected, setSkipRejected] = useState(true);
+  const [topic, setTopic] = useState("");
+  const [topics, setTopics] = useState<LibraryTopic[]>([]);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const key = ids.join(",");
+
+  const request = (dryRun: boolean) => ({
+    ids,
+    dryRun,
+    ...(skipRejected ? {} : { decisions: ["all", "parts", "undecided", "skip"] as VerdictDecision[] }),
+    ...(topic ? { topic } : {}),
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    let current = true;
+    store.topics().then(
+      (list) => {
+        if (current) setTopics(list);
+      },
+      (error: unknown) => {
+        if (current) setFailure((error as Error).message);
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [open, store]);
+
+  useEffect(() => {
+    if (!open) return;
+    let current = true;
+    setPreview(null);
+    setFailure(null);
+    setResult(null);
+    setSendError(null);
+    store.kobo({ ...request(true), topic: undefined }).then(
+      (value) => {
+        if (current) setPreview(value);
+      },
+      (error: unknown) => {
+        if (current) setFailure((error as Error).message);
+      },
+    );
+    return () => {
+      current = false;
+    };
+    // `request` reads the current options, which are part of the dependencies below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, key, skipRejected, store]);
+
+  const send = async () => {
+    setSending(true);
+    setSendError(null);
+    try {
+      setResult(await store.kobo(request(false)));
+    } catch (error) {
+      // Shown in the dialog: the list page has no toast area.
+      setSendError((error as Error).message || "Operazione non riuscita.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const books = (result ?? preview)?.plan.books ?? [];
+  const messages = result?.reports.flatMap((r) => [...r.errors, ...r.warnings]) ?? [];
+  const failed = result?.failures ?? [];
+  const added = result !== null ? books.length - failed.length : 0;
+  const finished = result !== null && failed.length === 0;
+  const kobo = result?.reports.some((r) => r.errors.length === 0 && r.actions.some((a) => a.type === "upload")) ?? false;
+
+  return (
+    <>
+      <Button variant="outline" disabled={ids.length === 0} onClick={() => setOpen(true)}>
+        <TabletSmartphoneIcon aria-hidden /> {label}
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Aggiungi alla libreria</DialogTitle>
+            <DialogDescription>
+              I libri esplorati di {ids.length === 1 ? "questa esplorazione" : `${ids.length} esplorazioni`} entrano in
+              libreria con l'argomento che scegli e vanno sul Kobo, dove l'argomento è la serie. I libri già in
+              libreria non cambiano.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-3 text-sm">
+            <Label className="flex items-center gap-2">
+              <Checkbox checked={skipRejected} onCheckedChange={(v) => setSkipRejected(v === true)} />
+              Escludi i libri con verdetto «Non leggere»
+            </Label>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="kobo-topic">Argomento</Label>
+              <select
+                id="kobo-topic"
+                value={topic}
+                onChange={(event) => setTopic(event.target.value)}
+                className={FIELD}
+                disabled={sending || finished}
+              >
+                <option value="">Scegli un argomento…</option>
+                {topics.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Un argomento nuovo si crea in Libreria → Argomenti.
+              </p>
+            </div>
+
+            {failure ? (
+              <p role="alert" className="text-destructive">
+                {failure}
+              </p>
+            ) : preview === null ? (
+              <p className="text-muted-foreground" aria-busy>
+                Controllo cosa c'è da aggiungere…
+              </p>
+            ) : books.length === 0 ? (
+              <p className="text-muted-foreground">
+                Nessun libro da aggiungere
+                {preview.plan.skippedLibrary > 0
+                  ? ` (${preview.plan.skippedLibrary} sono già in libreria)`
+                  : ""}
+                .
+              </p>
+            ) : (
+              <ul className="flex max-h-56 flex-col gap-1.5 overflow-y-auto">
+                {books.map((book) => {
+                  const bad = failed.find((f) => f.id === book.id);
+                  return (
+                    <li key={book.id} className="flex flex-wrap justify-between gap-x-3">
+                      <span className="min-w-0 font-medium break-words">{book.title}</span>
+                      <span className={bad ? "text-destructive" : "text-muted-foreground"}>
+                        {bad ? bad.message : result ? "aggiunto" : "da aggiungere"}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {sending ? (
+              <p className="text-muted-foreground" aria-busy role="status">
+                Aggiungo alla libreria e carico sul Kobo: la conversione e l'invio possono richiedere qualche decina
+                di secondi…
+              </p>
+            ) : null}
+            {sendError ? (
+              <p role="alert" className="text-destructive">
+                {sendError}
+              </p>
+            ) : null}
+            {finished ? (
+              <p role="status" className="font-medium text-foreground">
+                Fatto: {added === 1 ? "1 libro" : `${added} libri`} in libreria
+                {kobo ? " e sul Kobo" : ""}.
+              </p>
+            ) : null}
+            {messages.map((message, index) => (
+              <p key={`${message.code}-${index}`} className="text-destructive" role="alert">
+                {KOBO_ERROR_HINTS[message.code] ?? message.message}
+              </p>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              {result ? "Chiudi" : "Annulla"}
+            </Button>
+            <Button
+              disabled={sending || finished || books.length === 0 || failure !== null || topic === ""}
+              onClick={() => void send()}
+            >
+              {sending ? "Aggiungo…" : failed.length > 0 ? "Riprova" : "Aggiungi e manda al Kobo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "id": "2026-11-17-sorvegliare-e-punire-nascita-della-prigione",
+  "title": "Sorvegliare e punire. Nascita della prigione",
+  "question": "Pensiero generale",
+  "status": "open",
+  "createdAt": "2026-11-17T20:41:31.523Z",
+  "updatedAt": "2026-11-17T20:42:47.943Z",
+  "sources": [
+    {
+      "kind": "book",
+      "id": "1f4cv0mk",
+      "origin": "explore",
+      "title": "Sorvegliare e punire. Nascita della prigione",
+      "authors": [
+        "Michel Foucault"
+      ],
+      "language": "it",
+      "epub": {
+        "fileName": "Michel Foucault - Sorvegliare e punire. Nascita della prigione.epub",
+        "md5": "10a854023300133c1cde5116d4b8fdc3",
+        "bytes": 990886
+      },
+      "addedAt": "2026-11-17T20:41:33.578Z",
+      "verdict": null
+    },
+    {
+      "kind": "book",
+      "id": "52qwc6ff",
+      "origin": "explore",
+      "title": "Foucault: A Very Short Introduction (Very Short Introductions)",
+      "authors": [
+        "Gary Gutting"
+      ],
+      "language": "en",
+      "epub": {
+        "fileName": "Gary Gutting [Gutting, Gary] - Foucault A Very Short Introduction.epub",
+        "md5": "b56aea902346a7c7df810bfae6d1394d",
+        "bytes": 796591
+      },
+      "addedAt": "2026-11-17T20:42:47.943Z",
+      "verdict": null
+    }
+  ],
+  "summary": null,
+  "notes": [],
+  "journal": []
+}

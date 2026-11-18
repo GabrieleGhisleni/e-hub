@@ -27,6 +27,7 @@ export function formatExploration(e: Exploration): string[] {
   lines.push(`«${e.title}»  [${e.id}]`);
   lines.push(`Domanda: ${e.question}`);
   lines.push(`Stato: ${STATUS_LABELS[e.status]}  ·  aggiornata ${formatDate(e.updatedAt)}`);
+  if (e.tags && e.tags.length > 0) lines.push(`Tag: ${e.tags.join(", ")}`);
   lines.push("");
   lines.push(`Fonti (${e.sources.length})`);
   if (e.sources.length === 0) lines.push("  nessuna fonte: aggiungine con «explore add»");

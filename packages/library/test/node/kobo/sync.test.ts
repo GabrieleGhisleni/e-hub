@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cachedEpubPath, cachedKepubPath } from "../../../src/node/cache/index.ts";
+import { cacheExploreBookDir, cachedEpubPath, cachedKepubPath } from "../../../src/node/cache/index.ts";
 import {
   type KoboContext,
   createKoboContext,
@@ -347,5 +347,25 @@ describe("kobo reconcile on a local folder", () => {
       { env: t.env.env },
     );
     expect(viaEnv.transport.description).toBe(path.resolve(t.env.koboDir));
+  });
+});
+
+describe("explore books and prune", () => {
+  it("elib sync --prune never treats a book imported for an exploration as an orphan", async () => {
+    const t = await setupKobo();
+    try {
+      const id = "ex4mp1e8";
+      const dir = cacheExploreBookDir(t.env.cacheDir, id);
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(dir, "book.epub"), "EPUB");
+      const name = koboFileName({ id, title: "Etica", authors: ["Baruch Spinoza"] }, "kepub");
+      await t.put(name, "KEPUB");
+      await t.addBook(makeBook(ID_A), { kepub: "KEPUB-A" });
+      const report = await reconcile(t.ctx, "all", { prune: true });
+      expect(report.warnings.filter((w) => w.code === "orphan-file")).toEqual([]);
+      expect(await t.read(name)).toBe("KEPUB");
+    } finally {
+      await t.cleanup();
+    }
   });
 });

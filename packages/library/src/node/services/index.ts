@@ -80,6 +80,7 @@ export {
   summarizeBookService,
 } from "./summary.ts";
 export { saveBookNotes } from "./notes.ts";
+export { promoteExploreBook } from "./explore-promote.ts";
 export { addTopic, deleteTopic, listTopics, renameTopic } from "./topics.ts";
 export {
   type AnalyzeUploadOptions,

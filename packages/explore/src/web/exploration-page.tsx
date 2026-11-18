@@ -8,10 +8,12 @@ import { formatVerdict } from "../labels.ts";
 import type { BookSource, Exploration, Note } from "../schema.ts";
 import {
   DevExplorationToolbar,
+  DevKoboButton,
   DevNoteComposer,
   DevNoteDelete,
   DevNotebookEditor,
   DevSourceActions,
+  DevTagsEditor,
 } from "./dev-slots.tsx";
 import {
   ORIGIN_LABELS,
@@ -223,11 +225,32 @@ export function ExplorationPage({
           }
         />
 
+        {devTools && DevTagsEditor ? (
+          <div className="mt-4">
+            <Suspense fallback={null}>
+              <DevTagsEditor exploration={exploration} store={store} />
+            </Suspense>
+          </div>
+        ) : exploration.tags && exploration.tags.length > 0 ? (
+          <ul aria-label="Tag" className="mt-4 flex flex-wrap gap-1.5">
+            {exploration.tags.map((tag) => (
+              <li key={tag}>
+                <Badge variant="outline">{tag}</Badge>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
         {devTools && DevExplorationToolbar ? (
-          <div className="mt-6">
+          <div className="mt-6 flex flex-wrap items-center gap-2">
             <Suspense fallback={null}>
               <DevExplorationToolbar exploration={exploration} store={store} />
             </Suspense>
+            {DevKoboButton ? (
+              <Suspense fallback={null}>
+                <DevKoboButton ids={[exploration.id]} store={store} />
+              </Suspense>
+            ) : null}
           </div>
         ) : null}
 

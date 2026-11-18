@@ -221,6 +221,12 @@ export function createChatApp({ getLlm, resolveSource }: ChatAppOptions) {
         abortSignal: c.req.raw.signal,
       });
 
+      // When the client stops the reply, the SDK rejects its result promises (with an undefined reason). Nobody reads
+      // them here, and an unhandled rejection kills the dev server: mark them as handled.
+      for (const promise of [result.text, result.finishReason, result.usage, result.totalUsage, result.steps, result.response]) {
+        Promise.resolve(promise).catch(() => {});
+      }
+
       return result.toUIMessageStreamResponse({
         originalMessages: messages,
         messageMetadata: ({ part }) => metadataFor(part, routerInfo),

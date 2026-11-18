@@ -10,6 +10,7 @@ import {
   BookSource,
   Exploration,
   ExplorationStatus,
+  Tags,
   JournalEntry,
   MAX_EPUB_BYTES,
   MAX_NOTEBOOK_LENGTH,
@@ -180,6 +181,8 @@ export const ExplorationPatch = z
     question: QuestionInput.optional(),
     summary: Exploration.shape.summary.optional(),
     status: ExplorationStatus.optional(),
+    /** The whole list of tags (an empty list removes them). */
+    tags: Tags.optional(),
   })
   .refine((patch) => Object.values(patch).some((value) => value !== undefined), "Niente da modificare");
 export type ExplorationPatch = z.input<typeof ExplorationPatch>;
@@ -198,9 +201,35 @@ export async function updateExploration(
       ...(valid.question !== undefined ? { question: valid.question } : {}),
       ...(valid.summary !== undefined ? { summary: valid.summary } : {}),
       ...(valid.status !== undefined ? { status: valid.status } : {}),
+      ...(valid.tags !== undefined ? { tags: valid.tags } : {}),
     }),
     now,
   );
+}
+
+/**
+ * The book (imported only for explorations) is now a library book with the same ID: every exploration that has it
+ * as a source turns it into a library source (no EPUB record any more). Returns the explorations changed.
+ */
+export async function markBookPromoted(bookId: string, now = new Date()): Promise<string[]> {
+  const changed: string[] = [];
+  for (const exploration of await listExplorations()) {
+    if (!exploration.sources.some((s) => s.id === bookId && s.origin === "explore")) continue;
+    await mutate(
+      exploration.id,
+      (current) => ({
+        ...current,
+        sources: current.sources.map((source) => {
+          if (source.id !== bookId || source.origin !== "explore") return source;
+          const { epub: _epub, ...rest } = source;
+          return { ...rest, origin: "library" as const };
+        }),
+      }),
+      now,
+    );
+    changed.push(exploration.id);
+  }
+  return changed;
 }
 
 /** Adds a book of the library as a source (its text is read from the library cache when needed). */

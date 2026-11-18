@@ -14,8 +14,19 @@ import { generateBookId, isBookId } from "../../shared/ids.ts";
 import { type Book, type BookSummary, BookSummarySchema } from "../../shared/schema.ts";
 import { bookSlug } from "../../shared/slug.ts";
 import { bookHref } from "../../web/lib/format.ts";
-import { CACHE_TEXT_DIR, cachedTextDir, ensureDir } from "../cache/index.ts";
+import {
+  CACHE_EXPLORE_DIR,
+  CACHE_EXPLORE_EPUB_FILE,
+  CACHE_TEXT_DIR,
+  cachedTextDir,
+  ensureDir,
+} from "../cache/index.ts";
 import { loadConfig } from "../config/index.ts";
+import { type KoboContext, createKoboContext } from "../kobo/index.ts";
+import { type ServiceContext, createServiceContext } from "../services/context.ts";
+import { listTopics } from "../services/topics.ts";
+import { promoteExploreBook as promoteBook } from "../services/explore-promote.ts";
+import type { BookWriteResponse } from "../../shared/api.ts";
 import { extractEpubMetadata } from "../epub/index.ts";
 import { type SummarizeProgress, TextUnavailableError, summarizeText } from "../summary/index.ts";
 import { type SummaryModel, loadLocalEnv, summaryModelFromEnv } from "../summary/llm.ts";
@@ -68,9 +79,9 @@ export type ExploreEpubImport = {
 };
 
 /** Name of the folder under the cache that holds the explore books. */
-const EXPLORE_DIR = "explore";
+const EXPLORE_DIR = CACHE_EXPLORE_DIR;
 const EXPLORE_BOOKS_DIR = "books";
-const EXPLORE_EPUB_FILE = "book.epub";
+const EXPLORE_EPUB_FILE = CACHE_EXPLORE_EPUB_FILE;
 /** Route prefix of the library pages on the site. */
 const LIBRARY_ROUTE = "/library";
 
@@ -438,4 +449,35 @@ export function startExploreSummaryInBackground(
     }
     logger?.warn(`Sintesi del libro esplorato ${id} non riuscita: ${errorMessageOf(error)}`);
   });
+}
+
+// Library side of "put an exploration's books on the Kobo": promote them to library books (same ID), which uploads
+// them to the Kobo; the Kobo itself is only read or cleaned through the context.
+export { removeBookFiles as removeExploreBookFiles } from "../kobo/index.ts";
+export type { ReconcileReport, BookWriteResponse } from "../../shared/api.ts";
+export { formatReport as formatKoboReport } from "../cli/format.ts";
+
+let sharedServices: ServiceContext | undefined;
+function services(): ServiceContext {
+  sharedServices ??= createServiceContext(loadConfig());
+  return sharedServices;
+}
+
+/** Topics of the library (the series of its books on the Kobo), in order. */
+export async function listLibraryTopics(): Promise<{ id: string; label: string }[]> {
+  const { topics } = await listTopics(services());
+  return topics.map(({ id, label }) => ({ id, label }));
+}
+
+/** Adds the book imported for explorations to the library under `topic`, then to the Kobo (same book ID). */
+export async function promoteExploreBook(input: {
+  id: string;
+  topic: string;
+}): Promise<BookWriteResponse> {
+  return promoteBook(services(), input);
+}
+
+/** Kobo context of the configured device (SSH, or `ELIB_KOBO_LOCAL_DIR`). */
+export function createExploreKoboContext(opts: { dryRun?: boolean } = {}): KoboContext {
+  return createKoboContext(loadConfig(), opts);
 }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { ExplorationPage } from "../../src/web/exploration-page.tsx";
@@ -22,6 +22,24 @@ describe("exploration list (read-only)", () => {
     expect(screen.getByText(/Leggere i capitoli 2 e 5/)).toBeTruthy();
     expect(screen.getByText(/Leggere tutto/)).toBeTruthy();
     expect(screen.queryByText("Nuova esplorazione")).toBeNull();
+  });
+
+  it("shows the tags and filters the list by tag", () => {
+    const store = createMemoryExploreStore([
+      sampleExploration({ tags: ["filosofia"] }),
+      otherExploration(),
+    ]);
+    render(
+      <MemoryRouter>
+        <ExplorationListPage store={store} devTools={false} />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByText("filosofia").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "filosofia" }));
+    expect(screen.getByRole("heading", { name: "Nietzsche e la morale cristiana" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: otherExploration().title })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Tutte" }));
+    expect(screen.getByRole("heading", { name: otherExploration().title })).toBeTruthy();
   });
 
   it("shows the empty state when there are no explorations", () => {

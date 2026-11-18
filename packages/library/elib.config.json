@@ -1,6 +1,6 @@
 {
   "kobo": {
-    "host": "root@192.168.1.11",
+    "host": "root@192.168.1.12",
     "port": 2222,
     "identityFile": "~/.ssh/id_ecds_kobo",
     "booksDir": "/mnt/onboard/books"

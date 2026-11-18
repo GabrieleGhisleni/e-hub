@@ -122,6 +122,20 @@ export const Notebook = z.strictObject({
 });
 export type Notebook = z.output<typeof Notebook>;
 
+/** A tag of an exploration (e.g. "filosofia"): lowercase, one line, no commas. Duplicates are dropped. */
+export const Tag = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1, "Il tag è vuoto")
+  .max(40, "Il tag supera 40 caratteri")
+  .regex(/^[^,\r\n]+$/, "Il tag non può contenere virgole né andare a capo");
+export const MAX_TAGS = 10;
+export const Tags = z
+  .array(Tag)
+  .max(MAX_TAGS, `Al massimo ${MAX_TAGS} tag`)
+  .transform((tags) => [...new Set(tags)].sort((a, b) => a.localeCompare(b, "it")));
+
 export const Exploration = z
   .strictObject({
     version: z.literal(1),
@@ -129,6 +143,8 @@ export const Exploration = z
     title: z.string().trim().min(1, "Il titolo è vuoto").max(MAX_TITLE_LENGTH),
     question: z.string().trim().min(1, "La domanda è vuota").max(MAX_QUESTION_LENGTH),
     status: ExplorationStatus,
+    /** Free labels to group explorations (e.g. to send the books of all "filosofia" explorations to the Kobo). */
+    tags: Tags.optional(),
     createdAt: Instant,
     updatedAt: Instant,
     sources: z

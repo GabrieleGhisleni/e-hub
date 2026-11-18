@@ -19,6 +19,11 @@ import {
   readLibraryBookRef,
   readLibraryBookSummary,
   startExploreSummaryInBackground,
+  createExploreKoboContext,
+  listLibraryTopics,
+  promoteExploreBook,
+  removeExploreBookFiles,
+  formatKoboReport,
 } from "@ehub/library/explore";
 
 export type { ExploreEpubImport, LibraryBookRef, BookSummary, TextManifest };
@@ -38,6 +43,14 @@ export interface LibraryDeps {
   /** Progress of the summary of an explore book in this process, else whether it exists. */
   exploreSummaryStatus: typeof exploreSummaryStatus;
   bookTextDir: typeof bookTextDir;
+  /** The Kobo (SSH, or a local folder with `ELIB_KOBO_LOCAL_DIR`). */
+  createKoboContext: typeof createExploreKoboContext;
+  /** Topics of the library (the series on the Kobo). */
+  listLibraryTopics: typeof listLibraryTopics;
+  /** Library book from an explore book (same ID), uploaded to the Kobo by the library. */
+  promoteExploreBook: typeof promoteExploreBook;
+  removeExploreBookFiles: typeof removeExploreBookFiles;
+  formatKoboReport: typeof formatKoboReport;
 }
 
 export const defaultLibraryDeps: LibraryDeps = {
@@ -52,6 +65,11 @@ export const defaultLibraryDeps: LibraryDeps = {
   startExploreSummaryInBackground,
   exploreSummaryStatus,
   bookTextDir,
+  createKoboContext: createExploreKoboContext,
+  listLibraryTopics,
+  promoteExploreBook,
+  removeExploreBookFiles,
+  formatKoboReport,
 };
 
 /** Overrides for some of the dependencies (the rest keep their defaults). */

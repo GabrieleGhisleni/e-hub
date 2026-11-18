@@ -19,6 +19,9 @@
  *   POST   /api/explore/:id/journal                  { text } → 201 Exploration
  *   PUT    /api/explore/:id/notebook                 { body } (empty clears) → Exploration
  *   POST   /api/explore/:id/notebook/append          { text } → Exploration
+ *   POST   /api/explore/kobo                         { ids?, tags?, decisions?, topic?, dryRun? } → { plan, reports, failures }
+ *                                                   (explore books → library under `topic` → Kobo)
+ *   GET    /api/explore/topics                      → { topics: { id, label }[] } (library topics)
  *
  * Writes come from the app, so they are recorded with `via: "app"`. Error bodies: `{ error, code, details? }`.
  */
@@ -40,6 +43,8 @@ import {
   appendNotebook,
   createExploration,
   listExplorations,
+  addBooksToLibraryAndKobo,
+  planKoboBooks,
   readExploration,
   removeBook,
   removeNote,
@@ -53,6 +58,8 @@ import {
 import {
   BookId,
   JournalEntry,
+  Tag,
+  VerdictDecision,
   MAX_EPUB_BYTES,
   MAX_NOTEBOOK_LENGTH,
   Exploration,
@@ -69,6 +76,14 @@ const CreateBody = z.strictObject({
   title: Exploration.shape.title,
   question: Exploration.shape.question,
   books: z.array(BookId).max(30).optional(),
+});
+const KoboBody = z.strictObject({
+  ids: z.array(ExplorationId).max(200).optional(),
+  tags: z.array(Tag).max(20).optional(),
+  decisions: z.array(VerdictDecision).max(4).optional(),
+  /** Library topic ID: required unless `dryRun`. */
+  topic: z.string().trim().min(1).max(80).optional(),
+  dryRun: z.boolean().optional(),
 });
 const AddBookBody = z.strictObject({ bookId: BookId });
 const NoteBody = z.strictObject({
@@ -255,6 +270,27 @@ export function createExploreApp(options: ExploreAppOptions = {}): Hono {
   app.get("/api/explore/library-books", async (c) =>
     c.json({ books: await deps.listLibraryBookRefs() }),
   );
+
+  app.get("/api/explore/topics", async (c) => c.json({ topics: await deps.listLibraryTopics() }));
+
+  // Explore books of the chosen explorations → library (same ID, under `topic`) → Kobo.
+  app.post("/api/explore/kobo", async (c) => {
+    const input = await readJson(c, KoboBody);
+    const plan = planKoboBooks(await listExplorations(), {
+      ...(input.ids ? { ids: input.ids } : {}),
+      ...(input.tags ? { tags: input.tags } : {}),
+      ...(input.decisions ? { decisions: input.decisions } : {}),
+    });
+    if (input.dryRun === true || plan.books.length === 0) return c.json({ plan, reports: [], failures: [] });
+    if (!input.topic) {
+      throw new ExploreError("invalid-input", "Scegli l'argomento della libreria per i libri.");
+    }
+    const topics = await deps.listLibraryTopics();
+    if (!topics.some((t) => t.id === input.topic)) {
+      throw new ExploreError("invalid-input", `Argomento «${input.topic}» non trovato in libreria.`);
+    }
+    return c.json({ plan, ...(await addBooksToLibraryAndKobo(plan, input.topic, deps)) });
+  });
 
   app.get("/api/explore", async (c) => c.json({ explorations: await listExplorations() }));
 

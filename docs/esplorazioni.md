@@ -26,7 +26,7 @@ Rispetto alla **skill di studio** (PLAN della libreria, §11-bis): l'esplorazion
 | RAG, embedding, indici  | **Non nella v1**. Si aggiungono solo davanti a un problema concreto (§8)                                               |
 | Testi, trascrizioni     | **Mai nel repo**: restano nella cache locale, come già oggi                                                            |
 | Fonti nella v1          | **Solo libri**. Gli episodi dei podcast sono rimandati: il formato ha già il campo `kind`, così si aggiungono senza migrare i file |
-| Libri non in libreria   | **Solo da esplorare**: l'EPUB resta nella cache locale e non entra in libreria, né sul Kobo (§12) |
+| Libri non in libreria   | **Solo da esplorare**: l'EPUB resta nella cache locale e non entra in libreria; sul Kobo ci va solo se lo chiedi, con `explore kobo` (§13) |
 | Note                    | **Nel file di esplorazione**, non nel pacchetto `notes`: riguardano la domanda, e così c'è un solo percorso di scrittura |
 | Cosa si pubblica        | Esplorazione, verdetti e note, scritti con parole mie o dell'agente, con citazioni brevi                               |
 
@@ -159,7 +159,7 @@ Titolo e autori dei libri sono copiati nel file, come fanno le note: `/explore` 
 
 Un EPUB aggiunto con `--epub` (CLI) o caricato dalla pagina dell'esplorazione:
 
-- va in `~/.cache/e-library/explore/books/<id>/` (EPUB e capitoli in Markdown, stesso formato di `elib text`), mai nel repo né sul Kobo;
+- va in `~/.cache/e-library/explore/books/<id>/` (EPUB e capitoli in Markdown, stesso formato di `elib text`), mai nel repo; sul Kobo solo con `explore kobo` (§13);
 - ha un ID nello stesso formato dei libri della libreria, diverso da tutti quelli esistenti;
 - titolo, autori e lingua vengono dai metadati dell'EPUB;
 - lo stesso file in due esplorazioni è un solo libro (riconosciuto dall'MD5);
@@ -209,3 +209,19 @@ Ogni esplorazione ha **un solo documento Markdown condiviso** tra l'utente e Cla
 - **Quote**: alla prima prova il router aveva tutti gli endpoint in pausa (503 `all_providers_busy`); la chat ha mostrato l'avviso in italiano con il tempo d'attesa, e dopo circa 15 minuti ha funzionato.
 - **Corretto durante le prove**: in dev Vite guardava i file di `packages/explore/data` (importati con `import.meta.glob` per la build) e ricaricava la pagina a ogni scrittura, interrompendo il salvataggio della proposta. Ora quella cartella è esclusa dal watcher (`apps/web/vite.config.ts`).
 - **Da tenere d'occhio**: il modello ha proposto anche capitoli che non aveva letto (6, 8 e 9), basandosi sui titoli. La scheda di conferma serve proprio a correggere questi casi.
+
+## 13. Esplorazioni sul Kobo (17/11)
+
+Un libro sul Kobo deve essere in libreria: l'argomento è la serie. Quindi **dall'esplorazione al Kobo si passa dalla libreria**.
+
+- **Tag**: ogni esplorazione ha `tags` (minuscoli, al massimo 10, senza virgole). `explore tag <id> --add filosofia`, `--remove`, `--set`; `explore list --tag filosofia`. Il PATCH del server accetta `tags`.
+- **`explore kobo --topic <argomento>`** prende i libri _esplorati_ (EPUB nella cache `explore/books/<id>`) delle esplorazioni scelte con `--id` (ripetibile) o `--tag` (ripetibile, basta uno) e li **aggiunge alla libreria con lo stesso ID**, sotto l'argomento indicato (ID o nome, es. `filosofia`). La libreria poi li carica sul Kobo, dove l'argomento è la serie.
+  - È lo stesso percorso del form di upload (`analyzeUpload` + `createBook`): metadati e copertina dall'EPUB, KEPUB in cache, `book.json`. Il riassunto fatto per l'esplorazione diventa il `summary.json` del libro e la cartella in `explore/books` sparisce (l'EPUB è nella cache della libreria).
+  - Lo stesso ID vuol dire che un libro già caricato sul Kobo come "solo esplorato" non si duplica: il file è lo stesso, si aggiornano nome e serie; i progressi di lettura restano.
+  - In ogni esplorazione che lo cita, la fonte diventa «dalla libreria» (senza record EPUB).
+  - I libri già in libreria si saltano (ci pensa `elib sync`). `--verdict all|parts|undecided|skip` limita ai libri con quel verdetto; senza, vanno tutti tranne `skip`.
+  - `--dry-run` mostra il piano senza scrivere. Il Kobo spento non blocca nulla: i libri entrano in libreria e `elib sync` finisce il lavoro.
+  - `--remove` (senza `--topic`) toglie dal Kobo i libri _non ancora_ in libreria, per ripulire i caricamenti fatti prima di questa regola (irreversibile, nessun cestino).
+- **Nell'app (solo in dev)**: sull'elenco ogni card ha una casella, c'è il filtro per tag e «Seleziona le visibili»; «Aggiungi alla libreria (N)» apre un dialogo con l'elenco dei libri e la scelta dell'argomento (quelli della libreria; uno nuovo si crea in Libreria → Argomenti). Lo stesso pulsante è nella pagina di un'esplorazione, dove i tag si aggiungono e si tolgono. Endpoint: `POST /api/explore/kobo`, `GET /api/explore/topics`.
+- **`elib sync --prune`** non tratta come orfani i libri che hanno ancora una cartella in `explore/books` della cache.
+- Codice: `packages/library/src/node/services/explore-promote.ts` (promozione), `packages/explore/src/node/kobo.ts` (selezione e orchestrazione), comando in `packages/explore/src/cli/commands.ts`.

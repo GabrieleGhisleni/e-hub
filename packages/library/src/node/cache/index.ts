@@ -22,6 +22,9 @@ export const CACHE_HIGHLIGHTS_DIR = "highlights";
 export const CACHE_EPUB_FILE = "book.epub";
 export const CACHE_KEPUB_FILE = "book.kepub.epub";
 export const CACHE_TEXT_DIR = "text";
+/** Books imported only to be explored live under `<cache>/explore/books/<id>/` (never in the library). */
+export const CACHE_EXPLORE_DIR = "explore";
+export const CACHE_EXPLORE_EPUB_FILE = "book.epub";
 export const CACHE_SUMMARY_PROGRESS_FILE = "summary-progress.json";
 
 /** `<cache>/books`. */
@@ -33,6 +36,12 @@ export function cacheBooksDir(cacheDir: string): string {
 export function cacheBookDir(cacheDir: string, id: string): string {
   assertBookId(id);
   return path.join(cacheBooksDir(cacheDir), id);
+}
+
+/** `<cache>/explore/books/<id>`. */
+export function cacheExploreBookDir(cacheDir: string, id: string): string {
+  assertBookId(id);
+  return path.join(cacheDir, CACHE_EXPLORE_DIR, CACHE_BOOKS_DIR, id);
 }
 
 /** `<cache>/books/<id>/book.epub`. */

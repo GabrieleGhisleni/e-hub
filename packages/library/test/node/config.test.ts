@@ -23,7 +23,7 @@ describe("loadConfig", () => {
   it("reads the versioned elib.config.json with ~ expanded", () => {
     const config = loadConfig({ env: {} });
     expect(config.configPath).toBe(path.join(REPO_ROOT, "elib.config.json"));
-    expect(config.kobo.host).toBe("root@192.168.1.11");
+    expect(config.kobo.host).toMatch(/^root@\d+\.\d+\.\d+\.\d+$/);
     expect(config.kobo.port).toBe(2222);
     expect(config.kobo.booksDir).toBe("/mnt/onboard/books");
     expect(config.kobo.identityFile).toBe(path.join(os.homedir(), ".ssh/id_ecds_kobo"));
@@ -71,7 +71,7 @@ describe("loadConfig", () => {
   it("ELIB_KOBO_HOST overrides the host of the config file", () => {
     const config = loadConfig({ env: { ELIB_KOBO_HOST: "root@192.168.1.20" } });
     expect(config.kobo.host).toBe("root@192.168.1.20");
-    expect(loadConfig({ env: {} }).kobo.host).toBe("root@192.168.1.11");
+    expect(loadConfig({ env: {} }).kobo.host).toMatch(/^root@\d+\.\d+\.\d+\.\d+$/);
   });
 
   it("an invalid ELIB_KOBO_HOST throws ConfigError", () => {

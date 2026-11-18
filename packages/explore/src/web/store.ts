@@ -66,8 +66,42 @@ export interface NewExplorationInput {
   books?: string[];
 }
 
+/** Which explorations and books go to the Kobo (`POST /api/explore/kobo`). */
+export interface KoboRequest {
+  ids?: string[];
+  tags?: string[];
+  decisions?: VerdictDecision[];
+  /** Library topic ID the books are added under (the series on the Kobo); needed unless `dryRun`. */
+  topic?: string;
+  /** Only plan: nothing is written on the Kobo. */
+  dryRun?: boolean;
+}
+
+export interface KoboResult {
+  plan: {
+    explorations: string[];
+    books: { id: string; title: string; authors: string[]; exploration: string }[];
+    skippedLibrary: number;
+    skippedVerdict: number;
+  };
+  reports: {
+    dryRun: boolean;
+    actions: { type: string; status: string; bookId?: string; to?: string }[];
+    warnings: { code: string; message: string }[];
+    errors: { code: string; message: string }[];
+  }[];
+  /** Books that could not be added to the library. */
+  failures: { id: string; message: string }[];
+}
+
+export interface LibraryTopic {
+  id: string;
+  label: string;
+}
+
 export interface ExplorationPatch {
   title?: string;
+  tags?: string[];
   question?: string;
   summary?: string | null;
   status?: ExplorationStatus;
@@ -111,6 +145,10 @@ export interface ExploreStore {
   setNotebook(id: string, body: string): Promise<Exploration>;
   /** Appends text to the notebook after a blank line (`POST /api/explore/:id/notebook/append`). */
   appendNotebook(id: string, text: string): Promise<Exploration>;
+  /** Topics of the library: the series its books have on the Kobo (`GET /api/explore/topics`). */
+  topics(): Promise<LibraryTopic[]>;
+  /** Adds the explore books of the chosen explorations to the library and the Kobo (or only plans it with `dryRun`). */
+  kobo(request: KoboRequest): Promise<KoboResult>;
   dismissError(): void;
 }
 
@@ -212,6 +250,8 @@ export function createStaticExploreStore(explorations: readonly unknown[]): Expl
     addJournal: reject,
     setNotebook: reject,
     appendNotebook: reject,
+    kobo: reject,
+    topics: async () => [],
     dismissError: () => {},
   };
 }
@@ -341,6 +381,21 @@ export function createHttpExploreStore(
     addJournal: (id, text) => send("POST", `${at(id)}/journal`, { text }),
     setNotebook: (id, body) => send("PUT", `${at(id)}/notebook`, { body }),
     appendNotebook: (id, text) => send("POST", `${at(id)}/notebook/append`, { text }),
+    async topics() {
+      const response = await doFetch(`${baseUrl}/topics`, { headers: { accept: "application/json" } });
+      if (!response.ok) throw await apiError(response);
+      const body = (await response.json()) as { topics?: LibraryTopic[] };
+      return Array.isArray(body.topics) ? body.topics : [];
+    },
+    async kobo(request) {
+      const response = await doFetch(`${baseUrl}/kobo`, {
+        method: "POST",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        body: JSON.stringify(request),
+      });
+      if (!response.ok) throw await apiError(response);
+      return (await response.json()) as KoboResult;
+    },
     dismissError: () => state.setMeta({ error: null }),
   };
 }
@@ -422,6 +477,9 @@ export function createMemoryExploreStore(
         ...(patch.question !== undefined ? { question: patch.question } : {}),
         ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
         ...(patch.status !== undefined ? { status: patch.status } : {}),
+        ...(patch.tags !== undefined
+          ? { tags: [...new Set(patch.tags.map((t) => t.trim().toLowerCase()))].sort() }
+          : {}),
       })),
     removeBook: async (id, bookId) =>
       change(id, (e) => ({
@@ -481,6 +539,10 @@ export function createMemoryExploreStore(
         const notebook: Notebook = { body, updatedAt: at, via: "app" };
         return { ...e, notebook };
       }),
+    kobo: async () => {
+      throw new ExploreApiError("Il Kobo non è raggiungibile da questo store.", 405);
+    },
+    topics: async () => [],
     dismissError: () => {},
   };
 }
@@ -517,6 +579,8 @@ export const exploreStore: ExploreStore = {
   addJournal: (id, text) => active.addJournal(id, text),
   setNotebook: (id, body) => active.setNotebook(id, body),
   appendNotebook: (id, text) => active.appendNotebook(id, text),
+  kobo: (request) => active.kobo(request),
+  topics: () => active.topics(),
   dismissError: () => active.dismissError(),
 };
 

@@ -218,3 +218,77 @@ describe("explore CLI: notebook", () => {
     expect((await cli(["notebook", ID, "--text", "  ", "--append"])).code).toBe(1);
   });
 });
+
+describe("explore tags and kobo", () => {
+  async function newWithEpub(title: string, ...extra: string[]) {
+    await writeFile(path.join(work, "g.epub"), FAKE_EPUB);
+    const created = await cli(["new", "--title", title, "--question", "Q", "--epub", "g.epub", ...extra]);
+    expect(created.code).toBe(0);
+    return created.out.split("\n")[0]!;
+  }
+
+  it("sets, adds, removes and filters tags", async () => {
+    const id = await newWithEpub("Prova");
+    expect((await cli(["tag", id, "--add", "Filosofia", "--add", "etica", "--add", "filosofia"])).out).toContain(
+      "Tag: etica, filosofia.",
+    );
+    expect((await cli(["tag", id, "--remove", "etica"])).out).toContain("Tag: filosofia.");
+    expect((await cli(["tag", id])).out.trim()).toBe("filosofia");
+    expect((await cli(["list", "--tag", "filosofia"])).out).toContain(id);
+    expect((await cli(["list", "--tag", "storia"])).out).toContain("Nessuna esplorazione.");
+    expect((await cli(["tag", id, "--set", ""])).out).toContain("Tag: nessuno.");
+    expect((await cli(["tag", id, "--set", "a", "--add", "b"])).code).toBe(2);
+  });
+
+  it("adds the explore books of the tagged explorations to the library under a topic, skipping library books", async () => {
+    const id = await newWithEpub("Prova", "--book", "78w462eb");
+    await cli(["tag", id, "--add", "filosofia"]);
+    const promoted: { id: string; topic: string }[] = [];
+    const deps = {
+      ...fakeLibrary(),
+      listLibraryTopics: async () => [
+        { id: "saggistica", label: "Saggistica" },
+        { id: "filosofia", label: "Filosofia" },
+      ],
+      promoteExploreBook: async (input: { id: string; topic: string }) => {
+        promoted.push(input);
+        return { book: {}, report: { dryRun: false, actions: [], warnings: [], errors: [] } } as never;
+      },
+      formatKoboReport: () => ["fatto"],
+    };
+    const run = async (argv: string[]) => {
+      const io = captureIo(work, "");
+      const code = await runCli(argv, io.io, deps as never);
+      return { code, out: io.stdout(), err: io.stderr() };
+    };
+
+    const dry = await run(["kobo", "--tag", "filosofia", "--topic", "Filosofia", "--dry-run"]);
+    expect(dry.code).toBe(0);
+    expect(promoted).toEqual([]);
+    expect(dry.err).toContain("già in libreria: 1");
+
+    const real = await run(["kobo", "--tag", "filosofia", "--topic", "filosofia"]);
+    expect(real.code).toBe(0);
+    expect(promoted).toEqual([{ id: "ex000001", topic: "filosofia" }]);
+    // The source is a library source now.
+    const shown = JSON.parse((await cli(["show", id, "--json"])).out);
+    expect(shown.sources.find((s: { id: string }) => s.id === "ex000001")).toMatchObject({ origin: "library" });
+    expect(shown.sources.find((s: { id: string }) => s.id === "ex000001").epub).toBeUndefined();
+
+    expect((await run(["kobo", "--tag", "filosofia", "--topic", "nope"])).code).toBe(0); // nothing left to add
+    expect((await run(["kobo"])).code).toBe(1);
+  });
+
+  it("asks for a known topic", async () => {
+    const id = await newWithEpub("Prova");
+    const deps = { ...fakeLibrary(), listLibraryTopics: async () => [{ id: "filosofia", label: "Filosofia" }] };
+    const run = async (argv: string[]) => {
+      const io = captureIo(work, "");
+      return { code: await runCli(argv, io.io, deps as never), err: io.stderr() };
+    };
+    expect((await run(["kobo", "--id", id])).code).toBe(2);
+    const unknown = await run(["kobo", "--id", id, "--topic", "storia"]);
+    expect(unknown.code).toBe(2);
+    expect(unknown.err).toContain("filosofia");
+  });
+});
