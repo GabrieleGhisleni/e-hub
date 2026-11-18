@@ -42,10 +42,10 @@ describe("migration", () => {
 
     const docs = new MemoryDocClient();
     const blobs = new MemoryBlobStore();
-    const result = await runMigration(plan, docs, blobs);
+    const result = await runMigration(plan, docs, blobs, "owner1");
     expect(result).toEqual({ documents: 3, blobs: 2, failed: [] });
-    expect((await docs.get("books", "ab12cd34"))?.data).toEqual({ id: "ab12cd34" });
-    expect([...blobs.objects.keys()].sort()).toEqual(["books/ab12cd34.epub", "covers/ab12cd34.webp"]);
+    expect((await docs.forUser("owner1").get("books", "ab12cd34"))?.data).toEqual({ id: "ab12cd34" });
+    expect([...blobs.objects.keys()].sort()).toEqual(["users/owner1/books/ab12cd34.epub", "users/owner1/covers/ab12cd34.webp"]);
   });
 
   it("collects failures instead of throwing", async () => {
@@ -56,7 +56,7 @@ describe("migration", () => {
       podcasts: path.join(base, "p2"),
     };
     await put(path.join(roots.explore, "bad.json"), "not json");
-    const result = await runMigration(await planMigration(roots, path.join(base, "none")), new MemoryDocClient(), new MemoryBlobStore());
+    const result = await runMigration(await planMigration(roots, path.join(base, "none")), new MemoryDocClient(), new MemoryBlobStore(), "owner1");
     expect(result.failed).toHaveLength(1);
   });
 });

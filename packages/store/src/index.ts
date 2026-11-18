@@ -6,3 +6,5 @@ export * from "./config.ts";
 export * from "./migrate.ts";
 export * from "./sql.ts";
 export * from "./remote.ts";
+export * from "./user-context.ts";
+export * from "./users.ts";

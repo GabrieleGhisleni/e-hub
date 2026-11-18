@@ -1,6 +1,10 @@
+import { assertUserId } from "./user-context.ts";
+
 /**
- * Document tables: `id`, `data` (JSON), `updated_at` (turso/migrations).
- * `TursoDocClient` talks to Turso (libSQL); `MemoryDocClient` is the same thing for tests.
+ * Document tables: `user_id`, `id`, `data` (JSON), `updated_at`, primary key `(user_id, id)` (turso/migrations).
+ * There is no way to read or write a row without naming its owner: `DocClient.forUser(userId)` returns the only handle
+ * to the data, and every query of it carries the `user_id`. `TursoDocClient` talks to Turso (libSQL);
+ * `MemoryDocClient` is the same thing for tests.
  */
 export interface Doc {
   id: string;
@@ -8,13 +12,54 @@ export interface Doc {
   updatedAt: string;
 }
 
-export interface DocClient {
+/** One user's documents. */
+export interface UserDocs {
   get(table: string, id: string): Promise<Doc | null>;
   list(table: string): Promise<Doc[]>;
   /** Insert or replace; `updatedAt` is set by the store. */
   put(table: string, id: string, data: unknown): Promise<void>;
   delete(table: string, id: string): Promise<void>;
 }
+
+export interface UserRecord {
+  /** Google `sub`; `email:<address>` for an owner prepared by the migration who has not logged in yet. */
+  id: string;
+  email: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface UserStore {
+  findById(id: string): Promise<UserRecord | null>;
+  findByEmail(email: string): Promise<UserRecord | null>;
+  /** Every user (for maintenance jobs that run outside a request). */
+  list(): Promise<UserRecord[]>;
+  /** Creates the user, or updates email and name of an existing one. */
+  upsert(user: { id: string; email: string; name: string }): Promise<UserRecord>;
+  /** Moves a placeholder user and all their rows to `toId`. */
+  reassign(fromId: string, toId: string): Promise<void>;
+}
+
+export interface DocClient {
+  forUser(userId: string): UserDocs;
+  readonly users: UserStore;
+}
+
+/** Every table that holds user data (the `users` table is separate). Keep in sync with turso/migrations. */
+export const DATA_TABLES = [
+  "books",
+  "book_summaries",
+  "book_highlights",
+  "book_markdown",
+  "topics",
+  "shows",
+  "episodes",
+  "conversations",
+  "notes",
+  "explorations",
+  "chats",
+  "kobo_queue",
+] as const;
 
 const TABLE = /^[a-z][a-z0-9_]*$/;
 
@@ -24,30 +69,60 @@ export function assertTable(table: string): string {
 }
 
 export class MemoryDocClient implements DocClient {
-  readonly tables = new Map<string, Map<string, Doc>>();
+  /** table -> userId -> id -> doc */
+  readonly tables = new Map<string, Map<string, Map<string, Doc>>>();
+  readonly userRows = new Map<string, UserRecord>();
+  readonly users: UserStore = {
+    findById: async (id) => this.userRows.get(id) ?? null,
+    findByEmail: async (email) => [...this.userRows.values()].find((u) => u.email === email) ?? null,
+    list: async () => [...this.userRows.values()],
+    upsert: async ({ id, email, name }) => {
+      const record = { id, email, name, createdAt: this.userRows.get(id)?.createdAt ?? new Date().toISOString() };
+      this.userRows.set(id, record);
+      return record;
+    },
+    reassign: async (fromId, toId) => {
+      const user = this.userRows.get(fromId);
+      if (user) {
+        this.userRows.delete(fromId);
+        this.userRows.set(toId, { ...user, id: toId });
+      }
+      for (const byUser of this.tables.values()) {
+        const rows = byUser.get(fromId);
+        if (!rows) continue;
+        byUser.delete(fromId);
+        byUser.set(toId, rows);
+      }
+    },
+  };
 
-  private table(name: string): Map<string, Doc> {
-    assertTable(name);
-    let t = this.tables.get(name);
-    if (!t) this.tables.set(name, (t = new Map()));
-    return t;
+  private rows(table: string, userId: string): Map<string, Doc> {
+    assertTable(table);
+    let byUser = this.tables.get(table);
+    if (!byUser) this.tables.set(table, (byUser = new Map()));
+    let rows = byUser.get(userId);
+    if (!rows) byUser.set(userId, (rows = new Map()));
+    return rows;
   }
-  async get(table: string, id: string): Promise<Doc | null> {
-    return this.table(table).get(id) ?? null;
-  }
-  async list(table: string): Promise<Doc[]> {
-    return [...this.table(table).values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  }
-  async put(table: string, id: string, data: unknown): Promise<void> {
-    // A JSON round trip, as the database does: what comes back is what was stored, not the caller's object.
-    this.table(table).set(id, {
-      id,
-      data: JSON.parse(JSON.stringify(data)),
-      updatedAt: new Date().toISOString(),
-    });
-  }
-  async delete(table: string, id: string): Promise<void> {
-    this.table(table).delete(id);
+
+  forUser(userId: string): UserDocs {
+    assertUserId(userId);
+    return {
+      get: async (table, id) => this.rows(table, userId).get(id) ?? null,
+      list: async (table) =>
+        [...this.rows(table, userId).values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+      put: async (table, id, data) => {
+        // A JSON round trip, as the database does: what comes back is what was stored, not the caller's object.
+        this.rows(table, userId).set(id, {
+          id,
+          data: JSON.parse(JSON.stringify(data)),
+          updatedAt: new Date().toISOString(),
+        });
+      },
+      delete: async (table, id) => {
+        this.rows(table, userId).delete(id);
+      },
+    };
   }
 }
 
@@ -71,37 +146,88 @@ function toDoc(row: Row): Doc {
   };
 }
 
-/** Documents in Turso (libSQL): `<table>(id TEXT PRIMARY KEY, data TEXT json, updated_at TEXT)`, see turso/migrations. */
+/** Documents in Turso (libSQL): `<table>(user_id, id, data TEXT json, updated_at, PRIMARY KEY (user_id, id))`. */
 export class TursoDocClient implements DocClient {
   private readonly db: SqlClient;
+  readonly users: UserStore;
 
   // Plain field, no parameter property: this file may be loaded by Node's type stripping.
   constructor(db: SqlClient) {
     this.db = db;
+    this.users = new TursoUserStore(db);
   }
 
-  private async rows(sql: string, args: (string | number | null)[] = []): Promise<Row[]> {
+  forUser(userId: string): UserDocs {
+    assertUserId(userId);
+    const db = this.db;
+    const rows = async (sql: string, args: (string | number | null)[]): Promise<Row[]> =>
+      (await db.execute({ sql, args })).rows as Row[];
+    return {
+      async get(table, id) {
+        const found = await rows(
+          `SELECT id, data, updated_at FROM ${assertTable(table)} WHERE user_id = ? AND id = ?`,
+          [userId, id],
+        );
+        return found[0] ? toDoc(found[0]) : null;
+      },
+      async list(table) {
+        const found = await rows(
+          `SELECT id, data, updated_at FROM ${assertTable(table)} WHERE user_id = ? ORDER BY id`,
+          [userId],
+        );
+        return found.map(toDoc);
+      },
+      async put(table, id, data) {
+        await rows(
+          `INSERT INTO ${assertTable(table)} (user_id, id, data, updated_at) VALUES (?, ?, ?, ?)
+           ON CONFLICT(user_id, id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+          [userId, id, JSON.stringify(data), new Date().toISOString()],
+        );
+      },
+      async delete(table, id) {
+        await rows(`DELETE FROM ${assertTable(table)} WHERE user_id = ? AND id = ?`, [userId, id]);
+      },
+    };
+  }
+}
+
+function toUser(row: Row): UserRecord {
+  return { id: String(row.id), email: String(row.email), name: String(row.name), createdAt: String(row.created_at) };
+}
+
+class TursoUserStore implements UserStore {
+  private readonly db: SqlClient;
+  constructor(db: SqlClient) {
+    this.db = db;
+  }
+  private async rows(sql: string, args: (string | number | null)[]): Promise<Row[]> {
     return (await this.db.execute({ sql, args })).rows as Row[];
   }
-
-  async get(table: string, id: string): Promise<Doc | null> {
-    const rows = await this.rows(`SELECT id, data, updated_at FROM ${assertTable(table)} WHERE id = ?`, [id]);
-    return rows[0] ? toDoc(rows[0]) : null;
+  async findById(id: string): Promise<UserRecord | null> {
+    const found = await this.rows("SELECT id, email, name, created_at FROM users WHERE id = ?", [id]);
+    return found[0] ? toUser(found[0]) : null;
   }
-
-  async list(table: string): Promise<Doc[]> {
-    return (await this.rows(`SELECT id, data, updated_at FROM ${assertTable(table)} ORDER BY id`)).map(toDoc);
+  async findByEmail(email: string): Promise<UserRecord | null> {
+    const found = await this.rows("SELECT id, email, name, created_at FROM users WHERE email = ?", [email]);
+    return found[0] ? toUser(found[0]) : null;
   }
-
-  async put(table: string, id: string, data: unknown): Promise<void> {
+  async list(): Promise<UserRecord[]> {
+    return (await this.rows("SELECT id, email, name, created_at FROM users ORDER BY created_at", [])).map(toUser);
+  }
+  async upsert(user: { id: string; email: string; name: string }): Promise<UserRecord> {
     await this.rows(
-      `INSERT INTO ${assertTable(table)} (id, data, updated_at) VALUES (?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
-      [id, JSON.stringify(data), new Date().toISOString()],
+      `INSERT INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET email = excluded.email, name = excluded.name`,
+      [user.id, user.email, user.name, new Date().toISOString()],
     );
+    return (await this.findById(user.id))!;
   }
-
-  async delete(table: string, id: string): Promise<void> {
-    await this.rows(`DELETE FROM ${assertTable(table)} WHERE id = ?`, [id]);
+  async reassign(fromId: string, toId: string): Promise<void> {
+    assertUserId(toId);
+    // Idempotent and resumable: rows still under `fromId` move on the next call. The user row goes last.
+    for (const table of DATA_TABLES) {
+      await this.rows(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`, [toId, fromId]);
+    }
+    await this.rows("UPDATE users SET id = ? WHERE id = ?", [toId, fromId]);
   }
 }

@@ -4,8 +4,9 @@
  * (the Pi keeps podcast audio, transcripts and caches there).
  */
 import { type Backend, type DirEntry, mountBackend } from "./backend.ts";
-import { type BlobStore } from "./blobs.ts";
-import { type DocClient } from "./docs.ts";
+import { type BlobStore, scopedBlobs } from "./blobs.ts";
+import { type DocClient, type UserDocs } from "./docs.ts";
+import { requireUserId } from "./user-context.ts";
 
 export type RouteKind = "json" | "text" | "blob";
 
@@ -78,6 +79,12 @@ export class HostedBackend implements Backend {
     this.layout = layout;
   }
 
+  /** The data of the user of the current request. Throws outside one: nothing here is reachable without a user. */
+  private scope(): { docs: UserDocs; blobs: BlobStore } {
+    const userId = requireUserId();
+    return { docs: this.docs.forUser(userId), blobs: scopedBlobs(this.blobs, userId) };
+  }
+
   private route(key: string): { route: Route; m: RegExpMatchArray } | null {
     return routeFor(this.layout, key);
   }
@@ -90,8 +97,9 @@ export class HostedBackend implements Backend {
     const hit = this.route(key);
     if (!hit) return null;
     const { route, m } = hit;
-    if (route.kind === "blob") return this.blobs.get(route.blobKey!(m));
-    const doc = await this.docs.get(route.table, route.id(m));
+    const { docs, blobs } = this.scope();
+    if (route.kind === "blob") return blobs.get(route.blobKey!(m));
+    const doc = await docs.get(route.table, route.id(m));
     if (!doc) return null;
     if (route.kind === "text") {
       const text = (doc.data as { text?: unknown } | null)?.text;
@@ -104,14 +112,15 @@ export class HostedBackend implements Backend {
     const hit = this.route(key);
     if (!hit) return false;
     const { route, m } = hit;
+    const { docs, blobs } = this.scope();
     if (route.kind === "blob") {
       const body = typeof content === "string" ? Buffer.from(content) : content;
-      await this.blobs.put(route.blobKey!(m), body, contentTypeOf(key));
+      await blobs.put(route.blobKey!(m), body, contentTypeOf(key));
       return true;
     }
     const text = typeof content === "string" ? content : Buffer.from(content).toString("utf8");
     const data = route.kind === "text" ? { text } : (JSON.parse(text) as unknown);
-    await this.docs.put(route.table, route.id(m), data);
+    await docs.put(route.table, route.id(m), data);
     return true;
   }
 
@@ -119,8 +128,9 @@ export class HostedBackend implements Backend {
     const hit = this.route(key);
     if (!hit) return false;
     const { route, m } = hit;
-    if (route.kind === "blob") await this.blobs.delete(route.blobKey!(m));
-    else await this.docs.delete(route.table, route.id(m));
+    const { docs, blobs } = this.scope();
+    if (route.kind === "blob") await blobs.delete(route.blobKey!(m));
+    else await docs.delete(route.table, route.id(m));
     return true;
   }
 
@@ -135,7 +145,7 @@ export class HostedBackend implements Backend {
   async list(prefix: string): Promise<DirEntry[] | null> {
     const listing = this.layout.listings.find((l) => l.dir === prefix);
     if (!listing) return null;
-    const docs = await this.docs.list(listing.table);
+    const docs = await this.scope().docs.list(listing.table);
     const idPrefix = listing.idPrefix ?? "";
     return docs
       .filter((d) => d.id.startsWith(idPrefix))
@@ -161,7 +171,7 @@ const ID = "([^/]+)";
 /** `packages/library/data`: books, per-book files, topics. Covers go to R2. */
 export const libraryLayout: Layout = {
   routes: [
-    { match: /^topics\.json$/, kind: "json", table: "topics", id: () => "all" },
+    { match: /^topics\.json$/, kind: "json", table: "topics", id: () => "all" }, // one row per user
     { match: /^kobo-queue\/([^/.][^/]*)\.json$/, kind: "json", table: "kobo_queue", id: (m) => m[1]! },
     { match: new RegExp(`^books/${ID}/book\\.json$`), kind: "json", table: "books", id: (m) => m[1]! },
     {

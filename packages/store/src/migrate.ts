@@ -5,7 +5,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { type Backend } from "./backend.ts";
-import { type BlobStore } from "./blobs.ts";
+import { type BlobStore, scopedBlobs } from "./blobs.ts";
+import { runAsUser } from "./user-context.ts";
 import { type DocClient } from "./docs.ts";
 import {
   HostedBackend,
@@ -96,6 +97,8 @@ export async function runMigration(
   plan: MigrationPlan,
   docs: DocClient,
   blobs: BlobStore,
+  /** The owner of everything that is migrated (a real `sub` or the placeholder of `ensureOwner`). */
+  userId: string,
   onProgress: (item: MigrationItem) => void = () => {},
 ): Promise<MigrationResult> {
   const backends = new Map<string, Backend>();
@@ -103,15 +106,16 @@ export async function runMigration(
     backends.set(name, new HostedBackend(docs, blobs, LAYOUTS[name]));
   }
   const result: MigrationResult = { documents: 0, blobs: 0, failed: [] };
+  const owned = scopedBlobs(blobs, userId);
   for (const item of plan.items) {
     onProgress(item);
     try {
       const bytes = new Uint8Array(await readFile(item.file));
       if (item.root === "epub") {
-        await blobs.put(item.key, bytes, "application/epub+zip");
+        await owned.put(item.key, bytes, "application/epub+zip");
         result.blobs += 1;
       } else {
-        await backends.get(item.root)!.write(item.key, bytes);
+        await runAsUser(userId, () => backends.get(item.root as keyof DataRoots)!.write(item.key, bytes));
         if (item.key.endsWith(".webp")) result.blobs += 1;
         else result.documents += 1;
       }

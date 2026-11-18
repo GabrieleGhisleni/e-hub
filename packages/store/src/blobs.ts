@@ -6,6 +6,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { assertUserId } from "./user-context.ts";
 
 export interface BlobStore {
   get(key: string): Promise<Uint8Array | null>;
@@ -13,6 +14,25 @@ export interface BlobStore {
   delete(key: string): Promise<void>;
   /** Keys under `prefix`, sorted. */
   list(prefix: string): Promise<string[]>;
+}
+
+/**
+ * R2 keys of one user: `users/<id>/<key>`. The hosted backend wraps the bucket with this on every operation, so a key
+ * of one user can never name an object of another.
+ */
+export function scopedBlobs(blobs: BlobStore, userId: string): BlobStore {
+  assertUserId(userId);
+  const prefix = `users/${userId}/`;
+  const own = (key: string): string => {
+    if (key.startsWith("/") || key.split("/").some((s) => s === ".." || s === ".")) throw new Error(`chiave non valida: ${key}`);
+    return prefix + key;
+  };
+  return {
+    get: async (key) => blobs.get(own(key)),
+    put: async (key, body, contentType) => blobs.put(own(key), body, contentType),
+    delete: async (key) => blobs.delete(own(key)),
+    list: async (p) => (await blobs.list(own(p))).map((k) => k.slice(prefix.length)),
+  };
 }
 
 export class MemoryBlobStore implements BlobStore {

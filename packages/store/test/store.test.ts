@@ -18,6 +18,7 @@ import {
   removeTree,
   unmountAll,
   writeFileAtomic,
+  runAsUser,
 } from "../src/index.ts";
 import { exploreLayout, libraryLayout, mountHosted, HostedBackend } from "../src/hosted.ts";
 import { mountBackend } from "../src/backend.ts";
@@ -43,7 +44,7 @@ describe("fs seam without a mount", () => {
 });
 
 describe("hosted mount", () => {
-  it("routes the library layout to tables and blobs", async () => {
+  it("routes the library layout to tables and blobs", () => runAsUser("u1", async () => {
     const docs = new MemoryDocClient();
     const blobs = new MemoryBlobStore();
     mountHosted(
@@ -54,21 +55,21 @@ describe("hosted mount", () => {
     await writeFileAtomic("/x/lib/books/ab12cd34/book.json", JSON.stringify({ id: "ab12cd34" }));
     await writeFileAtomic("/x/lib/books/ab12cd34/notes.md", "# nota\n");
     await writeFileAtomic("/x/lib/books/ab12cd34/cover.webp", new Uint8Array([1, 2, 3]));
-    expect((await docs.get("books", "ab12cd34"))?.data).toEqual({ id: "ab12cd34" });
-    expect((await docs.get("book_markdown", "ab12cd34:notes"))?.data).toEqual({ text: "# nota\n" });
-    expect(blobs.objects.has("covers/ab12cd34.webp")).toBe(true);
+    expect((await docs.forUser("u1").get("books", "ab12cd34"))?.data).toEqual({ id: "ab12cd34" });
+    expect((await docs.forUser("u1").get("book_markdown", "ab12cd34:notes"))?.data).toEqual({ text: "# nota\n" });
+    expect(blobs.objects.has("users/u1/covers/ab12cd34.webp")).toBe(true);
     expect(await readTextIfExists("/x/lib/books/ab12cd34/notes.md")).toBe("# nota\n");
     expect(JSON.parse((await readTextIfExists("/x/lib/books/ab12cd34/book.json"))!)).toEqual({
       id: "ab12cd34",
     });
     expect(await listDir("/x/lib/books")).toEqual([{ name: "ab12cd34", isDirectory: true }]);
     await removeTree("/x/lib/books/ab12cd34");
-    expect(await docs.get("books", "ab12cd34")).toBeNull();
+    expect(await docs.forUser("u1").get("books", "ab12cd34")).toBeNull();
     expect(blobs.objects.size).toBe(0);
     expect(await readTextIfExists("/x/lib/books/ab12cd34/notes.md")).toBeNull();
-  });
+  }));
 
-  it("lists explorations as files and routes notes by module", async () => {
+  it("lists explorations as files and routes notes by module", () => runAsUser("u1", async () => {
     const docs = new MemoryDocClient();
     const blobs = new MemoryBlobStore();
     mountHosted(
@@ -79,11 +80,11 @@ describe("hosted mount", () => {
     await writeFileAtomic("/x/exp/2026-11-13-a.json", "{}");
     expect(await listDir("/x/exp")).toEqual([{ name: "2026-11-13-a.json", isDirectory: false }]);
     await writeFileAtomic("/x/notes/library/eec5cpre.json", '{"notes":[]}');
-    expect((await docs.get("notes", "library:eec5cpre"))?.data).toEqual({ notes: [] });
+    expect((await docs.forUser("u1").get("notes", "library:eec5cpre"))?.data).toEqual({ notes: [] });
     expect(await listDir("/x/notes/library")).toEqual([{ name: "eec5cpre.json", isDirectory: false }]);
-  });
+  }));
 
-  it("leaves unrouted keys on disk", async () => {
+  it("leaves unrouted keys on disk", () => runAsUser("u1", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "store-"));
     try {
       mountBackend(dir, new HostedBackend(new MemoryDocClient(), new MemoryBlobStore(), exploreLayout));
@@ -93,14 +94,15 @@ describe("hosted mount", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
-  });
+  }));
 });
 
 describe("TursoDocClient (SQLite in memory, with the real migration)", () => {
   async function client() {
     const db = new DatabaseSync(":memory:");
     for (const sql of splitStatements(
-      await readFile(new URL("../../../turso/migrations/0001_init.sql", import.meta.url), "utf8"),
+      (await readFile(new URL("../../../turso/migrations/0001_init.sql", import.meta.url), "utf8")) +
+        (await readFile(new URL("../../../turso/migrations/0002_per_user.sql", import.meta.url), "utf8")),
     )) {
       db.exec(sql);
     }
@@ -111,7 +113,7 @@ describe("TursoDocClient (SQLite in memory, with the real migration)", () => {
         return { rows };
       },
     };
-    return new TursoDocClient(sqlClient);
+    return new TursoDocClient(sqlClient).forUser("u1");
   }
 
   it("puts, gets, lists, replaces and deletes; key order survives", async () => {
@@ -176,11 +178,12 @@ describe("local libSQL database (file: / :memory:)", () => {
     const { createClient } = await import("@libsql/client");
     const client = createClient({ url: ":memory:" });
     for (const sql of splitStatements(
-      await readFile(new URL("../../../turso/migrations/0001_init.sql", import.meta.url), "utf8"),
+      (await readFile(new URL("../../../turso/migrations/0001_init.sql", import.meta.url), "utf8")) +
+        (await readFile(new URL("../../../turso/migrations/0002_per_user.sql", import.meta.url), "utf8")),
     )) {
       await client.execute(sql);
     }
-    const docs = new TursoDocClient(client);
+    const docs = new TursoDocClient(client).forUser("u1");
     await docs.put("books", "a", { x: 1 });
     expect((await docs.get("books", "a"))?.data).toEqual({ x: 1 });
     expect(await localDbFromEnv({ TURSO_DATABASE_URL: "libsql://x.turso.io" })).toBeNull();
