@@ -125,7 +125,9 @@ export function bootSession(): Session | null {
   const session = loadSession(storage);
   (globalThis as { __EHUB_ADMIN__?: boolean }).__EHUB_ADMIN__ = session !== null;
   window.fetch = apiFetch(API_URL, () => loadSession(storage)?.token ?? null, window.fetch.bind(window), () => {
+    // The session is gone (expired, or the API refused it): back to the login page.
     clearSession(storage);
+    window.location.reload();
   });
   return session;
 }

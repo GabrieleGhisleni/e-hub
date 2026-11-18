@@ -5,7 +5,9 @@ import { exploreRoutes } from "@ehub/explore";
 import { notesRoutes } from "@ehub/notes";
 import { Shell } from "./components/shell";
 import { HomePage } from "./pages/home";
+import { LoginPage } from "./pages/login";
 import { NotFoundPage } from "./pages/not-found";
+import { HOSTED, currentSession } from "./session";
 
 /** One SPA, one router: the modules contribute their own routes ("library/…", "podcasts/…") under the shell. */
 const router = createBrowserRouter(
@@ -27,6 +29,8 @@ const router = createBrowserRouter(
 );
 
 export function App() {
+  // Hosted: no session, no data. The router (and every request it triggers) starts only after the login.
+  if (HOSTED && !currentSession) return <LoginPage />;
   // Synchronous navigations (no transitions): the podcasts search box is driven by the URL.
   return <RouterProvider router={router} useTransitions={false} />;
 }

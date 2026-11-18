@@ -28,7 +28,7 @@ function loadGoogleScript(): Promise<GoogleIdentity> {
 }
 
 /** The "Sign in with Google" button of Google Identity Services. */
-function GoogleSignIn() {
+export function GoogleSignIn() {
   const holder = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
