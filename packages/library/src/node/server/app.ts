@@ -69,6 +69,10 @@ export function createApp(
 
   app.get("/api/library/health", (c) => c.json({ ok: true } satisfies HealthResponse));
 
+  // ---- Kobo queue (hosted setup)
+  app.get("/api/library/kobo/queue", async (c) => c.json(await services.koboQueue()));
+  app.post("/api/library/kobo/sync", async (c) => c.json(await services.syncKoboNow()));
+
   // ---- uploads
   app.post("/api/library/uploads", limit(limits.epubMaxBytes + MULTIPART_OVERHEAD), async (c) => {
     const file = await multipartFile(c, "file");

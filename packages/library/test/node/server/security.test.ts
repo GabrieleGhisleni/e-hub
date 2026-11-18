@@ -23,6 +23,8 @@ export function fakeServices(overrides: Partial<Services> = {}): Services {
     analyzeUpload: unused,
     readUploadCover: unused,
     discardUpload: unused,
+    koboQueue: async () => ({ pending: [] }),
+    syncKoboNow: unused,
     cleanupStaleUploads: async () => 0,
     createBook: unused,
     updateBook: unused,

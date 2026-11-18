@@ -21,12 +21,16 @@ export interface KoboContext {
   readonly kepubify: ConvertToKepubOptions;
   /** A dry-run context never writes, whatever the per-call options say. */
   readonly dryRun: boolean;
+  /** Hosted setup: a sleeping Kobo queues the sync instead of failing it (kobo/queue.ts). */
+  readonly queue: boolean;
 }
 
 export interface KoboContextOptions {
   /** Env of the ssh and kepubify processes. */
   env?: NodeJS.ProcessEnv;
   dryRun?: boolean;
+  /** Queue syncs while the Kobo is off (default: `ELIB_KOBO_QUEUE=1` in `env`). */
+  queue?: boolean;
   /**
    * Prebuilt transport (tests: `localTransport(dir)`). Otherwise `ELIB_KOBO_LOCAL_DIR` in `env` (default
    * `process.env`) selects `localTransport` on that folder (CLI tests, or a Kobo mounted over USB), else
@@ -62,5 +66,6 @@ export function createKoboContext(
       ...(options.kepubifyTimeoutMs ? { timeoutMs: options.kepubifyTimeoutMs } : {}),
     },
     dryRun: options.dryRun ?? false,
+    queue: options.queue ?? (options.env ?? process.env).ELIB_KOBO_QUEUE === "1",
   };
 }

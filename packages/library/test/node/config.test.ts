@@ -19,6 +19,19 @@ afterEach(async () => {
   await tmp.cleanup();
 });
 
+describe("loadConfig Kobo overrides from the environment (the Pi has no editable config)", () => {
+  it("takes host, port and host key alias from ELIB_KOBO_*", () => {
+    const config = loadConfig({
+      env: { ELIB_KOBO_HOST: "root@10.0.0.7", ELIB_KOBO_PORT: "2200", ELIB_KOBO_HOST_KEY_ALIAS: "ehub-kobo" },
+    });
+    expect(config.kobo).toMatchObject({ host: "root@10.0.0.7", port: 2200, hostKeyAlias: "ehub-kobo" });
+  });
+
+  it("rejects a bad port", () => {
+    expect(() => loadConfig({ env: { ELIB_KOBO_PORT: "99999" } })).toThrow(ConfigError);
+  });
+});
+
 describe("loadConfig", () => {
   it("reads the versioned elib.config.json with ~ expanded", () => {
     const config = loadConfig({ env: {} });

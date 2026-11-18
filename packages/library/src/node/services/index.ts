@@ -2,6 +2,7 @@
  * Services layer (W3a): the one implementation of every admin operation (PLAN §7), shared by the Hono server and the
  * `elib` CLI. Every function takes a `ServiceContext`; `createServices(ctx)` binds them for the server.
  */
+import { type DrainResult, createKoboContext, drainKoboQueue, koboResolver, listQueue } from "../kobo/index.ts";
 import type {
   BookPatch,
   BookWriteResponse,
@@ -93,6 +94,20 @@ export {
 } from "./uploads.ts";
 
 /** The services bound to one context (what the server needs). */
+export interface KoboQueueResponse {
+  pending: string[];
+}
+
+/** Drain the queue; when the configured Kobo host does not answer, look for the Kobo on the LAN (kobo/discovery.ts). */
+export function drainWithDiscovery(ctx: ServiceContext): Promise<DrainResult> {
+  const makeContext = (host: string) =>
+    createKoboContext(
+      { ...ctx.config, kobo: { ...ctx.config.kobo, host } },
+      { queue: true },
+    );
+  return drainKoboQueue(ctx.kobo, koboResolver({ makeContext }));
+}
+
 export interface Services {
   readonly ctx: ServiceContext;
   analyzeUpload(input: UploadInput, options?: AnalyzeUploadOptions): Promise<UploadResponse>;
@@ -111,6 +126,10 @@ export interface Services {
   renameTopic(id: string, label: string): Promise<TopicWriteResponse>;
   deleteTopic(id: string): Promise<DeleteTopicResponse>;
   saveBookNotes(id: string, request: SaveNotesRequest): Promise<SaveNotesResponse>;
+  /** Books waiting for the Kobo (hosted setup). */
+  koboQueue(): Promise<KoboQueueResponse>;
+  /** Drains the queue now if the Kobo answers (the "sincronizza ora" button). */
+  syncKoboNow(): Promise<DrainResult>;
   summarizeBook(
     id: string,
     request: SummarizeRequest,
@@ -121,6 +140,8 @@ export interface Services {
 export function createServices(ctx: ServiceContext): Services {
   return {
     ctx,
+    koboQueue: async () => ({ pending: (await listQueue(ctx.dataDir)).map((e) => e.bookId) }),
+    syncKoboNow: () => ctx.lock.runExclusive(() => drainWithDiscovery(ctx)),
     analyzeUpload: (input, options) => analyzeUpload(ctx, input, options),
     readUploadCover: (uploadId, source) => readUploadCover(ctx, uploadId, source),
     discardUpload: (uploadId) => discardUpload(ctx, uploadId),

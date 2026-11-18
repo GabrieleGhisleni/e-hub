@@ -23,7 +23,7 @@ import { type Book, BookSchema } from "../../shared/schema.ts";
 import { cachedEpubPath, cachedKepubPath, ensureDir, isNonEmptyFile } from "../cache/index.ts";
 import { pushEpub } from "../cache/remote.ts";
 import { placeholderCover, saveCover } from "../covers/index.ts";
-import { reconcile, removeBookFiles } from "../kobo/index.ts";
+import { reconcileOrQueue, removeBookFiles } from "../kobo/index.ts";
 import { KepubifyError, convertToKepub } from "../kepub/index.ts";
 import {
   BookNotFoundError,
@@ -107,7 +107,7 @@ async function createBookLocked(
       throw error;
     }
     if (state.status !== "created") await finishStaging(dir, state.bookId);
-    return { book, report: await reconcile(ctx.kobo, [book.id]) };
+    return { book, report: await reconcileOrQueue(ctx.kobo, [book.id]) };
   }
 
   const topics = await loadTopics(ctx);
@@ -159,7 +159,7 @@ async function createBookLocked(
   }
   await finishStaging(dir, id);
   // 4. Kobo: KEPUB and series metadata. Errors stay in the report; `elib sync` finishes what did not reach the Kobo.
-  const report = await reconcile(ctx.kobo, [id]);
+  const report = await reconcileOrQueue(ctx.kobo, [id]);
   ctx.logger.info(`book ${id} created: ${book.title}`);
   return { book, report };
 }
@@ -246,7 +246,7 @@ export async function updateBook(
     } catch (error) {
       throw asWriteError(error);
     }
-    return { book: next, report: await reconcile(ctx.kobo, [id]) };
+    return { book: next, report: await reconcileOrQueue(ctx.kobo, [id]) };
   });
 }
 
@@ -282,7 +282,7 @@ export async function bulkUpdate(
       }
       updated.push(next);
     }
-    return { books: updated, report: await reconcile(ctx.kobo, ids) };
+    return { books: updated, report: await reconcileOrQueue(ctx.kobo, ids) };
   });
 }
 

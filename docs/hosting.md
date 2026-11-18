@@ -95,7 +95,7 @@ Flusso di un libro nuovo: upload dalla UI o da `elib` → il Pi salva l'EPUB su 
 | 1. Fondamenta | fatta nel codice, **da eseguire a mano** | `turso/migrations/0001_init.sql` (applicata con `pnpm --filter @ehub/store db:migrate --apply`), `packages/store` (client Turso, R2, mount), `pnpm --filter @ehub/store migrate` (a secco senza `--apply`). Servono: database Turso, bucket R2, variabili in `.env.local`. |
 | 2. Repository su Turso | **fatta** | I repository di libreria, esplorazioni, note e podcast passano da `@ehub/store`; test con mount in memoria in `*/hosted.test.ts`. Le CLI di validazione (`elib validate`, `site-data`) leggono ancora file locali: spariscono in fase 5/8. |
 | 3. Backend sul Pi | fatta nel codice, **da installare a mano** | `apps/api` (Hono unico: CORS, login Google gestito dall'API + token di sessione + allowlist, GET pubbliche), EPUB su R2 (`cache/remote.ts`), bundle esbuild, `deploy/pi/` (unità systemd, env, `deploy.sh`). Vedi «Installazione sul Pi». |
-| 4. Kobo | da fare | |
+| 4. Kobo | fatta nel codice, **da attivare sul Pi** | Coda `kobo_queue` (`kobo/queue.ts`): con `ELIB_KOBO_QUEUE=1` i servizi mettono in coda invece di fallire; `ehub-kobo-sync.timer` ogni 5 minuti svuota la coda con `reconcile` (mai `--prune`); ricerca dell'IP sulla `/24` come riserva (`kobo/discovery.ts`); host, porta e alias da `ELIB_KOBO_*`; rotte `GET /api/library/kobo/queue` e `POST /api/library/kobo/sync` («sincronizza ora»). La UI arriva in fase 5. |
 | 5. Frontend | da fare | |
 | 6. CLI e skill `explore` | da fare | |
 | 7. Podcast | da fare | |
@@ -118,3 +118,9 @@ Il JSON è salvato come testo: l'ordine delle chiavi si conserva. Il test di `Tu
 Variabili di login sul Pi: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `PUBLIC_API_URL`, `ALLOWED_EMAILS`. Nella console Google il client OAuth (tipo «Web») ha come URI di reindirizzamento `<PUBLIC_API_URL>/auth/google/callback`. Il sito parte da `<PUBLIC_API_URL>/auth/google?return=<URL del sito>`; `return` deve stare in `CORS_ORIGINS`.
 
 Rotte private anche se `GET`: trascrizioni dei podcast, area di staging degli upload, candidati di copertina, stato Z-Library, riassunti delle esplorazioni (`PRIVATE_GETS` in `apps/api/src/auth.ts`). Cancellare un libro non cancella l'EPUB su R2 (è l'unica copia: si toglie a mano).
+
+## Kobo sul Pi
+
+- Prenotazione DHCP sul router per il MAC del Kobo (la via principale). Se l'indirizzo cambia lo stesso, `ehub-kobo-sync` cerca la porta SSH sulla `/24` del Pi e accetta solo un dispositivo che passa il login con `StrictHostKeyChecking=yes` sotto l'alias `ELIB_KOBO_HOST_KEY_ALIAS` (senza alias la ricerca è disattivata). L'indirizzo trovato è ricordato in `<cache>/kobo-host`.
+- Una tantum, a mano: copiare sul Pi la chiave SSH del Kobo (`~ehub/.ssh/`) e aggiungere a `known_hosts` la chiave del Kobo con l'alias (`ssh-keyscan -p 2222 <ip>` poi sostituire l'host con `ehub-kobo`; controllare l'impronta a mano).
+- Le sync fatte mentre il Kobo dorme escono come avviso `queued` nel resoconto. Le cancellazioni di libri restano dirette (falliscono se il Kobo è spento, come oggi) e non passano dalla coda.

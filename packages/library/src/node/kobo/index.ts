@@ -7,6 +7,8 @@ export * from "./context.ts";
 export * from "./duplicates.ts";
 export * from "./highlights.ts";
 export * from "./local.ts";
+export * from "./queue.ts";
+export * from "./discovery.ts";
 export * from "./prune-guard.ts";
 export * from "./sidecar.ts";
 export * from "./ssh.ts";

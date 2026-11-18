@@ -11,7 +11,7 @@ import path from "node:path";
 import type { BookWriteResponse, CoverSource } from "../../shared/api.ts";
 import { UNSORTED_TOPIC_ID } from "../../shared/labels.ts";
 import { CACHE_EXPLORE_EPUB_FILE, cacheExploreBookDir, isNonEmptyFile } from "../cache/index.ts";
-import { reconcile } from "../kobo/index.ts";
+import { reconcileOrQueue } from "../kobo/index.ts";
 import { BookNotFoundError, readBook, summaryPath } from "../repo/index.ts";
 import type { ServiceContext } from "./context.ts";
 import { notFound } from "./errors.ts";
@@ -31,7 +31,7 @@ export async function promoteExploreBook(
   // Already a library book (an earlier run finished, or another exploration promoted it): just align the Kobo.
   try {
     const book = await readBook(ctx.dataDir, input.id);
-    return { book, report: await reconcile(ctx.kobo, [book.id]) };
+    return { book, report: await reconcileOrQueue(ctx.kobo, [book.id]) };
   } catch (error) {
     if (!(error instanceof BookNotFoundError)) throw error;
   }

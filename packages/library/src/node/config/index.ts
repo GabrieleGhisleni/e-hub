@@ -84,6 +84,12 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
   const envData = nonEmpty(env.ELIB_DATA_DIR);
   const dataDir = envData ? path.resolve(expandHome(envData)) : DEFAULT_DATA_DIR;
 
+  const envKoboPort = nonEmpty(env.ELIB_KOBO_PORT);
+  const koboPort = envKoboPort === undefined ? undefined : Number(envKoboPort);
+  if (koboPort !== undefined && !(Number.isInteger(koboPort) && koboPort >= 1 && koboPort <= 65535)) {
+    throw new ConfigError(`invalid ELIB_KOBO_PORT ${JSON.stringify(envKoboPort)}`);
+  }
+  const envKoboAlias = nonEmpty(env.ELIB_KOBO_HOST_KEY_ALIAS);
   const envKoboHost = nonEmpty(env.ELIB_KOBO_HOST);
   if (envKoboHost !== undefined && !KoboConfigSchema.shape.host.safeParse(envKoboHost).success) {
     throw new ConfigError(
@@ -96,6 +102,8 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
     kobo: {
       ...config.kobo,
       ...(envKoboHost ? { host: envKoboHost } : {}),
+      ...(koboPort !== undefined ? { port: koboPort } : {}),
+      ...(envKoboAlias ? { hostKeyAlias: envKoboAlias } : {}),
       identityFile: path.resolve(expandHome(config.kobo.identityFile)),
     },
     cache: { ...config.cache, dir: cacheDir },

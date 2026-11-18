@@ -1,0 +1,12 @@
+[Unit]
+Description=e-hub: sync the Kobo queue (quiet when the Kobo is off)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ehub
+WorkingDirectory=/opt/ehub
+EnvironmentFile=/etc/ehub/env
+# ELIB_KOBO_HOST / ELIB_KOBO_PORT / ELIB_KOBO_HOST_KEY_ALIAS in /etc/ehub/env override elib.config.json.
+ExecStart=/usr/bin/node /opt/ehub/ehub-kobo-sync.mjs
+TimeoutStartSec=240

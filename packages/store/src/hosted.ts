@@ -142,6 +142,7 @@ const ID = "([^/]+)";
 export const libraryLayout: Layout = {
   routes: [
     { match: /^topics\.json$/, kind: "json", table: "topics", id: () => "all" },
+    { match: /^kobo-queue\/([^/.][^/]*)\.json$/, kind: "json", table: "kobo_queue", id: (m) => m[1]! },
     { match: new RegExp(`^books/${ID}/book\\.json$`), kind: "json", table: "books", id: (m) => m[1]! },
     {
       match: new RegExp(`^books/${ID}/summary\\.json$`),
@@ -169,7 +170,10 @@ export const libraryLayout: Layout = {
       blobKey: (m) => `covers/${m[1]}.webp`,
     },
   ],
-  listings: [{ dir: "books", table: "books", as: "dirs" }],
+  listings: [
+    { dir: "books", table: "books", as: "dirs" },
+    { dir: "kobo-queue", table: "kobo_queue", as: "files" },
+  ],
   trees: [
     {
       match: new RegExp(`^books/${ID}$`),

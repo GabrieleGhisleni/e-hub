@@ -12,7 +12,7 @@ import {
 import { topicIdFromLabel } from "../../shared/ids.ts";
 import { UNSORTED_TOPIC_ID } from "../../shared/labels.ts";
 import { TopicIdSchema, type Topic } from "../../shared/schema.ts";
-import { reconcile } from "../kobo/index.ts";
+import { reconcileOrQueue } from "../kobo/index.ts";
 import { InvalidDataError, readAllBooks, writeBook, writeTopics } from "../repo/index.ts";
 import type { ServiceContext } from "./context.ts";
 import { badRequest, conflict, notFound } from "./errors.ts";
@@ -96,7 +96,7 @@ export async function renameTopic(
     const ids = (await readAllBooks(ctx.dataDir)).books
       .filter((b) => b.topic === id)
       .map((b) => b.id);
-    const report = ids.length > 0 ? await reconcile(ctx.kobo, ids) : emptyReconcileReport();
+    const report = ids.length > 0 ? await reconcileOrQueue(ctx.kobo, ids) : emptyReconcileReport();
     return { topic, topics: next, report };
   });
 }
@@ -124,7 +124,7 @@ export async function deleteTopic(ctx: ServiceContext, id: string): Promise<Dele
     await saveTopics(ctx, next, id);
     const report =
       books.length > 0
-        ? await reconcile(
+        ? await reconcileOrQueue(
             ctx.kobo,
             books.map((b) => b.id),
           )
