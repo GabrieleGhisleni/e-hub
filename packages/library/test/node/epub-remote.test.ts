@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { MemoryBlobStore } from "@ehub/store";
+import { MemoryBlobStore, runAsUser } from "@ehub/store";
 import { afterEach, describe, expect, it } from "vitest";
 import { cachedEpubPath, ensureDir } from "../../src/node/cache/index.ts";
 import { blobEpubRemote, ensureCachedEpub, pushEpub, setEpubRemote } from "../../src/node/cache/remote.ts";
@@ -20,7 +20,7 @@ describe("EPUB remote (R2)", () => {
     expect(await ensureCachedEpub(dir, "ab12cd34")).toBe(false);
   });
 
-  it("pushes the cached EPUB and restores it into an empty cache", async () => {
+  it("pushes the cached EPUB and restores it into an empty cache, per user", () => runAsUser("u1", async () => {
     dir = await mkdtemp(path.join(tmpdir(), "epub-remote-"));
     const blobs = new MemoryBlobStore();
     setEpubRemote(blobEpubRemote(blobs));
@@ -28,11 +28,11 @@ describe("EPUB remote (R2)", () => {
     await ensureDir(path.dirname(file));
     await writeFile(file, "EPUB-BYTES");
     await pushEpub(dir, "ab12cd34");
-    expect(blobs.objects.has("books/ab12cd34.epub")).toBe(true);
+    expect(blobs.objects.has("users/u1/books/ab12cd34.epub")).toBe(true);
 
     await rm(file);
     expect(await ensureCachedEpub(dir, "ab12cd34")).toBe(true);
     expect(await readFile(file, "utf8")).toBe("EPUB-BYTES");
     expect(await ensureCachedEpub(dir, "zz99zz99")).toBe(false);
-  });
+  }));
 });

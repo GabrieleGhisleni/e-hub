@@ -18,6 +18,7 @@ import {
 import type { ServiceContext } from "./context.ts";
 import { ServiceError, conflict } from "./errors.ts";
 import { loadBook, parseInput } from "./internal.ts";
+import { currentUserId } from "@ehub/store";
 
 export const AI_NOT_CONFIGURED_MESSAGE = "Chat AI non configurata: copia .env.example in .env.local";
 
@@ -39,7 +40,7 @@ export async function summarizeBookService(
 ): Promise<SummarizeResponse> {
   const req = parseInput(SummarizeRequestSchema, request, "sintesi");
   await loadBook(ctx, id);
-  if (ctx.summariesInProgress.has(id)) {
+  if (ctx.summariesInProgress.has(`${currentUserId() ?? ""}:${id}`)) {
     throw conflict("busy", `La sintesi del libro ${id} è già in corso: attendi che finisca.`);
   }
 
@@ -54,7 +55,7 @@ export async function summarizeBookService(
   }
 
   const concurrency = options.concurrency ?? model.concurrency;
-  ctx.summariesInProgress.add(id);
+  ctx.summariesInProgress.add(`${currentUserId() ?? ""}:${id}`);
   try {
     return await summarizeBook(
       {
@@ -83,7 +84,7 @@ export async function summarizeBookService(
     }
     throw error;
   } finally {
-    ctx.summariesInProgress.delete(id);
+    ctx.summariesInProgress.delete(`${currentUserId() ?? ""}:${id}`);
   }
 }
 

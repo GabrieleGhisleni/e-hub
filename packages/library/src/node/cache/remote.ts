@@ -4,7 +4,7 @@
  */
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { BlobStore } from "@ehub/store";
+import { type BlobStore, requireUserId, scopedBlobs } from "@ehub/store";
 import { cachedEpubPath, ensureDir, isNonEmptyFile } from "./index.ts";
 
 export interface EpubRemote {
@@ -13,10 +13,12 @@ export interface EpubRemote {
 }
 
 export function blobEpubRemote(blobs: BlobStore): EpubRemote {
+  // R2 key: `users/<user>/books/<id>.epub`; the user is the one of the current request.
   const key = (id: string) => `books/${id}.epub`;
+  const mine = () => scopedBlobs(blobs, requireUserId());
   return {
-    put: (id, bytes) => blobs.put(key(id), bytes, "application/epub+zip"),
-    get: (id) => blobs.get(key(id)),
+    put: (id, bytes) => mine().put(key(id), bytes, "application/epub+zip"),
+    get: (id) => mine().get(key(id)),
   };
 }
 

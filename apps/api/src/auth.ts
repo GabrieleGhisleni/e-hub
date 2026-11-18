@@ -1,12 +1,17 @@
 /**
- * Access rules of the hosted API (docs/hosting.md): reads are public, everything else needs a session token (30 days).
- * The token is issued by this API after a Google login (google.ts) for an email in the allowlist, and is checked here
- * with the API's own secret.
+ * Access rules of the hosted API (docs/hosting.md): everything needs a session token (30 days), GET included. The only
+ * routes without one are the login itself, the health check and the CORS preflight.
+ * The token is issued by this API after a Google login (google.ts), carries the user's Google `sub` and email, and is
+ * checked here with the API's own secret. Every request then runs as that user (`runAsUser` from @ehub/store): the
+ * storage layer reads the user from there, so no route can touch data of somebody else.
  */
 import { SignJWT, jwtVerify } from "jose";
 import type { MiddlewareHandler } from "hono";
+import { runAsUser } from "@ehub/store";
 
 export interface Identity {
+  /** Google `sub`: the id of the user in the database. */
+  userId: string;
   email: string;
 }
 
@@ -19,11 +24,11 @@ export const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 const encoder = new TextEncoder();
 
-/** Signs a session token (HS256) for `email`. Issued by the Google login only after the allowlist check. */
-export async function createSession(secret: string, email: string, now = new Date()): Promise<string> {
-  return new SignJWT({ email })
+/** Signs a session token (HS256) for a user. Issued by the Google login only after the allowlist check. */
+export async function createSession(secret: string, identity: Identity, now = new Date()): Promise<string> {
+  return new SignJWT({ email: identity.email })
     .setProtectedHeader({ alg: "HS256" })
-    .setSubject(email)
+    .setSubject(identity.userId)
     .setIssuer(SESSION_ISSUER)
     .setAudience(SESSION_AUDIENCE)
     .setIssuedAt(Math.floor(now.getTime() / 1000))
@@ -40,8 +45,9 @@ export function sessionVerifier(secret: string): VerifyToken {
       algorithms: ["HS256"],
     });
     const email = typeof payload.email === "string" ? payload.email.toLowerCase() : "";
-    if (!email) throw new Error("token without email");
-    return { email };
+    const userId = typeof payload.sub === "string" ? payload.sub : "";
+    if (!email || !userId) throw new Error("token without subject or email");
+    return { userId, email };
   };
 }
 
@@ -54,28 +60,18 @@ export function parseAllowedEmails(value: string | undefined): Set<string> {
   );
 }
 
-/**
- * GET routes that stay private even though they are reads: transcripts of podcasts, the upload staging area, cover
- * candidates, the Z-Library status and the exploration summaries (derived from book text).
- */
-export const PRIVATE_GETS: readonly RegExp[] = [
-  /^\/api\/store(\/|$)/,
-  /^\/api\/podcasts\/episodes\/[^/]+\/transcript/,
-  /^\/api\/library\/uploads(\/|$)/,
-  /^\/api\/library\/books\/[^/]+\/cover-candidates/,
-  /^\/api\/library\/zlibrary/,
-  /^\/api\/explore\/[^/]+\/summaries$/,
-  /^\/api\/explore\/kobo/,
-];
-
-const PUBLIC_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-/** The login itself: the caller has no session yet. */
-const PUBLIC_POSTS = new Set(["/auth/google"]);
+/** Reachable without a session: the login (the caller has none yet) and the health check. */
+const PUBLIC_ROUTES = new Set(["POST /auth/google", "GET /api/health", "HEAD /api/health"]);
 
 export interface AuthOptions {
   verify: VerifyToken;
+  /** Optional allowlist: empty means every verified Google account may log in; otherwise only these emails. */
   allowedEmails: ReadonlySet<string>;
-  privateGets?: readonly RegExp[];
+  /**
+   * `false` (API_LOCAL_DEV, plain files, no database): the request is authenticated but not scoped to a user, since
+   * local files have no owner. Default `true`.
+   */
+  scopeToUser?: boolean;
 }
 
 function deny(status: 401 | 403, code: string, message: string): Response {
@@ -83,13 +79,10 @@ function deny(status: 401 | 403, code: string, message: string): Response {
 }
 
 export function authMiddleware(options: AuthOptions): MiddlewareHandler {
-  const privateGets = options.privateGets ?? PRIVATE_GETS;
+  const scope = options.scopeToUser ?? true;
   return async (c, next) => {
     const path = new URL(c.req.url).pathname;
-    if (c.req.method === "POST" && PUBLIC_POSTS.has(path)) return next();
-    if (PUBLIC_METHODS.has(c.req.method) && !privateGets.some((re) => re.test(path))) {
-      return next();
-    }
+    if (c.req.method === "OPTIONS" || PUBLIC_ROUTES.has(`${c.req.method} ${path}`)) return next();
     const header = c.req.header("authorization") ?? "";
     const token = /^Bearer (.+)$/i.exec(header)?.[1];
     if (!token) return deny(401, "unauthorized", "Accesso richiesto.");
@@ -99,10 +92,13 @@ export function authMiddleware(options: AuthOptions): MiddlewareHandler {
     } catch {
       return deny(401, "unauthorized", "Sessione non valida o scaduta.");
     }
-    if (!options.allowedEmails.has(identity.email)) {
+    // Checked on every request, not only at login: removing an email from the allowlist locks that user out at once.
+    if (options.allowedEmails.size > 0 && !options.allowedEmails.has(identity.email)) {
       return deny(403, "forbidden", "Questo account non è autorizzato.");
     }
+    c.set("userId", identity.userId);
     c.set("email", identity.email);
-    return next();
+    if (!scope) return next();
+    return runAsUser(identity.userId, () => next(), { email: identity.email });
   };
 }

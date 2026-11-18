@@ -9,6 +9,7 @@
 import { createHash } from "node:crypto";
 import { rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { currentUserId, userScopedDir } from "@ehub/store";
 import { AiConfigError } from "@ehub/chat/node";
 import { generateBookId, isBookId } from "../../shared/ids.ts";
 import { type Book, type BookSummary, BookSummarySchema } from "../../shared/schema.ts";
@@ -147,7 +148,7 @@ export async function newExploreBookId(
 /** `<cache>/explore/books/<id>`. Throws `InvalidBookIdError` for anything that is not a book ID. */
 export function exploreBookDir(id: string, opts: { cacheDir?: string } = {}): string {
   assertBookId(id);
-  return path.join(cacheDirOf(opts.cacheDir), EXPLORE_DIR, EXPLORE_BOOKS_DIR, id);
+  return path.join(userScopedDir(cacheDirOf(opts.cacheDir)), EXPLORE_DIR, EXPLORE_BOOKS_DIR, id);
 }
 
 /** Folder of the chapters of a book: `<cache>/books/<id>/text` (library) or `<cache>/explore/books/<id>/text`. */
@@ -304,6 +305,8 @@ type ExploreSummaryRun =
   | { state: "failed"; error: string };
 
 /** Books whose summary runs in this process: one run per book at a time. */
+/** In-process progress is per user: the same id of two users must not collide. */
+const runKey = (id: string): string => `${currentUserId() ?? ""}:${id}`;
 const exploreSummariesRunning = new Set<string>();
 const exploreSummaryRuns = new Map<string, ExploreSummaryRun>();
 
@@ -335,12 +338,12 @@ export async function readExploreBookSummary(
 }
 
 function trackExploreProgress(id: string, event: SummarizeProgress): void {
-  const run = exploreSummaryRuns.get(id);
+  const run = exploreSummaryRuns.get(runKey(id));
   if (!run || run.state !== "running") return;
   if (event.kind === "chapter") {
-    exploreSummaryRuns.set(id, { state: "running", done: event.done, total: event.total });
+    exploreSummaryRuns.set(runKey(id), { state: "running", done: event.done, total: event.total });
   } else if (event.kind === "book") {
-    exploreSummaryRuns.set(id, { state: "running", done: run.total, total: run.total });
+    exploreSummaryRuns.set(runKey(id), { state: "running", done: run.total, total: run.total });
   }
 }
 
@@ -354,20 +357,20 @@ export async function summarizeExploreBook(
   id: string,
   opts: SummarizeExploreOptions = {},
 ): Promise<BookSummary> {
-  if (exploreSummariesRunning.has(id)) {
+  if (exploreSummariesRunning.has(runKey(id))) {
     throw new Error(`La sintesi del libro esplorato ${id} è già in corso: attendi che finisca.`);
   }
-  exploreSummariesRunning.add(id);
-  exploreSummaryRuns.set(id, { state: "running", done: 0, total: 0 });
+  exploreSummariesRunning.add(runKey(id));
+  exploreSummaryRuns.set(runKey(id), { state: "running", done: 0, total: 0 });
   try {
     const summary = await runExploreSummary(id, opts);
-    exploreSummaryRuns.delete(id);
+    exploreSummaryRuns.delete(runKey(id));
     return summary;
   } catch (error) {
-    exploreSummaryRuns.set(id, { state: "failed", error: errorMessageOf(error) });
+    exploreSummaryRuns.set(runKey(id), { state: "failed", error: errorMessageOf(error) });
     throw error;
   } finally {
-    exploreSummariesRunning.delete(id);
+    exploreSummariesRunning.delete(runKey(id));
   }
 }
 
@@ -381,7 +384,7 @@ async function runExploreSummary(id: string, opts: SummarizeExploreOptions): Pro
       cause: new Error(`il testo non è in cache: ricarica l'EPUB con pnpm explore add ${id} --epub <file>`),
     });
   }
-  exploreSummaryRuns.set(id, { state: "running", done: 0, total: manifest.chapters.length });
+  exploreSummaryRuns.set(runKey(id), { state: "running", done: 0, total: manifest.chapters.length });
   const progressFile = path.join(exploreBookDir(id, opts), EXPLORE_SUMMARY_PROGRESS_FILE);
   const file = exploreSummaryPath(id, opts);
   if (opts.force === true) await rm(progressFile, { force: true });
@@ -423,7 +426,7 @@ export async function exploreSummaryStatus(
   id: string,
   opts: { cacheDir?: string } = {},
 ): Promise<ExploreSummaryStatus> {
-  const run = exploreSummaryRuns.get(id);
+  const run = exploreSummaryRuns.get(runKey(id));
   if (run?.state === "running") return { state: "running", done: run.done, total: run.total };
   if (run?.state === "failed") return { state: "failed", error: run.error };
   return { state: (await readExploreBookSummary(id, opts)) !== null ? "done" : "none" };

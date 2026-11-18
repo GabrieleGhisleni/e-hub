@@ -8,13 +8,15 @@
  *   <cache>/uploads/<uploadId>/          staging area of an upload in progress (W3a)
  *   <cache>/highlights/                  raw highlight exports (future, never public)
  *
+ * In the hosted setup every path above lives under `<cache>/users/<id>/` (`userScopedDir`): users never share a file.
+ *
  * The cache holds the only local copy of the EPUBs and KEPUBs (the Kobo gets the KEPUB over SSH): back it up. A
  * missing EPUB cannot be fetched again.
  */
 import { randomUUID } from "node:crypto";
 import { mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { isMounted, readBytesIfExists } from "@ehub/store";
+import { isMounted, readBytesIfExists, userScopedDir } from "@ehub/store";
 import { assertBookId } from "../repo/paths.ts";
 
 export const CACHE_BOOKS_DIR = "books";
@@ -30,7 +32,7 @@ export const CACHE_SUMMARY_PROGRESS_FILE = "summary-progress.json";
 
 /** `<cache>/books`. */
 export function cacheBooksDir(cacheDir: string): string {
-  return path.join(cacheDir, CACHE_BOOKS_DIR);
+  return path.join(userScopedDir(cacheDir), CACHE_BOOKS_DIR);
 }
 
 /** `<cache>/books/<id>`. Throws `InvalidBookIdError` for anything that is not a book ID (no path tricks). */
@@ -42,7 +44,7 @@ export function cacheBookDir(cacheDir: string, id: string): string {
 /** `<cache>/explore/books/<id>`. */
 export function cacheExploreBookDir(cacheDir: string, id: string): string {
   assertBookId(id);
-  return path.join(cacheDir, CACHE_EXPLORE_DIR, CACHE_BOOKS_DIR, id);
+  return path.join(userScopedDir(cacheDir), CACHE_EXPLORE_DIR, CACHE_BOOKS_DIR, id);
 }
 
 /** `<cache>/books/<id>/book.epub`. */
@@ -67,7 +69,7 @@ export function cachedSummaryProgressPath(cacheDir: string, id: string): string 
 
 /** `<cache>/uploads`. */
 export function cacheUploadsDir(cacheDir: string): string {
-  return path.join(cacheDir, CACHE_UPLOADS_DIR);
+  return path.join(userScopedDir(cacheDir), CACHE_UPLOADS_DIR);
 }
 
 /** `<cache>/uploads/<uploadId>`. Throws `InvalidUploadIdError` unless `uploadId` came from `newUploadId()`. */
@@ -78,7 +80,7 @@ export function uploadDir(cacheDir: string, uploadId: string): string {
 
 /** `<cache>/highlights` (raw exports: never public, never in the repo). */
 export function highlightsDir(cacheDir: string): string {
-  return path.join(cacheDir, CACHE_HIGHLIGHTS_DIR);
+  return path.join(userScopedDir(cacheDir), CACHE_HIGHLIGHTS_DIR);
 }
 
 /** `mkdir -p`; returns `dir`. */

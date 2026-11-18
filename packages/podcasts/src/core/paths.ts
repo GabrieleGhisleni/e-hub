@@ -5,6 +5,7 @@
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { userScopedDir } from "@ehub/store";
 import { Slug } from "./schema";
 import { ValidationError } from "./errors";
 
@@ -37,7 +38,8 @@ export const dirs = {
   shows: () => path.join(dataDir(), "shows"),
   episodes: () => path.join(dataDir(), "episodes"),
   conversations: () => path.join(dataDir(), "conversations"),
-  transcripts: () => path.join(dataDir(), "transcripts"),
+  // Disk-only files (not in Turso): one folder per user in the hosted setup.
+  transcripts: () => path.join(userScopedDir(dataDir()), "transcripts"),
   showImages: () => path.join(publicDir(), "shows"),
 };
 

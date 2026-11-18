@@ -13,6 +13,7 @@ import { createApp as createPodcastsApp } from "@ehub/podcasts/server";
 import { exploreDataDir } from "@ehub/explore/node";
 import { notesDataDir } from "@ehub/notes/node";
 import { dataDir as podcastsDataDir } from "@ehub/podcasts/paths";
+import { runAsUser } from "@ehub/store";
 import { createApi, passThrough } from "./app.ts";
 import { parseAllowedEmails, sessionVerifier } from "./auth.ts";
 import { boot } from "./boot.ts";
@@ -20,32 +21,47 @@ import { createChat } from "./chat.ts";
 import { createGoogleLogin } from "./google.ts";
 import { createStoreRoutes } from "./store-routes.ts";
 
-const { env, config, hosted } = await boot();
+const { env, config, hosted, docs, blobs } = await boot();
 
 let auth;
 let google: Hono | undefined;
-if (env.SESSION_SECRET && env.ALLOWED_EMAILS.length > 0) {
+if (env.SESSION_SECRET && docs) {
   const verify = sessionVerifier(env.SESSION_SECRET);
+  // Empty ALLOWED_EMAILS = any verified Google account may log in (docs/hosting.md).
   const allowedEmails = parseAllowedEmails(env.ALLOWED_EMAILS.join(","));
   auth = { verify, allowedEmails };
+  if (allowedEmails.size === 0) console.warn("ALLOWED_EMAILS vuota: può entrare chiunque abbia un account Google verificato.");
   if (env.GOOGLE_CLIENT_ID) {
     google = createGoogleLogin({
       clientId: env.GOOGLE_CLIENT_ID,
       sessionSecret: env.SESSION_SECRET,
       allowedEmails,
       verify,
+      docs,
+      blobs,
+      koboFor: (email) => env.KOBO_OWNER_EMAIL !== "" && email === env.KOBO_OWNER_EMAIL,
     });
   } else {
-    console.warn("Login Google non configurato (GOOGLE_CLIENT_ID): le scritture restano chiuse.");
+    console.warn("Login Google non configurato (GOOGLE_CLIENT_ID): nessuno può entrare.");
   }
-} else if (env.API_LOCAL_DEV === "1") {
-  auth = { verify: async () => ({ email: "dev@local" }), allowedEmails: new Set(["dev@local"]) };
+} else if (env.API_LOCAL_DEV === "1" && !hosted) {
+  // Plain local files have no owners: one fixed identity, no per-user scoping.
+  auth = {
+    verify: async () => ({ userId: "dev", email: "dev@local" }),
+    allowedEmails: new Set<string>(),
+    scopeToUser: false,
+  };
 } else {
-  throw new Error("Imposta SESSION_SECRET e ALLOWED_EMAILS (o API_LOCAL_DEV=1 in locale).");
+  throw new Error("Imposta TURSO_DATABASE_URL e SESSION_SECRET (o API_LOCAL_DEV=1 con file locali, senza database).");
 }
 
 const services = createServices(createServiceContext(config));
-const removed = await services.cleanupStaleUploads();
+// Upload staging dirs live in each user's cache folder: clean them user by user.
+let removed = 0;
+for (const user of docs ? await docs.users.list() : [null]) {
+  if (user && user.id.startsWith("email:")) continue; // not logged in yet: no folder on the Pi
+  removed += await (user ? runAsUser(user.id, () => services.cleanupStaleUploads()) : services.cleanupStaleUploads());
+}
 if (removed > 0) console.log(`removed ${removed} stale upload staging dir(s)`);
 
 const app = createApi({

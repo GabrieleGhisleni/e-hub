@@ -5,6 +5,7 @@ import { cachedKepubPath } from "../../../src/node/cache/index.ts";
 import {
   createKoboContext,
   discoverKoboHost,
+  setKoboAccessPolicy,
   drainKoboQueue,
   koboResolver,
   listQueue,
@@ -56,7 +57,10 @@ beforeEach(async () => {
   await mkdir(path.dirname(kepub), { recursive: true });
   await writeFile(kepub, "KEPUB");
 });
-afterEach(() => env.cleanup());
+afterEach(async () => {
+  setKoboAccessPolicy(null);
+  await env.cleanup();
+});
 
 describe("Kobo queue", () => {
   it("without the queue it is plain reconcile (a sleeping Kobo is an error)", async () => {
@@ -80,6 +84,19 @@ describe("Kobo queue", () => {
     expect(drained.status).toBe("synced");
     expect(await listQueue(env.dataDir)).toEqual([]);
     expect((await readdir(env.koboDir)).some((n) => n.endsWith(".kepub.epub"))).toBe(true);
+    expect(await drainKoboQueue(ctx)).toEqual({ status: "empty", pending: 0 });
+  });
+
+  it("for a user who is not the Kobo owner every Kobo operation is a no-op: no sync, no queue", async () => {
+    setKoboAccessPolicy(() => false);
+    const ctx = ctxOf(true);
+    for (const awake of [false, true]) {
+      asleep = !awake;
+      const report = await reconcileOrQueue(ctx, [ID]);
+      expect(report).toMatchObject({ errors: [], warnings: [], actions: [] });
+    }
+    expect(await listQueue(env.dataDir)).toEqual([]);
+    expect(await readdir(env.koboDir)).toEqual([]);
     expect(await drainKoboQueue(ctx)).toEqual({ status: "empty", pending: 0 });
   });
 

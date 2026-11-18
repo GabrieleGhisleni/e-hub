@@ -13,6 +13,8 @@
 import { createHash } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
+import { userScopedDir } from "@ehub/store";
+import { koboAllowed } from "./access.ts";
 import {
   type ReconcileAction,
   type ReconcileMessage,
@@ -81,7 +83,7 @@ interface RunInput {
 /** IDs of the books imported for explorations (folders of `<cache>/explore/books`); [] when there are none. */
 export async function listExploreBookIds(cacheDir: string): Promise<string[]> {
   try {
-    const entries = await readdir(path.join(cacheDir, CACHE_EXPLORE_DIR, "books"), {
+    const entries = await readdir(path.join(userScopedDir(cacheDir), CACHE_EXPLORE_DIR, "books"), {
       withFileTypes: true,
     });
     return entries.filter((e) => e.isDirectory() && isBookId(e.name)).map((e) => e.name);
@@ -101,6 +103,7 @@ export async function reconcile(
   options: ReconcileOptions = {},
 ): Promise<ReconcileReport> {
   const report = emptyReconcileReport(isDryRun(ctx, options));
+  if (!koboAllowed()) return report;
   const topics = await loadTopics(ctx, report);
   if (!topics) return report;
 
@@ -147,6 +150,7 @@ export async function reconcileBooks(
   options: ReconcileOptions = {},
 ): Promise<ReconcileReport> {
   const report = emptyReconcileReport(isDryRun(ctx, options));
+  if (!koboAllowed()) return report;
   const topics = await loadTopics(ctx, report);
   if (!topics) return report;
   return run(ctx, { books: [...books], topics }, options, report);
@@ -164,6 +168,7 @@ export async function removeBookFiles(
   assertBookId(id);
   const dryRun = isDryRun(ctx, options);
   const report = emptyReconcileReport(dryRun);
+  if (!koboAllowed()) return report;
 
   let entries: KoboEntry[];
   try {

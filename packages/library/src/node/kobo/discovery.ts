@@ -6,6 +6,7 @@
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { userScopedDir } from "@ehub/store";
 import { readFile, writeFile } from "node:fs/promises";
 import type { KoboConfig } from "../../shared/config.ts";
 import type { KoboContext } from "./context.ts";
@@ -94,7 +95,7 @@ const HOST_CACHE = "kobo-host";
 export function koboResolver(deps: DiscoveryDeps & { makeContext: (host: string) => KoboContext }) {
   return async (ctx: KoboContext): Promise<KoboContext | null> => {
     if (await koboReachable(ctx)) return ctx;
-    const file = path.join(ctx.cacheDir, HOST_CACHE);
+    const file = path.join(userScopedDir(ctx.cacheDir), HOST_CACHE);
     const remembered = (await readFile(file, "utf8").catch(() => "")).trim();
     if (remembered && remembered !== ctx.kobo.host) {
       const next = deps.makeContext(remembered);

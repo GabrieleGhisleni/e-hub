@@ -3,7 +3,7 @@ import {
   HostedBackend,
   libraryLayout,
 } from "@ehub/store/hosted";
-import { MemoryBlobStore, MemoryDocClient, mountBackend, unmountAll } from "@ehub/store";
+import { MemoryBlobStore, MemoryDocClient, mountBackend, runAsUser, unmountAll } from "@ehub/store";
 import {
   deleteBookDir,
   listBookIds,
@@ -23,7 +23,7 @@ afterEach(() => unmountAll());
 const ROOT = "/nonexistent/hosted-library-data";
 
 describe("library repo on a hosted (mounted) data dir", () => {
-  it("keeps books, markdown, covers and topics in the doc and blob stores, not on disk", async () => {
+  it("keeps books, markdown, covers and topics in the doc and blob stores, not on disk", () => runAsUser("u1", async () => {
     const docs = new MemoryDocClient();
     const blobs = new MemoryBlobStore();
     mountBackend(ROOT, new HostedBackend(docs, blobs, libraryLayout));
@@ -49,12 +49,12 @@ describe("library repo on a hosted (mounted) data dir", () => {
     expect(await listBookIds(ROOT)).toEqual(["ab12cd34"]);
     const all = await readAllBooks(ROOT);
     expect(all.books.map((b) => b.id)).toEqual(["ab12cd34"]);
-    expect(blobs.objects.has("covers/ab12cd34.webp")).toBe(true);
+    expect(blobs.objects.has("users/u1/covers/ab12cd34.webp")).toBe(true);
     expect(existsSync(ROOT)).toBe(false);
 
     await deleteBookDir(ROOT, "ab12cd34");
     expect(await listBookIds(ROOT)).toEqual([]);
     expect(blobs.objects.size).toBe(0);
     expect(await readBookMarkdown(ROOT, "ab12cd34", "notes")).toBeNull();
-  });
+  }));
 });

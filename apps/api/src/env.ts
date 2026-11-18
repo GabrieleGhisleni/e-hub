@@ -16,8 +16,10 @@ const Env = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   /** Signs the session tokens: at least 32 random characters. */
   SESSION_SECRET: z.string().min(32).optional(),
-  /** Emails allowed to write, comma separated. */
+  /** Optional allowlist, comma separated. Empty (default): any verified Google account may log in. */
   ALLOWED_EMAILS: List,
+  /** Email of the one user who owns the Kobo (host/port/SSH key are the owner's). Empty: nobody has the Kobo. */
+  KOBO_OWNER_EMAIL: z.string().default("").transform((v) => v.trim().toLowerCase()),
   /** Folder that holds the four data dirs (mount roots when hosted; real files otherwise). */
   EHUB_DATA_ROOT: z.string().default(""),
   /** `1`: no login, loopback only. For `pnpm` on the laptop; refused with a non-loopback HOST. */

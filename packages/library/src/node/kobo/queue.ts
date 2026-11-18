@@ -14,6 +14,7 @@ import {
 import { isBookId } from "../../shared/ids.ts";
 import { formatJson, readTextIfExists, writeFileAtomic } from "../repo/fs.ts";
 import { BookNotFoundError, readBook } from "../repo/index.ts";
+import { koboAllowed } from "./access.ts";
 import type { KoboContext } from "./context.ts";
 import { reconcile } from "./sync.ts";
 
@@ -92,6 +93,7 @@ export async function reconcileOrQueue(
   ctx: KoboContext,
   ids: readonly string[],
 ): Promise<ReconcileReport> {
+  if (!koboAllowed()) return emptyReconcileReport();
   if (!ctx.queue) return reconcile(ctx, ids);
   if (!(await koboReachable(ctx))) {
     await enqueueBooks(ctx.dataDir, ids, "asleep");
@@ -134,6 +136,7 @@ export async function drainKoboQueue(
   resolve: (ctx: KoboContext) => Promise<KoboContext | null> = async (c) =>
     (await koboReachable(c)) ? c : null,
 ): Promise<DrainResult> {
+  if (!koboAllowed()) return { status: "empty", pending: 0 };
   const queue = await listQueue(ctx.dataDir);
   if (queue.length === 0) return { status: "empty", pending: 0 };
   const live = await resolve(ctx);

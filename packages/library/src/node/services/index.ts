@@ -2,7 +2,7 @@
  * Services layer (W3a): the one implementation of every admin operation (PLAN §7), shared by the Hono server and the
  * `elib` CLI. Every function takes a `ServiceContext`; `createServices(ctx)` binds them for the server.
  */
-import { type DrainResult, createKoboContext, drainKoboQueue, koboResolver, listQueue } from "../kobo/index.ts";
+import { type DrainResult, createKoboContext, drainKoboQueue, koboAllowed, koboResolver, listQueue } from "../kobo/index.ts";
 import type {
   BookPatch,
   BookWriteResponse,
@@ -140,7 +140,9 @@ export interface Services {
 export function createServices(ctx: ServiceContext): Services {
   return {
     ctx,
-    koboQueue: async () => ({ pending: (await listQueue(ctx.dataDir)).map((e) => e.bookId) }),
+    koboQueue: async () => ({
+      pending: koboAllowed() ? (await listQueue(ctx.dataDir)).map((e) => e.bookId) : [],
+    }),
     syncKoboNow: () => ctx.lock.runExclusive(() => drainWithDiscovery(ctx)),
     analyzeUpload: (input, options) => analyzeUpload(ctx, input, options),
     readUploadCover: (uploadId, source) => readUploadCover(ctx, uploadId, source),

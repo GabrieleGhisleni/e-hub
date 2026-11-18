@@ -16,6 +16,7 @@ import {
   type Highlight,
 } from "../../shared/schema.ts";
 import { InvalidDataError, readBookHighlights, writeBookHighlights } from "../repo/index.ts";
+import { koboAllowed } from "./access.ts";
 import type { KoboContext } from "./context.ts";
 
 /** KOReader's per-book settings file inside the sidecar folder (the book is a `.epub` for KOReader). */
@@ -313,6 +314,7 @@ export async function pullHighlights(
 ): Promise<HighlightsPullReport> {
   const dryRun = ctx.dryRun || options.dryRun === true;
   const report: HighlightsPullReport = { dryRun, items: [], errors: [] };
+  if (!koboAllowed()) return report;
   let listing;
   try {
     listing = await ctx.transport.list();

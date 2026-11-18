@@ -1,12 +1,12 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { SignJWT } from "jose";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createExploration, exploreDataDir, listExplorations, readExploration, DATA_DIR_ENV } from "@ehub/explore/node";
 import { mountRemoteFromEnv, unmountAll } from "@ehub/store";
 import { createApi } from "../src/app.ts";
-import { SESSION_AUDIENCE, SESSION_ISSUER, parseAllowedEmails, sessionVerifier } from "../src/auth.ts";
+import { parseAllowedEmails, sessionVerifier } from "../src/auth.ts";
+import { sessionToken } from "./helpers.ts";
 import { createStoreRoutes } from "../src/store-routes.ts";
 
 const SECRET = "k".repeat(40);
@@ -25,12 +25,7 @@ beforeAll(async () => {
     podcasts: path.join(base, "s-podcasts"),
   };
   clientExplore = path.join(base, "c-explore");
-  token = await new SignJWT({ email: "me@example.com" })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuer(SESSION_ISSUER)
-    .setAudience(SESSION_AUDIENCE)
-    .setExpirationTime("1h")
-    .sign(new TextEncoder().encode(SECRET));
+  token = await sessionToken(SECRET);
   app = createApi({
     corsOrigins: [],
     auth: { verify: sessionVerifier(SECRET), allowedEmails: parseAllowedEmails("me@example.com") },

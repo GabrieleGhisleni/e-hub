@@ -3,6 +3,7 @@
  * sidecar folder per book. `createKoboContext` builds what the operations need; `reconcile` / `removeBookFiles` make
  * the Kobo mirror the repo; the transports (`sshTransport`, `localTransport`) do the file operations.
  */
+export * from "./access.ts";
 export * from "./context.ts";
 export * from "./duplicates.ts";
 export * from "./highlights.ts";
