@@ -38,8 +38,31 @@ describe("exploration list (read-only)", () => {
     fireEvent.click(screen.getByRole("button", { name: "filosofia" }));
     expect(screen.getByRole("heading", { name: "Nietzsche e la morale cristiana" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: otherExploration().title })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Tutte" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rimuovi filtro: filosofia" }));
     expect(screen.getByRole("heading", { name: otherExploration().title })).toBeTruthy();
+  });
+
+  it("uses the first book cover and combines the state filter with a search by source", () => {
+    const first = sampleExploration();
+    const store = createMemoryExploreStore([first, { ...otherExploration(), status: "closed" }]);
+    render(
+      <MemoryRouter>
+        <ExplorationListPage
+          store={store}
+          devTools={false}
+          cover={({ source }) => <img alt={`Copertina di ${source.title}`} />}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByRole("img", { name: `Copertina di ${first.sources[0].title}` })).toHaveLength(2);
+    expect(screen.queryByRole("img", { name: `Copertina di ${first.sources[1].title}` })).toBeNull();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Cerca nelle esplorazioni" }), {
+      target: { value: first.sources[1].title },
+    });
+    expect(screen.getByRole("heading", { name: first.title })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: otherExploration().title })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Chiusa" }));
+    expect(screen.getByText("Nessuna esplorazione trovata")).toBeTruthy();
   });
 
   it("shows the empty state when there are no explorations", () => {

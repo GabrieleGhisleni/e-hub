@@ -59,7 +59,7 @@ export function renderExplorationPrompt(exploration: Exploration, books: PromptB
   }
 
   lines.push("", "## Sintesi dell'esplorazione");
-  lines.push(exploration.summary ?? "Non ancora scritta.");
+  lines.push(exploration.summary ?? exploration.synthesis?.body ?? "Non ancora scritta.");
 
   lines.push("", "## Quaderno");
   lines.push(exploration.notebook?.body ?? "Vuoto.");

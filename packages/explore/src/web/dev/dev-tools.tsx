@@ -7,12 +7,15 @@ import {
   CompassIcon,
   PencilIcon,
   PlusIcon,
+  RotateCcwIcon,
+  SearchIcon,
+  LockIcon,
   TabletSmartphoneIcon,
   Trash2Icon,
   UploadIcon,
   XIcon,
 } from "lucide-react";
-import { type FormEvent, useEffect, useId, useState } from "react";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { ChatButton, type ToolPartInfo } from "@ehub/chat/web";
@@ -27,14 +30,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@ehub/ui/components/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@ehub/ui/components/dropdown-menu";
 import { Input } from "@ehub/ui/components/input";
 import { Label } from "@ehub/ui/components/label";
 import { Textarea } from "@ehub/ui/components/textarea";
 import { Toaster } from "@ehub/ui/components/sonner";
 import { VERDICT_LABELS, formatVerdict, type VerdictDecision } from "../../labels.ts";
 import type { BookSource, Exploration } from "../../schema.ts";
+import type { ZlibraryPicker, ZlibrarySelection } from "../integrations.ts";
 import { explorationHref } from "../format.ts";
 import {
+  ExploreApiError,
   type ExploreStore,
   type KoboResult,
   type LibraryBookRef,
@@ -164,12 +175,17 @@ function verdictFromFields(
 export function ExplorationDevToolbar({
   exploration,
   store,
+  zlibrary: Zlibrary,
 }: {
   exploration: Exploration;
   store: ExploreStore;
+  zlibrary?: ZlibraryPicker;
 }) {
   const { busy, run } = useRun();
   const [adding, setAdding] = useState(false);
+  const [searchingZlibrary, setSearchingZlibrary] = useState(false);
+  const upload = useRef<HTMLInputElement>(null);
+  const downloaded = useRef(new Map<string, File>());
   const closed = exploration.status === "closed";
   const taken = new Set(exploration.sources.map((s) => s.id));
 
@@ -177,6 +193,7 @@ export function ExplorationDevToolbar({
     <div className="flex flex-wrap items-center gap-2">
       <Toaster position="bottom-right" closeButton />
       <ChatButton
+        iconOnly
         source={{ kind: "exploration", id: exploration.id }}
         title={exploration.title}
         subtitle={exploration.question}
@@ -211,25 +228,57 @@ export function ExplorationDevToolbar({
         }}
       />
 
-      <Button variant="outline" onClick={() => setAdding(true)} disabled={busy}>
-        <PlusIcon aria-hidden /> Aggiungi libro
-      </Button>
-      <Label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium shadow-xs hover:bg-muted">
-        <UploadIcon aria-hidden className="size-4" /> Carica EPUB
-        <input
-          type="file"
-          accept=".epub,application/epub+zip"
-          className="sr-only"
-          disabled={busy}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = "";
-            if (file) void run(() => store.uploadEpub(exploration.id, file), "EPUB caricato");
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="icon" aria-label="Aggiungi una fonte" title="Aggiungi una fonte" disabled={busy}>
+            <PlusIcon aria-hidden />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onSelect={() => setAdding(true)}>Dalla libreria</DropdownMenuItem>
+          {Zlibrary ? (
+            <DropdownMenuItem onSelect={() => setSearchingZlibrary(true)}>Da Z-Library</DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem onSelect={() => upload.current?.click()}>Carica EPUB</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <input
+        ref={upload}
+        type="file"
+        accept=".epub,application/epub+zip"
+        hidden
+        disabled={busy}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void run(() => store.uploadEpub(exploration.id, file), "EPUB caricato");
+        }}
+      />
+      {Zlibrary ? (
+        <Zlibrary
+          open={searchingZlibrary}
+          onOpenChange={setSearchingZlibrary}
+          selection={{
+            label: "Aggiungi all’esplorazione",
+            pick: async (book) => {
+              const file = downloaded.current.get(book.key) ?? await book.download();
+              downloaded.current.set(book.key, file);
+              try {
+                await store.uploadEpub(exploration.id, file);
+              } catch (error) {
+                if (!(error instanceof ExploreApiError) || error.code !== "already-exists") throw error;
+              }
+              downloaded.current.delete(book.key);
+              toast.success("Libro aggiunto");
+            },
           }}
         />
-      </Label>
+      ) : null}
       <Button
         variant="outline"
+        size="icon"
+        aria-label={closed ? "Riapri esplorazione" : "Chiudi esplorazione"}
+        title={closed ? "Riapri esplorazione" : "Chiudi esplorazione"}
         disabled={busy}
         onClick={() =>
           void run(
@@ -238,7 +287,7 @@ export function ExplorationDevToolbar({
           )
         }
       >
-        {closed ? "Riapri" : "Chiudi"}
+        {closed ? <RotateCcwIcon aria-hidden /> : <LockIcon aria-hidden />}
       </Button>
 
       <AddBookDialog
@@ -362,8 +411,10 @@ export function SourceDevActions({
   return (
     <div className="mt-1 flex flex-wrap justify-end gap-1">
       <Button
-        size="sm"
+        size="icon-sm"
         variant="ghost"
+        aria-label="Modifica verdetto"
+        title="Modifica verdetto"
         disabled={busy}
         onClick={() => {
           setFields({
@@ -374,18 +425,20 @@ export function SourceDevActions({
           setEditing(true);
         }}
       >
-        <PencilIcon aria-hidden /> Modifica verdetto
+        <PencilIcon aria-hidden />
       </Button>
       <Button
-        size="sm"
+        size="icon-sm"
         variant="ghost"
+        aria-label="Rimuovi fonte"
+        title="Rimuovi fonte"
         disabled={busy}
         onClick={() => {
           if (!window.confirm(`Rimuovere «${source.title}» dall'esplorazione?`)) return;
           void run(() => store.removeBook(exploration.id, source.id), "Fonte rimossa");
         }}
       >
-        <Trash2Icon aria-hidden /> Rimuovi
+        <Trash2Icon aria-hidden />
       </Button>
 
       <Dialog open={editing} onOpenChange={setEditing}>
@@ -748,7 +801,13 @@ function TextProposal({
 // ---------------------------------------------------------------------------------------------
 // The "new exploration" page (dev only): title, question, library books and EPUBs to explore.
 
-export function NewExplorationPage({ store }: { store: ExploreStore }) {
+export function NewExplorationPage({
+  store,
+  zlibrary: Zlibrary,
+}: {
+  store: ExploreStore;
+  zlibrary?: ZlibraryPicker;
+}) {
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
   const [question, setQuestion] = useState("");
@@ -756,6 +815,11 @@ export function NewExplorationPage({ store }: { store: ExploreStore }) {
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [filter, setFilter] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [searchingZlibrary, setSearchingZlibrary] = useState(false);
+  const [selectedZlibrary, setSelectedZlibrary] = useState<ZlibrarySelection[]>([]);
+  const [created, setCreated] = useState<Exploration | null>(null);
+  const [pendingUploads, setPendingUploads] = useState<File[]>([]);
+  const downloads = useRef(new Map<string, File>());
   const { busy, run } = useRun();
   const id = useId();
 
@@ -786,105 +850,166 @@ export function NewExplorationPage({ store }: { store: ExploreStore }) {
       toast.error("Scrivi un titolo e una domanda.");
       return;
     }
-    let created: Exploration | undefined;
-    const ok = await run(async () => {
-      created = await store.create({
-        title: title.trim(),
-        question: question.trim(),
-        books: [...picked],
-      });
-    }, "Esplorazione creata");
-    if (!ok || !created) return;
-    for (const file of files) {
-      const uploaded = await run(() => store.uploadEpub(created!.id, file), `EPUB caricato: ${file.name}`);
-      if (!uploaded) break;
-    }
-    navigate(explorationHref(created.id));
+    await run(async () => {
+      let exploration = created;
+      let pending = pendingUploads;
+      if (!exploration) {
+        const externalFiles: File[] = [];
+        for (const book of selectedZlibrary) {
+          const file = downloads.current.get(book.key) ?? await book.download();
+          downloads.current.set(book.key, file);
+          externalFiles.push(file);
+        }
+        pending = [...files, ...externalFiles];
+        exploration = await store.create({
+          title: title.trim(),
+          question: question.trim(),
+          books: [...picked],
+        });
+        setCreated(exploration);
+        setPendingUploads(pending);
+      }
+      for (const [index, file] of pending.entries()) {
+        try {
+          await store.uploadEpub(exploration.id, file);
+        } catch (error) {
+          if (!(error instanceof ExploreApiError) || error.code !== "already-exists") throw error;
+        }
+        setPendingUploads(pending.slice(index + 1));
+      }
+      navigate(explorationHref(exploration.id));
+    }, created ? "Fonti aggiunte" : "Esplorazione creata");
   };
 
   return (
     <Container className="pt-6 pb-16 sm:pt-8">
       <Toaster position="bottom-right" closeButton />
       <PageHeader title="Nuova esplorazione" description="Una domanda e i libri su cui cercarla." />
-      <form onSubmit={(event) => void submit(event)} className="mt-8 grid max-w-[44rem] gap-6">
-        <div className="grid gap-1.5">
-          <Label htmlFor={`${id}-title`}>Titolo</Label>
-          <Input id={`${id}-title`} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor={`${id}-question`}>Domanda</Label>
-          <Textarea
-            id={`${id}-question`}
-            rows={3}
-            maxLength={2000}
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-          />
-        </div>
-
-        <fieldset className="grid gap-2">
-          <legend className="text-sm font-medium">Libri della libreria</legend>
-          <Input
-            aria-label="Cerca tra i libri"
-            placeholder="Cerca per titolo o autore"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          />
-          {books === null ? <p className="text-sm text-muted-foreground">Caricamento…</p> : null}
-          <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-lg border border-border">
-            {shown.map((book) => (
-              <li key={book.id} className="flex items-center gap-3 px-3 py-2">
-                <Checkbox
-                  aria-label={`Includi ${book.title}`}
-                  checked={picked.has(book.id)}
-                  onCheckedChange={(checked) =>
-                    setPicked((current) => {
-                      const next = new Set(current);
-                      if (checked === true) next.add(book.id);
-                      else next.delete(book.id);
-                      return next;
-                    })
-                  }
-                />
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium">{book.title}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{book.authors.join(", ")}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </fieldset>
-
-        <div className="grid gap-2">
-          <span className="text-sm font-medium">EPUB solo da esplorare</span>
-          <p className="text-xs text-muted-foreground">Non entrano in libreria: restano nella cache dell’esplorazione.</p>
-          {/* Styled label instead of the browser's own file button (its text follows the browser language). */}
-          <Label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium shadow-xs hover:bg-muted">
-            <UploadIcon aria-hidden className="size-4" /> Scegli EPUB
-            <input
-              id={`${id}-epub`}
-              type="file"
-              accept=".epub,application/epub+zip"
-              multiple
-              className="sr-only"
-              onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
+      <form onSubmit={(event) => void submit(event)} className="mt-8 max-w-[44rem]">
+        <fieldset disabled={busy || created !== null} className="grid gap-6">
+          <div className="grid gap-1.5">
+            <Label htmlFor={`${id}-title`}>Titolo</Label>
+            <Input id={`${id}-title`} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor={`${id}-question`}>Domanda</Label>
+            <Textarea
+              id={`${id}-question`}
+              rows={3}
+              maxLength={2000}
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
             />
-          </Label>
-          {files.length > 0 ? (
-            <ul className="text-sm text-muted-foreground">
-              {files.map((file) => (
-                <li key={file.name}>{file.name}</li>
+          </div>
+
+          <fieldset className="grid gap-2">
+            <legend className="text-sm font-medium">Libri della libreria</legend>
+            <Input
+              aria-label="Cerca tra i libri"
+              placeholder="Cerca per titolo o autore"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+            {books === null ? <p className="text-sm text-muted-foreground">Caricamento…</p> : null}
+            <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-lg border border-border">
+              {shown.map((book) => (
+                <li key={book.id} className="flex items-center gap-3 px-3 py-2">
+                  <Checkbox
+                    aria-label={`Includi ${book.title}`}
+                    checked={picked.has(book.id)}
+                    onCheckedChange={(checked) =>
+                      setPicked((current) => {
+                        const next = new Set(current);
+                        if (checked === true) next.add(book.id);
+                        else next.delete(book.id);
+                        return next;
+                      })
+                    }
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{book.title}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{book.authors.join(", ")}</span>
+                  </span>
+                </li>
               ))}
             </ul>
-          ) : null}
-        </div>
+          </fieldset>
 
-        <div className="flex justify-end">
+          <div className="grid gap-2">
+            <span className="text-sm font-medium">EPUB solo da esplorare</span>
+            <p className="text-xs text-muted-foreground">Non entrano in libreria: restano nella cache dell’esplorazione.</p>
+            {/* Styled label instead of the browser's own file button (its text follows the browser language). */}
+            <Label className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium shadow-xs hover:bg-muted">
+              <UploadIcon aria-hidden className="size-4" /> Scegli EPUB
+              <input
+                id={`${id}-epub`}
+                type="file"
+                accept=".epub,application/epub+zip"
+                multiple
+                className="sr-only"
+                onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
+              />
+            </Label>
+            {files.length > 0 ? (
+              <ul className="text-sm text-muted-foreground">
+                {files.map((file) => (
+                  <li key={file.name}>{file.name}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+
+          {Zlibrary ? (
+            <fieldset className="grid gap-2">
+              <legend className="text-sm font-medium">Libri da Z-Library</legend>
+              <Button type="button" variant="outline" className="w-fit" onClick={() => setSearchingZlibrary(true)}>
+                <SearchIcon aria-hidden /> Cerca su Z-Library
+              </Button>
+              {selectedZlibrary.length > 0 ? (
+                <ul className="divide-y divide-border rounded-lg border border-border">
+                  {selectedZlibrary.map((book) => (
+                    <li key={book.key} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                      <span>{book.title} {book.author ? <span className="text-muted-foreground">· {book.author}</span> : null}</span>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={`Rimuovi «${book.title}»`}
+                        onClick={() => setSelectedZlibrary((current) => current.filter(({ key }) => key !== book.key))}
+                      >
+                        <XIcon aria-hidden />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </fieldset>
+          ) : null}
+        </fieldset>
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
+          {created ? (
+            <Button variant="outline" asChild>
+              <Link to={explorationHref(created.id)}>Apri esplorazione</Link>
+            </Button>
+          ) : null}
           <Button type="submit" disabled={busy}>
-            Crea esplorazione
+            {busy ? "Salvataggio…" : created ? "Riprova ad aggiungere le fonti" : "Crea esplorazione"}
           </Button>
         </div>
       </form>
+      {Zlibrary ? (
+        <Zlibrary
+          open={searchingZlibrary}
+          onOpenChange={setSearchingZlibrary}
+          selection={{
+            label: "Seleziona",
+            selectedKeys: new Set(selectedZlibrary.map(({ key }) => key)),
+            pick: (book) => setSelectedZlibrary((current) =>
+              current.some(({ key }) => key === book.key) ? current : [...current, book],
+            ),
+          }}
+        />
+      ) : null}
     </Container>
   );
 }
@@ -991,10 +1116,12 @@ export function KoboDevButton({
   ids,
   store,
   label = "Aggiungi alla libreria",
+  iconOnly = false,
 }: {
   ids: string[];
   store: ExploreStore;
   label?: string;
+  iconOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<KoboResult | null>(null);
@@ -1074,8 +1201,15 @@ export function KoboDevButton({
 
   return (
     <>
-      <Button variant="outline" disabled={ids.length === 0} onClick={() => setOpen(true)}>
-        <TabletSmartphoneIcon aria-hidden /> {label}
+      <Button
+        variant="outline"
+        size={iconOnly ? "icon" : "default"}
+        aria-label={iconOnly ? label : undefined}
+        title={iconOnly ? label : undefined}
+        disabled={ids.length === 0}
+        onClick={() => setOpen(true)}
+      >
+        <TabletSmartphoneIcon aria-hidden /> {iconOnly ? null : label}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

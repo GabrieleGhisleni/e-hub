@@ -58,6 +58,7 @@ export interface BookSummaryStatus {
 
 export interface SummaryStatusResponse {
   books: BookSummaryStatus[];
+  synthesis?: { state: "none" | "running" | "done" | "failed"; updatedAt: string };
 }
 
 export interface NewExplorationInput {
@@ -110,10 +111,12 @@ export interface ExplorationPatch {
 /** An error from the store, with the message to show the user (already in Italian). */
 export class ExploreApiError extends Error {
   readonly status: number;
-  constructor(message: string, status: number) {
+  readonly code?: string;
+  constructor(message: string, status: number, code?: string) {
     super(message);
     this.name = "ExploreApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -137,6 +140,7 @@ export interface ExploreStore {
   summaries(id: string): Promise<SummaryStatusResponse>;
   /** Starts the summary of an explore book again after a failure (`POST /api/explore/:id/books/:bookId/summary`). */
   retrySummary(id: string, bookId: string): Promise<void>;
+  retrySynthesis(id: string): Promise<void>;
   setVerdict(id: string, bookId: string, verdict: VerdictInput): Promise<Exploration>;
   addNote(id: string, input: { body: string; book?: string }): Promise<Exploration>;
   removeNote(id: string, noteId: string): Promise<Exploration>;
@@ -244,6 +248,7 @@ export function createStaticExploreStore(explorations: readonly unknown[]): Expl
       })),
     }),
     retrySummary: reject,
+    retrySynthesis: reject,
     setVerdict: reject,
     addNote: reject,
     removeNote: reject,
@@ -258,19 +263,21 @@ export function createStaticExploreStore(explorations: readonly unknown[]): Expl
 
 /** Message and status of a failed response: the server's `error` text when it sent one. */
 async function apiError(response: Response): Promise<ExploreApiError> {
+  let code: string | undefined;
   let message = `Errore ${response.status}`;
   try {
-    const body = (await response.json()) as { error?: unknown; details?: unknown };
+    const body = (await response.json()) as { code?: unknown; error?: unknown; details?: unknown };
     const details = Array.isArray(body.details)
       ? body.details.filter((d): d is string => typeof d === "string")
       : [];
+    if (typeof body.code === "string") code = body.code;
     if (typeof body.error === "string") {
       message = details.length > 0 ? `${body.error} (${details.slice(0, 2).join("; ")})` : body.error;
     }
   } catch {
     // Not JSON: keep the status message.
   }
-  return new ExploreApiError(message, response.status);
+  return new ExploreApiError(message, response.status, code);
 }
 
 /** Local dev: the dev server's explorations API. Loads the list on first subscription. */
@@ -374,6 +381,14 @@ export function createHttpExploreStore(
       );
       if (!response.ok) throw await apiError(response);
     },
+    async retrySynthesis(id) {
+      const response = await doFetch(`${baseUrl}${at(id)}/synthesis`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      if (!response.ok) throw await apiError(response);
+    },
     setVerdict: (id, bookId, verdict) =>
       send("PUT", `${at(id)}/verdicts/${encodeURIComponent(bookId)}`, verdict),
     addNote: (id, input) => send("POST", `${at(id)}/notes`, input),
@@ -460,6 +475,7 @@ export function createMemoryExploreStore(
         })),
       };
     },
+    retrySynthesis: unsupported,
     retrySummary: async (id, bookId) => {
       const current = state.get(id);
       if (!current) throw new ExploreApiError("Esplorazione non trovata.", 404);
@@ -573,6 +589,7 @@ export const exploreStore: ExploreStore = {
   removeBook: (id, bookId) => active.removeBook(id, bookId),
   summaries: (id) => active.summaries(id),
   retrySummary: (id, bookId) => active.retrySummary(id, bookId),
+  retrySynthesis: (id) => active.retrySynthesis(id),
   setVerdict: (id, bookId, verdict) => active.setVerdict(id, bookId, verdict),
   addNote: (id, input) => active.addNote(id, input),
   removeNote: (id, noteId) => active.removeNote(id, noteId),

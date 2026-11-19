@@ -16,6 +16,7 @@ import {
   newExploreBookId,
   readCachedBookManifest,
   readExploreBookSummary,
+  readExploreBookCover,
   readLibraryBookRef,
   readLibraryBookSummary,
   startExploreSummaryInBackground,
@@ -43,6 +44,7 @@ export interface LibraryDeps {
   /** Progress of the summary of an explore book in this process, else whether it exists. */
   exploreSummaryStatus: typeof exploreSummaryStatus;
   bookTextDir: typeof bookTextDir;
+  readExploreBookCover: typeof readExploreBookCover;
   /** The Kobo (SSH, or a local folder with `ELIB_KOBO_LOCAL_DIR`). */
   createKoboContext: typeof createExploreKoboContext;
   /** Topics of the library (the series on the Kobo). */
@@ -62,6 +64,7 @@ export const defaultLibraryDeps: LibraryDeps = {
   readCachedBookManifest,
   readLibraryBookSummary,
   readExploreBookSummary,
+  readExploreBookCover,
   startExploreSummaryInBackground,
   exploreSummaryStatus,
   bookTextDir,

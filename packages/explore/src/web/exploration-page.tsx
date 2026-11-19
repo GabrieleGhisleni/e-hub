@@ -1,8 +1,9 @@
-import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
+import { ArrowLeftIcon, ExternalLinkIcon, SparklesIcon } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { NoteMarkdown } from "@ehub/notes";
 import { Container, PageHeader } from "@ehub/ui";
+import { Button } from "@ehub/ui/components/button";
 import { Badge } from "@ehub/ui/components/badge";
 import { formatVerdict } from "../labels.ts";
 import type { BookSource, Exploration, Note } from "../schema.ts";
@@ -22,6 +23,7 @@ import {
   formatDay,
   libraryBookHref,
 } from "./format.ts";
+import type { ZlibraryPicker } from "./integrations.ts";
 import { NotebookView } from "./notebook-view.tsx";
 import { SummaryLine, useSummaryStatus } from "./summary-status.tsx";
 import { ExploreErrorBanner, MessageState } from "./status.tsx";
@@ -138,15 +140,18 @@ function NoteItem({
 export function ExplorationPage({
   store = exploreStore,
   devTools = import.meta.env.DEV,
+  zlibrary,
 }: {
   store?: ExploreStore;
+  zlibrary?: ZlibraryPicker;
   /** Show the local-only actions (default: only in the dev server). */
   devTools?: boolean;
 }) {
   const { id: rawId = "" } = useParams();
   const exploration = useExploration(rawId, store);
   const [load, setLoad] = useState<LoadState>({ status: "loading" });
-  const summaries = useSummaryStatus(rawId, { enabled: devTools, store });
+  const summaries = useSummaryStatus(rawId, { enabled: devTools, store, updatedAt: exploration?.updatedAt });
+  const [synthesisError, setSynthesisError] = useState<string | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -244,11 +249,11 @@ export function ExplorationPage({
         {devTools && DevExplorationToolbar ? (
           <div className="mt-6 flex flex-wrap items-center gap-2">
             <Suspense fallback={null}>
-              <DevExplorationToolbar exploration={exploration} store={store} />
+              <DevExplorationToolbar exploration={exploration} store={store} zlibrary={zlibrary} />
             </Suspense>
             {DevKoboButton ? (
               <Suspense fallback={null}>
-                <DevKoboButton ids={[exploration.id]} store={store} />
+                <DevKoboButton ids={[exploration.id]} store={store} iconOnly />
               </Suspense>
             ) : null}
           </div>
@@ -296,13 +301,45 @@ export function ExplorationPage({
 
         <section aria-labelledby="sintesi" className="mt-12 max-w-[48rem]">
           <SectionTitle id="sintesi">Sintesi</SectionTitle>
-          {exploration.summary ? (
+          {exploration.synthesis ? (
             <p className="mt-6 text-[0.9375rem] leading-relaxed whitespace-pre-wrap break-words">
-              {exploration.summary}
+              {exploration.synthesis.body}
             </p>
-          ) : (
+          ) : null}
+          {exploration.summary ? (
+            <div className="mt-6">
+              {exploration.synthesis ? <h3 className="text-sm font-medium">Sintesi della sessione</h3> : null}
+              <p className="text-[0.9375rem] leading-relaxed whitespace-pre-wrap break-words">
+                {exploration.summary}
+              </p>
+            </div>
+          ) : !exploration.synthesis && summaries.synthesis?.state !== "running" ? (
             <p className="mt-6 text-sm text-muted-foreground">Nessuna sintesi ancora.</p>
-          )}
+          ) : null}
+          {summaries.synthesis?.state === "running" ? (
+            <p role="status" className="mt-3 text-sm text-muted-foreground">Aggiornamento della sintesi in corso…</p>
+          ) : null}
+          {summaries.synthesis?.state === "failed" || summaries.synthesis?.state === "none" ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {summaries.synthesis.state === "failed" ? (
+                <p role="alert" className="text-sm text-destructive">Aggiornamento della sintesi non riuscito.</p>
+              ) : null}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSynthesisError(null);
+                  void summaries.retrySynthesis().catch((error: unknown) => {
+                    setSynthesisError((error as Error).message);
+                  });
+                }}
+              >
+                <SparklesIcon aria-hidden />
+                {summaries.synthesis.state === "failed" ? "Riprova la sintesi" : "Genera sintesi"}
+              </Button>
+            </div>
+          ) : null}
+          {synthesisError ? <p role="alert" className="mt-2 text-sm text-destructive">{synthesisError}</p> : null}
         </section>
 
         <section aria-labelledby="note" className="mt-12 max-w-[48rem]">

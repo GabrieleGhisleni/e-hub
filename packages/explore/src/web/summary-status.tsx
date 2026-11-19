@@ -1,7 +1,7 @@
 import { CheckIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@ehub/ui/components/button";
-import { type BookSummaryStatus, type ExploreStore, exploreStore } from "./store.ts";
+import { type BookSummaryStatus, type ExploreStore, type SummaryStatusResponse, exploreStore } from "./store.ts";
 
 /** How often the status is read again while a summary runs. */
 export const SUMMARY_POLL_MS = 2000;
@@ -13,9 +13,14 @@ export const SUMMARY_POLL_MS = 2000;
  */
 export function useSummaryStatus(
   explorationId: string,
-  { enabled = true, store = exploreStore }: { enabled?: boolean; store?: ExploreStore } = {},
-): { statuses: ReadonlyMap<string, BookSummaryStatus>; retry: (bookId: string) => Promise<void> } {
+  { enabled = true, store = exploreStore, updatedAt }: {
+    enabled?: boolean;
+    store?: ExploreStore;
+    updatedAt?: string;
+  } = {},
+) {
   const [statuses, setStatuses] = useState<ReadonlyMap<string, BookSummaryStatus>>(new Map());
+  const [synthesis, setSynthesis] = useState<SummaryStatusResponse["synthesis"]>();
   const [refresh, setRefresh] = useState(0);
   const active = enabled && explorationId !== "";
 
@@ -23,17 +28,22 @@ export function useSummaryStatus(
     if (!active) return;
     let current = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    setSynthesis(undefined);
     const read = async () => {
-      let books: BookSummaryStatus[] | undefined;
+      let result: SummaryStatusResponse;
       try {
-        books = (await store.summaries(explorationId)).books;
+        result = await store.summaries(explorationId);
       } catch {
         // Keep the last status; a failed read does not start a poll loop by itself.
         return;
       }
       if (!current) return;
-      setStatuses(new Map(books.map((book) => [book.bookId, book])));
-      if (books.some((book) => book.state === "running")) {
+      setStatuses(new Map(result.books.map((book) => [book.bookId, book])));
+      setSynthesis(result.synthesis);
+      if (result.synthesis?.state === "done" && result.synthesis.updatedAt > (store.get(explorationId)?.updatedAt ?? "")) {
+        void store.fetchOne(explorationId).catch(() => {});
+      }
+      if (result.synthesis?.state === "running" || result.books.some((book) => book.state === "running")) {
         timer = setTimeout(() => void read(), SUMMARY_POLL_MS);
       }
     };
@@ -42,7 +52,7 @@ export function useSummaryStatus(
       current = false;
       clearTimeout(timer);
     };
-  }, [active, explorationId, store, refresh]);
+  }, [active, explorationId, store, refresh, updatedAt]);
 
   const retry = useCallback(
     async (bookId: string) => {
@@ -52,7 +62,12 @@ export function useSummaryStatus(
     [store, explorationId],
   );
 
-  return { statuses: active ? statuses : new Map(), retry };
+  const retrySynthesis = async () => {
+    await store.retrySynthesis(explorationId);
+    setRefresh((n) => n + 1);
+  };
+
+  return { statuses: active ? statuses : new Map(), synthesis: active ? synthesis : undefined, retry, retrySynthesis };
 }
 
 /** The summary line under a source: progress while running, the result when done, the error with a retry. */

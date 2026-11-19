@@ -207,6 +207,35 @@ export async function updateExploration(
   );
 }
 
+/** Compare the question and sources under the write lock before saving model output. */
+export async function saveSynthesis(
+  snapshot: ExplorationT,
+  body: string,
+): Promise<boolean> {
+  const file = explorationFile(snapshot.id);
+  return withLock(file, async () => {
+    const current = await readExplorationFile(file);
+    const inputHash = synthesisInputHash(snapshot);
+    if (!current || synthesisInputHash(current) !== inputHash) return false;
+    const next = parseInput(
+      Exploration,
+      { ...current, synthesis: { body, inputHash }, updatedAt: nextInstant(current.updatedAt, new Date()) },
+      "Sintesi non valida.",
+    );
+    await writeExplorationFile(file, next);
+    return true;
+  });
+}
+
+export function synthesisInputHash(exploration: ExplorationT): string {
+  const input = JSON.stringify([
+    exploration.title,
+    exploration.question,
+    exploration.sources.map(({ id, title, authors, addedAt }) => [id, title, authors, addedAt]),
+  ]);
+  return createHash("sha256").update(input).digest("hex");
+}
+
 /**
  * The book (imported only for explorations) is now a library book with the same ID: every exploration that has it
  * as a source turns it into a library source (no EPUB record any more). Returns the explorations changed.

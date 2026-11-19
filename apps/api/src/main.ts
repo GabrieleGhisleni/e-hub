@@ -7,7 +7,7 @@ import { serve } from "@hono/node-server";
 import type { Hono } from "hono";
 import { createServiceContext, createServices } from "@ehub/library/services";
 import { createApp as createLibraryApp } from "@ehub/library/server";
-import { createExploreApp } from "@ehub/explore/server";
+import { createExploreApp, generateExplorationSynthesis } from "@ehub/explore/server";
 import { createNotesApp } from "@ehub/notes/server";
 import { createApp as createPodcastsApp } from "@ehub/podcasts/server";
 import { exploreDataDir } from "@ehub/explore/node";
@@ -70,7 +70,7 @@ const app = createApi({
   modules: [
     ...(google ? [google] : []),
     createLibraryApp(services, config, { access: passThrough }),
-    createExploreApp({ access: passThrough }),
+    createExploreApp({ access: passThrough, synthesize: generateExplorationSynthesis }),
     createNotesApp({ access: passThrough }),
     createPodcastsApp({ access: passThrough }),
     createStoreRoutes({

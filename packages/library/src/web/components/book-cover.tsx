@@ -25,7 +25,7 @@ const blobCovers = new Map<string, Promise<string>>();
 
 function useCoverSrc(url: string | null): string | null | undefined {
   // The API builds absolute cover URLs; `fetch` wants the path (it adds the API origin and the token).
-  const apiPath = url === null ? null : /\/api\/library\/site\/covers\/[^/?#]+/.exec(url)?.[0] ?? null;
+  const apiPath = url === null ? null : /\/api\/(?:library\/site\/covers\/[^/?#]+|explore\/[^/?#]+\/books\/[^/?#]+\/cover)/.exec(url)?.[0] ?? null;
   const viaApi = apiPath !== null;
   const [blob, setBlob] = useState<{ url: string; src: string | null } | null>(null);
   useEffect(() => {

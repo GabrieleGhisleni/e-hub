@@ -1,7 +1,7 @@
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DATA_DIR_ENV } from "../src/node/index.ts";
 import { createExploreApp } from "../src/server/app.ts";
 import { FAKE_EPUB, fakeLibrary } from "./fakes.ts";
@@ -321,6 +321,56 @@ describe("explore API: summaries", () => {
       body: FAKE_EPUB,
     });
   }
+
+  it("updates the exploration synthesis for new sources and retries independently of source writes", async () => {
+    const deps = fakeLibrary();
+    const synthesize = vi.fn(async ({ sources }: { sources: readonly unknown[] }) =>
+      `Fonti considerate: ${sources.length}.`,
+    );
+    const app = createExploreApp({ deps, synthesize });
+    const id = (await create(app)).id;
+    const endpoint = `/api/explore/${id}`;
+    const read = async () => body(await call(app, "GET", endpoint));
+    const state = async () => (await body(await call(app, "GET", `${endpoint}/summaries`))).synthesis.state;
+
+    expect(await state()).toBe("running");
+    await vi.waitFor(async () => expect(await state()).toBe("done"), { timeout: 2000 });
+    expect((await read()).synthesis.body).toBe("Fonti considerate: 0.");
+    expect((await call(app, "PATCH", endpoint, { summary: "Dal diario." })).status).toBe(200);
+
+    synthesize.mockRejectedValueOnce(new Error("Errore del modello."));
+    expect((await call(app, "POST", `${endpoint}/books`, { bookId: "78w462eb" })).status).toBe(201);
+    await vi.waitFor(async () => expect(await state()).toBe("failed"), { timeout: 2000 });
+    expect((await read()).sources).toHaveLength(1);
+    expect((await read()).synthesis.body).toBe("Fonti considerate: 0.");
+
+    expect((await call(app, "POST", `${endpoint}/synthesis`, {})).status).toBe(202);
+    await vi.waitFor(async () => expect(await state()).toBe("done"), { timeout: 2000 });
+    expect((await read()).synthesis.body).toBe("Fonti considerate: 1.");
+
+    expect((await upload(app, id)).status).toBe(201);
+    await vi.waitFor(async () => expect(await state()).toBe("done"), { timeout: 2000 });
+    expect(await read()).toMatchObject({
+      summary: "Dal diario.",
+      synthesis: { body: "Fonti considerate: 2." },
+    });
+  }, 7000);
+
+  it("serves only the private EPUB covers whose book is a source of the exploration", async () => {
+    const cover = new Uint8Array([1, 2, 3]);
+    const readExploreBookCover = vi.fn(async () => cover);
+    const app = createExploreApp({ deps: { ...fakeLibrary(), readExploreBookCover } });
+    const { id } = await create(app, "Prova", ["78w462eb"]);
+    const { id: bookId } = (await body(await upload(app, id))).sources[1];
+    const other = (await create(app, "Altra")).id;
+    expect((await call(app, "GET", `/api/explore/${id}/books/78w462eb/cover`)).status).toBe(404);
+    expect((await call(app, "GET", `/api/explore/${other}/books/${bookId}/cover`)).status).toBe(404);
+    expect(readExploreBookCover).not.toHaveBeenCalled();
+    const result = await call(app, "GET", `/api/explore/${id}/books/${bookId}/cover`);
+    expect(result.status).toBe(200);
+    expect(result.headers.get("content-type")).toBe("image/webp");
+    expect(new Uint8Array(await result.arrayBuffer())).toEqual(cover);
+  });
 
   it("starts the summary of the new explore book in the background after an EPUB upload", async () => {
     const deps = fakeLibrary();

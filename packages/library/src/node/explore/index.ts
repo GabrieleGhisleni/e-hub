@@ -7,7 +7,7 @@
  * from `loadConfig()`, read only when a default is needed.
  */
 import { createHash } from "node:crypto";
-import { rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { currentUserId, userEnv, userScopedDir } from "@ehub/store";
 import { AiConfigError } from "@ehub/chat/node";
@@ -28,6 +28,7 @@ import { type ServiceContext, createServiceContext } from "../services/context.t
 import { listTopics } from "../services/topics.ts";
 import { promoteExploreBook as promoteBook } from "../services/explore-promote.ts";
 import type { BookWriteResponse } from "../../shared/api.ts";
+import { toCoverWebp } from "../covers/index.ts";
 import { extractEpubMetadata } from "../epub/index.ts";
 import { type SummarizeProgress, TextUnavailableError, summarizeText } from "../summary/index.ts";
 import { type SummaryModel, loadLocalEnv, summaryModelFromEnv } from "../summary/llm.ts";
@@ -199,6 +200,31 @@ export async function importExploreEpub(
     textDir,
     manifest,
   };
+}
+
+/** Reads the cover from a cached exploration EPUB, including books imported before covers were served. */
+export async function readExploreBookCover(id: string): Promise<Uint8Array | null> {
+  const dir = exploreBookDir(id);
+  const coverPath = path.join(dir, "cover.webp");
+  const read = async (file: string) => readFile(file).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  const cached = await read(coverPath);
+  if (cached) return cached;
+  const epub = await read(path.join(dir, EXPLORE_EPUB_FILE));
+  if (!epub) return null;
+  const { cover } = await extractEpubMetadata(epub);
+  if (!cover) return null;
+  let webp: Uint8Array;
+  try {
+    webp = await toCoverWebp(cover.bytes);
+  } catch {
+    return null;
+  }
+  await assertOutsideRepo(coverPath);
+  await writeFileAtomic(coverPath, webp);
+  return webp;
 }
 
 /**

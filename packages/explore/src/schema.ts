@@ -155,6 +155,10 @@ export const Exploration = z
         "Lo stesso libro compare due volte",
       ),
     summary: z.string().trim().min(1).max(MAX_SUMMARY_LENGTH).nullable(),
+    synthesis: z.strictObject({
+      body: z.string().trim().min(1).max(MAX_SUMMARY_LENGTH),
+      inputHash: z.hash("sha256"),
+    }).optional(),
     notes: z.array(Note),
     notebook: Notebook.optional(),
     journal: z.array(JournalEntry),
