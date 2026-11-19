@@ -11,6 +11,7 @@ import { LibraryPage } from "./routes/library-page";
 import { NotFoundPage, RouteErrorPage } from "./routes/not-found-page";
 import { SelectionProvider } from "./selection";
 
+export { KeysSettingsSlot, ZlibrarySettingsSlot } from "./admin-slots";
 export { LIBRARY_BASE } from "./lib/paths";
 
 /** Layout of the library subtree: no header/footer/skip-link (the shell owns them). */

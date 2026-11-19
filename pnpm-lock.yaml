@@ -266,6 +266,9 @@ importers:
       '@ehub/podcasts':
         specifier: workspace:*
         version: link:../../packages/podcasts
+      '@ehub/store':
+        specifier: workspace:*
+        version: link:../../packages/store
       '@ehub/ui':
         specifier: workspace:*
         version: link:../../packages/ui

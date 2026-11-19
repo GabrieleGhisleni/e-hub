@@ -35,5 +35,9 @@ export interface AdminModule {
   LibraryAdminBar: (props: LibraryAdminBarProps) => ReactNode;
   BookAdminActions: (props: BookAdminActionsProps) => ReactNode;
   /** "+" to add a topic (next to the topic filters). */
+  /** Z-Library account card of the app settings page. */
+  ZlibrarySettingsCard: () => ReactNode;
+  /** Personal AI / Groq keys card of the app settings page. */
+  KeysSettingsCard: () => ReactNode;
   NewTopicButton: (props: { onCreated?: (topic: { id: string; label: string }) => void }) => ReactNode;
 }

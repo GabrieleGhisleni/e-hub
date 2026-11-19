@@ -46,7 +46,7 @@ export async function summarizeBookService(
 
   let model: ReturnType<ServiceContext["summaryModel"]>;
   try {
-    model = ctx.summaryModel();
+    model = await ctx.summaryModel();
   } catch (error) {
     if (error instanceof AiConfigError) {
       throw new ServiceError("ai-not-configured", 503, AI_NOT_CONFIGURED_MESSAGE, { cause: error });

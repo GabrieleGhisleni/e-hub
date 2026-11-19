@@ -9,7 +9,7 @@
 import { createHash } from "node:crypto";
 import { rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { currentUserId, userScopedDir } from "@ehub/store";
+import { currentUserId, userEnv, userScopedDir } from "@ehub/store";
 import { AiConfigError } from "@ehub/chat/node";
 import { generateBookId, isBookId } from "../../shared/ids.ts";
 import { type Book, type BookSummary, BookSummarySchema } from "../../shared/schema.ts";
@@ -377,7 +377,7 @@ export async function summarizeExploreBook(
 async function runExploreSummary(id: string, opts: SummarizeExploreOptions): Promise<BookSummary> {
   // The explore server never loads .env.local itself (the library server and CLI do): load it here.
   if (!opts.model) loadLocalEnv();
-  const model = opts.model ?? summaryModelFromEnv();
+  const model = opts.model ?? summaryModelFromEnv(await userEnv());
   const manifest = await readCachedBookManifest("explore", id, opts);
   if (!manifest) {
     throw new TextUnavailableError(id, {

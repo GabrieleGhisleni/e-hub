@@ -85,8 +85,8 @@ function describeApiError(error: APICallError, richModel?: string): string {
     const wait = seconds === undefined ? "" : ` Riprova tra ${seconds} secondi.`;
     return `Il modello non è disponibile in questo momento (limiti dei piani gratuiti).${wait}`;
   }
-  if (status === 401) return "Chiave API non valida: controlla EHUB_AI_API_KEY in .env.local.";
-  if (status === 404) return "Modello non trovato: controlla EHUB_AI_MODEL.";
+  if (status === 401) return "Chiave API non valida: controlla la chiave in Impostazioni.";
+  if (status === 404) return "Modello non trovato: controlla il modello in Impostazioni.";
   const routerMessage = routerError(error).message;
   return `Errore del modello (HTTP ${status})${routerMessage ? `: ${routerMessage}` : ""}`;
 }

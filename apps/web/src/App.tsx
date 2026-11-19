@@ -5,6 +5,7 @@ import { exploreRoutes } from "@ehub/explore";
 import { notesRoutes } from "@ehub/notes";
 import { Shell } from "./components/shell";
 import { HomePage } from "./pages/home";
+import { SettingsPage } from "./pages/settings";
 import { NotFoundPage } from "./pages/not-found";
 
 /** One SPA, one router: the modules contribute their own routes ("library/…", "podcasts/…") under the shell. */
@@ -19,6 +20,7 @@ const router = createBrowserRouter(
         ...podcastsRoutes(),
         ...notesRoutes(),
         ...exploreRoutes(),
+        { path: "settings", element: <SettingsPage /> },
         { path: "*", element: <NotFoundPage /> },
       ],
     },

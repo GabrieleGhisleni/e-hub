@@ -14,6 +14,7 @@
   "dependencies": {
     "@ehub/library": "workspace:*",
     "@ehub/podcasts": "workspace:*",
+    "@ehub/store": "workspace:*",
     "@ehub/ui": "workspace:*",
     "lucide-react": "^1.70.0",
     "react": "^19.3.1",

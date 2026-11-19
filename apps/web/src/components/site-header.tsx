@@ -1,6 +1,6 @@
 import { Link, NavLink } from "react-router";
-import { cn, Container, Logo, ThemeToggle } from "@ehub/ui";
-import { AccountButton } from "./account-button";
+import { cn, Container, Logo } from "@ehub/ui";
+import { Settings } from "lucide-react";
 
 const NAV_ITEMS = [
   { to: "/library", label: "Libreria" },
@@ -45,8 +45,19 @@ export function SiteHeader() {
           </nav>
         </div>
         <div className="flex items-center gap-1">
-          <AccountButton />
-          <ThemeToggle />
+          <NavLink
+            to="/settings"
+            aria-label="Impostazioni"
+            title="Impostazioni"
+            className={({ isActive }) =>
+              cn(
+                "inline-flex size-9 items-center justify-center rounded-full transition-colors",
+                isActive ? "bg-brand-soft text-brand" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )
+            }
+          >
+            <Settings aria-hidden className="size-4" />
+          </NavLink>
         </div>
       </Container>
     </header>

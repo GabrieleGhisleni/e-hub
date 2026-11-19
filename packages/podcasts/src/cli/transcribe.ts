@@ -8,6 +8,7 @@
  * (use --force), 130 interrupted.
  */
 import { parseArgs } from "node:util";
+import { userEnv } from "@ehub/store";
 import { CoreError, EXIT_CODES, exitCodeFor } from "../core/errors";
 import { createHttp } from "../core/ingest/http";
 import { files } from "../core/paths";
@@ -121,11 +122,11 @@ async function main(argv: string[]): Promise<number> {
     const { slug, options } = parse(argv);
     const result = await transcribeEpisode(slug, options, {
       http: createHttp(),
-      runTranscriber: (job) =>
+      runTranscriber: async (job) =>
         runGroqTranscriber(job, {
           fetch,
           exec: nodeExec,
-          apiKey: process.env.GROQ_API_KEY,
+          apiKey: (await userEnv()).GROQ_API_KEY,
           log: (line) => console.error(`[transcribe] ${line}`),
         }),
       log: (line) => console.error(`[transcribe] ${line}`),

@@ -63,14 +63,14 @@ describe("describeLlmError", () => {
     expect(describeLlmError(error)).toBe("Il modello non è disponibile in questo momento (limiti dei piani gratuiti).");
   });
 
-  it("401: points at EHUB_AI_API_KEY", () => {
+  it("401: points at the settings", () => {
     const error = apiError({ statusCode: 401, body: { error: { message: "invalid key" } } });
-    expect(describeLlmError(error)).toBe("Chiave API non valida: controlla EHUB_AI_API_KEY in .env.local.");
+    expect(describeLlmError(error)).toBe("Chiave API non valida: controlla la chiave in Impostazioni.");
   });
 
-  it("404: points at EHUB_AI_MODEL", () => {
+  it("404: points at the settings", () => {
     const error = apiError({ statusCode: 404 });
-    expect(describeLlmError(error)).toBe("Modello non trovato: controlla EHUB_AI_MODEL.");
+    expect(describeLlmError(error)).toBe("Modello non trovato: controlla il modello in Impostazioni.");
   });
 
   it("500 with a router message: includes the router message", () => {

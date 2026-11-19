@@ -9,3 +9,4 @@ export * from "./remote.ts";
 export * from "./user-context.ts";
 export * from "./users.ts";
 export * from "./demo.ts";
+export * from "./user-settings.ts";

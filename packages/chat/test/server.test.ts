@@ -169,7 +169,7 @@ describe("POST /api/chat", () => {
 
     const chunks = parseChunks(await response.text());
     expect(chunks.find((c) => c.type === "error")?.errorText).toBe(
-      "Chiave API non valida: controlla EHUB_AI_API_KEY in .env.local.",
+      "Chiave API non valida: controlla la chiave in Impostazioni.",
     );
     expect(mock.requests).toHaveLength(1);
   });
@@ -181,6 +181,6 @@ describe("POST /api/chat", () => {
     const { error } = await response.json();
     expect(error).toContain("Chat non configurata");
     expect(error).toContain("EHUB_AI_API_KEY is missing");
-    expect(error).toContain(".env.example");
+    expect(error).toContain("Impostazioni");
   });
 });

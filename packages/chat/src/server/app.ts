@@ -67,7 +67,7 @@ export type ChatSourceContext = {
 
 export type ChatAppOptions = {
   /** Lazily builds the LLM config (throws AiConfigError when the configuration is missing or invalid). */
-  getLlm: () => Llm;
+  getLlm: () => Llm | Promise<Llm>;
   /** Resolves the source; returns undefined when it does not exist (404). */
   resolveSource: (source: ChatSource) => Promise<ChatSourceContext | undefined>;
 };
@@ -162,11 +162,11 @@ export function createChatApp({ getLlm, resolveSource }: ChatAppOptions) {
 
       let llm: Llm;
       try {
-        llm = getLlm();
+        llm = await getLlm();
       } catch (error) {
         if (error instanceof AiConfigError) {
           return c.json(
-            { error: `Chat non configurata: ${error.problems.join("; ")}. Copia .env.example in .env.local.` },
+            { error: `Chat non configurata: ${error.problems.join("; ")}. Inserisci le tue chiavi in Impostazioni (o, in locale, in .env.local).` },
             503,
           );
         }

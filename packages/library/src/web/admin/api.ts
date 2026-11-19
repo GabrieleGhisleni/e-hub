@@ -42,6 +42,12 @@ import {
   type ZlibrarySearchResponse,
   type ZlibraryStatusResponse,
 } from "@shared/zlibrary";
+import {
+  SettingsResponseSchema,
+  settingsPaths,
+  type SettingsResponse,
+  type SettingsUpdate,
+} from "@shared/settings";
 import { refreshSiteData } from "@library/data/site-data";
 import { ApiRequestError, isServerDownStatus } from "./lib/errors";
 
@@ -198,6 +204,14 @@ export const adminApi = {
 
   saveNotes(id: string, notes: string): Promise<SaveNotesResponse> {
     return written(request("PUT", apiPaths.bookNotes(id), SaveNotesResponseSchema, { notes }));
+  },
+
+  settings(): Promise<SettingsResponse> {
+    return request("GET", settingsPaths.keys, SettingsResponseSchema);
+  },
+
+  saveSettings(update: SettingsUpdate): Promise<SettingsResponse> {
+    return request("PUT", settingsPaths.keys, SettingsResponseSchema, update);
   },
 
   zlibraryStatus(): Promise<ZlibraryStatusResponse> {

@@ -26,6 +26,7 @@ import { ZlibraryClient, zlibraryEnvFrom } from "../zlibrary/index.ts";
 import { currentUserId, userScopedDir } from "@ehub/store";
 import { apiError, jsonBody } from "./http.ts";
 import { securityConfig, securityMiddleware } from "./security.ts";
+import { registerSettingsRoutes } from "./settings-routes.ts";
 import { registerSiteRoutes } from "./site-routes.ts";
 import { registerZlibraryRoutes } from "./zlibrary-routes.ts";
 
@@ -169,6 +170,8 @@ export function createApp(
   app.delete("/api/library/topics/:id", async (c) =>
     c.json(await services.deleteTopic(c.req.param("id"))),
   );
+
+  registerSettingsRoutes(app, jsonLimit);
 
   registerZlibraryRoutes(
     app,

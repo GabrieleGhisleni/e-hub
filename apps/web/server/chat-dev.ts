@@ -6,7 +6,8 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createChatApp, type ChatSourceContext } from "@ehub/chat/server";
-import { createLlm, loadAiConfig, loadDotEnvLocal, type Llm } from "@ehub/chat/node";
+import { createLlm, loadAiConfig, loadDotEnvLocal } from "@ehub/chat/node";
+import { userEnv } from "@ehub/store";
 import {
   buildEpisodeChatContext,
   NotFoundError,
@@ -19,16 +20,12 @@ import { createExplorationChatSource } from "@ehub/explore/chat";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 loadDotEnvLocal(repoRoot);
 
-let llm: Llm | undefined;
 const bookSource = createBookChatSource();
 const explorationSource = createExplorationChatSource();
 
 export default createChatApp({
-  // Memoized on success only: a missing configuration is reported on every request until it is fixed.
-  getLlm: () => {
-    llm ??= createLlm(loadAiConfig());
-    return llm;
-  },
+  // Personal settings (Impostazioni) over .env.local; read on every request so a change applies at once.
+  getLlm: async () => createLlm(loadAiConfig(await userEnv())),
   resolveSource: async (source): Promise<ChatSourceContext | undefined> => {
     if (source.kind === "book") {
       // The notes thread of the page is read on every request, so the chat sees notes added after it opened.

@@ -13,6 +13,8 @@ let AdminChrome: ComponentType | null = null;
 let LibraryAdminBar: ComponentType<LibraryAdminBarProps> | null = null;
 let BookAdminActions: ComponentType<BookAdminActionsProps> | null = null;
 let NewTopicButton: ComponentType | null = null;
+let ZlibrarySettingsCard: ComponentType | null = null;
+let KeysSettingsCard: ComponentType | null = null;
 
 if (__ELIB_ADMIN__) {
   const load = (): Promise<AdminModule> => import("./admin/index.tsx");
@@ -20,6 +22,8 @@ if (__ELIB_ADMIN__) {
   AdminChrome = lazy(() => load().then((m) => ({ default: m.AdminChrome })));
   LibraryAdminBar = lazy(() => load().then((m) => ({ default: m.LibraryAdminBar })));
   BookAdminActions = lazy(() => load().then((m) => ({ default: m.BookAdminActions })));
+  ZlibrarySettingsCard = lazy(() => load().then((m) => ({ default: m.ZlibrarySettingsCard as ComponentType })));
+  KeysSettingsCard = lazy(() => load().then((m) => ({ default: m.KeysSettingsCard as ComponentType })));
   NewTopicButton = lazy(() => load().then((m) => ({ default: m.NewTopicButton as ComponentType })));
 }
 
@@ -69,6 +73,26 @@ export function NewTopicSlot() {
   return (
     <Suspense fallback={null}>
       <NewTopicButton />
+    </Suspense>
+  );
+}
+
+/** Z-Library account card for the app settings page (nothing in the public build). */
+export function ZlibrarySettingsSlot() {
+  if (!ZlibrarySettingsCard) return null;
+  return (
+    <Suspense fallback={null}>
+      <ZlibrarySettingsCard />
+    </Suspense>
+  );
+}
+
+/** Personal keys card for the app settings page (nothing in the public build). */
+export function KeysSettingsSlot() {
+  if (!KeysSettingsCard) return null;
+  return (
+    <Suspense fallback={null}>
+      <KeysSettingsCard />
     </Suspense>
   );
 }
