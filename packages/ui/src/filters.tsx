@@ -21,6 +21,7 @@ export function SearchField({
   placeholder,
   label,
   inputRef,
+  inputClassName,
   className,
 }: {
   value: string;
@@ -29,6 +30,7 @@ export function SearchField({
   /** Accessible label (visually hidden). */
   label: string;
   inputRef?: RefObject<HTMLInputElement | null>;
+  inputClassName?: string;
   className?: string;
 }) {
   const ownRef = useRef<HTMLInputElement>(null);
@@ -88,6 +90,7 @@ export function SearchField({
           "transition-[border-color,box-shadow] placeholder:text-muted-foreground hover:border-foreground/25",
           "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/25",
           "[&::-webkit-search-cancel-button]:appearance-none",
+          inputClassName,
         )}
       />
       {value !== "" ? (
@@ -122,11 +125,13 @@ export function SearchToolbar({
   search,
   actions,
   activeFilterCount = 0,
+  toggleClassName,
   className,
 }: {
   search: ReactNode;
   actions?: ReactNode;
   activeFilterCount?: number;
+  toggleClassName?: string;
   className?: string;
 }) {
   const { isDesktop, collapsed, searchSlot } = useSidePanel();
@@ -136,7 +141,7 @@ export function SearchToolbar({
       <>
         {createPortal(
           <>
-            <SidePanelToggle activeCount={activeFilterCount} />
+            <SidePanelToggle activeCount={activeFilterCount} className={toggleClassName} />
             {search}
           </>,
           searchSlot,
@@ -155,7 +160,7 @@ export function SearchToolbar({
       )}
     >
       <div className="flex items-center gap-2">
-        <SidePanelToggle activeCount={activeFilterCount} />
+        <SidePanelToggle activeCount={activeFilterCount} className={toggleClassName} />
         {search}
         {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
       </div>

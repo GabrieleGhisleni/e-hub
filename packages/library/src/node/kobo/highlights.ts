@@ -15,6 +15,7 @@ import {
   type BookHighlights,
   type Highlight,
 } from "../../shared/schema.ts";
+import { publicationHighlight } from "../repo/highlights.ts";
 import { InvalidDataError, readBookHighlights, writeBookHighlights } from "../repo/index.ts";
 import { koboAllowed } from "./access.ts";
 import type { KoboContext } from "./context.ts";
@@ -186,7 +187,12 @@ function entries(table: LuaTable): LuaValue[] {
 
 /** Normalizes the whitespace KOReader keeps from the page layout (hyphenation breaks, runs of spaces). */
 function cleanText(text: string): string {
-  return text.replace(/­/g, "").replace(/\s*\n\s*/g, " ").replace(/[ \t]{2,}/g, " ").trim();
+  return text
+    .replace(/\u00ad/g, "")
+    .split(/\r?\n[ \t]*\r?\n/)
+    .map((paragraph) => paragraph.replace(/\s*\n\s*/g, " ").replace(/[ \t]{2,}/g, " ").trim())
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function highlightFrom(entry: LuaTable, page?: number): (Highlight & { order: number }) | null {
@@ -338,7 +344,7 @@ export async function pullHighlights(
     try {
       const source = await ctx.transport.readFile(`${sidecar}/${KOREADER_METADATA_FILE}`);
       if (source === null) continue;
-      const fromKobo = highlightsFromMetadata(parseLuaTable(source));
+      const fromKobo = highlightsFromMetadata(parseLuaTable(source)).map(publicationHighlight);
       let current: BookHighlights | null = null;
       try {
         current = await readBookHighlights(ctx.dataDir, book.id);

@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { BulkUpdateRequestSchema } from "../../../src/shared/api.ts";
+import { describe, expect, it, vi } from "vitest";
+import { apiPaths, BulkUpdateRequestSchema } from "@shared/api.ts";
+import { adminApi } from "@library/admin/api.ts";
 import { EMPTY_BULK, buildBulkPatch, describeBulkPatch } from "../../../src/web/admin/lib/bulk.ts";
 import {
   addTags,
@@ -78,5 +79,39 @@ describe("bulk", () => {
       { topic: (id) => `T(${id})`, status: () => "Letto" },
     );
     expect(lines).toEqual(["argomento: T(t)", "stato: Letto", "aggiungi tag: a", "rimuovi tag: b"]);
+  });
+});
+
+describe("bulk deletion (admin API client)", () => {
+  it("uses the existing per-book endpoint and keeps partial failures", async () => {
+    const first = "aaaaaaaa";
+    const second = "bbbbbbbb";
+    const third = "cccccccc";
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === apiPaths.book(second)) {
+        return Response.json(
+          { error: { code: "kobo-failed", message: "Kobo non raggiungibile." } },
+          { status: 502 },
+        );
+      }
+      const id = url === apiPaths.book(first) ? first : third;
+      return Response.json({
+        id,
+        report: { dryRun: false, actions: [], warnings: [], errors: [] },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const result = await adminApi.bulkDelete([first, second, third]);
+      expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+        apiPaths.book(first),
+        apiPaths.book(second),
+        apiPaths.book(third),
+      ]);
+      expect(result.deletedIds).toEqual([first, third]);
+      expect(result.failures.get(second)).toMatchObject({ code: "kobo-failed" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

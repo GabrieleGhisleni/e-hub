@@ -26,7 +26,7 @@ export function SortSelect({
           value={value}
           onChange={(event) => onChange(event.target.value as SortKey)}
           className={cn(
-            "h-9 cursor-pointer appearance-none rounded-full border border-input bg-card pr-9 pl-3.5 text-sm shadow-xs outline-none",
+            "h-9 cursor-pointer appearance-none rounded-md border border-input bg-card pr-9 pl-3.5 text-sm shadow-xs outline-none",
             "transition-[border-color,box-shadow] hover:bg-accent/50 sm:min-w-[9.5rem]",
             "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/25",
           )}

@@ -391,11 +391,11 @@ describe("summarizeBook book prompt", () => {
     const mock = scriptedModel(() => ANSWER);
     await summarizeBook(deps(mock.model), ID, { language: "it", concurrency: 1 });
     const bookCall = mock.calls.at(-1)!;
-    const first = bookCall.user.indexOf("- Le ore che scivolano");
-    const second = bookCall.user.indexOf("- Abitudini");
+    const first = bookCall.user.indexOf(" - Le ore che scivolano");
+    const second = bookCall.user.indexOf(" - Abitudini");
     expect(first).toBeGreaterThan(-1);
     expect(second).toBeGreaterThan(first);
-    expect(bookCall.user).not.toContain("- Copertina");
-    expect(bookCall.user).toContain("Non citare numeri di capitoli, pagine o altre cifre");
+    expect(bookCall.user).not.toContain(" - Copertina");
+    expect(bookCall.user).toContain("Usa solo dettagli presenti qui.");
   });
 });

@@ -3,7 +3,7 @@
  * summarized chapters ("Capitoli", a full-width box that folds, one collapsible item per chapter).
  */
 import { ChevronDownIcon } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import type { BookDetail } from "@shared/schema";
 import { formatDate, formatLanguage, paragraphs } from "@library/lib/format";
 import { CollapsibleBox } from "./collapsible-box";
@@ -32,19 +32,22 @@ export function summarizedChapters(summary: BookSummaryData): ChapterItem[] {
 }
 
 /** "Sintesi": the summary of the whole book and the line saying which model wrote it. */
-export function BookSummarySection({ summary }: { summary: BookSummaryData }) {
+export function BookSummarySection({ summary, action }: { summary: BookSummaryData; action?: ReactNode }) {
   const generatedOn = formatDate(summary.generatedAt.slice(0, 10));
   const language = summary.language !== "it" ? ` in ${formatLanguage(summary.language)}` : "";
   return (
     <section aria-labelledby={SUMMARY_SECTION_ID}>
-      <h2
-        id={SUMMARY_SECTION_ID}
-        tabIndex={-1}
-        className="flex scroll-mt-6 items-center gap-4 text-2xl font-medium tracking-tight outline-none sm:text-3xl"
-      >
-        {SUMMARY_SECTION_TITLE}
-        <span aria-hidden className="h-px flex-1 bg-border" />
-      </h2>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <h2
+          id={SUMMARY_SECTION_ID}
+          tabIndex={-1}
+          className="flex min-w-24 flex-1 scroll-mt-6 items-center gap-4 text-2xl font-medium tracking-tight outline-none sm:text-3xl"
+        >
+          {SUMMARY_SECTION_TITLE}
+          <span aria-hidden className="h-px flex-1 bg-border" />
+        </h2>
+        {action}
+      </div>
       <div className="prose-book mt-5">
         {paragraphs(summary.book).map((p, i) => (
           <p key={i}>{p}</p>
@@ -111,10 +114,8 @@ export function BookChaptersSection({ summary }: { summary: BookSummaryData }) {
                   className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
                 />
               </summary>
-              <div className="prose-book prose-book--compact pb-5 pl-10">
-                {paragraphs(chapter.text).map((p, i) => (
-                  <p key={i}>{p}</p>
-                ))}
+              <div className="prose-book prose-book--compact max-w-none pb-5 wrap-break-word sm:pl-10">
+                <p className="whitespace-pre-line">{chapter.text}</p>
               </div>
             </details>
           </li>

@@ -20,6 +20,7 @@ export interface LibraryAdminBarProps {
 /** Rendered in the book page header, next to the title. */
 export interface BookAdminActionsProps {
   book: BookDetail;
+  placement: "toolbar" | "cover" | "summary";
   /** The loaded index (topics for pickers), or undefined if it has not loaded (yet). */
   index: SiteIndex | undefined;
 }

@@ -20,7 +20,15 @@ describe("buildSiteData", () => {
     const hash = createHash("sha256").update(cover).digest("hex").slice(0, 8);
     await writeFakeBook(
       tmp.dataDir,
-      { id: "aaaaaaaa", title: "Pensieri lenti", tags: ["x"], rating: 4, publisher: "P" },
+      {
+        id: "aaaaaaaa",
+        title: "Pensieri lenti",
+        tags: ["x"],
+        rating: 4,
+        publisher: "P",
+        pages: 512,
+        year: 2011,
+      },
       {
         "cover.webp": cover,
         "notes.md": "# Ciao\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n<script>x</script>",
@@ -31,6 +39,7 @@ describe("buildSiteData", () => {
     const card = data.index.books[0]!;
     expect(card.coverUrl).toBe(`/e-library/data/covers/aaaaaaaa.${hash}.webp`);
     expect(card.tags).toEqual(["x"]);
+    expect(card).toMatchObject({ pages: 512, publisher: "P", year: 2011 });
     expect(data.index.topics.map((t) => t.id)).toContain("unsorted");
     expect(data.covers.get(`aaaaaaaa.${hash}.webp`)).toBe(
       path.join(tmp.dataDir, "books", "aaaaaaaa", "cover.webp"),
@@ -68,6 +77,31 @@ describe("buildSiteData", () => {
     const data = await buildSiteData(tmp.dataDir, opts);
     expect(data.index.books.map((b) => b.id)).toEqual(["cccccccc"]);
     expect(data.problems.map((p) => p.id).sort()).toEqual(["eeeeeeee", "ffffffff"]);
+  });
+
+  it("publishes at most two sentences from an older highlight and keeps its note", async () => {
+    await writeFakeBook(
+      tmp.dataDir,
+      { id: "aaaaaaaa" },
+      {
+        "highlights.json": JSON.stringify({
+          version: 1,
+          bookId: "aaaaaaaa",
+          syncedAt: "2026-11-12T10:00:00.000Z",
+          highlights: [
+            {
+              text: "Prima frase.\n\nSeconda frase. Terza frase.",
+              note: "Nota personale.",
+              pos: "/body/DocFragment[2]",
+            },
+          ],
+        }),
+      },
+    );
+    const detail = (await buildSiteData(tmp.dataDir, opts)).details.get("aaaaaaaa");
+    expect(detail?.highlights).toEqual([
+      { text: "Prima frase.\n\nSeconda frase. …", note: "Nota personale." },
+    ]);
   });
 
   it("sorts by title with Italian, accent-insensitive collation", async () => {

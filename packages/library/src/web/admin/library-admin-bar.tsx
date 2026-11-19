@@ -108,6 +108,14 @@ export function LibraryAdminBar({ index, visibleBooks }: LibraryAdminBarProps) {
             books={selectedBooks}
             topics={index.topics}
             allTags={allTags}
+            onDeleted={(remainingIds) => {
+              if (remainingIds.length > 0) {
+                selection.setSelected(remainingIds);
+              } else {
+                setBulkOpen(false);
+                selection.setSelecting(false);
+              }
+            }}
             onApplied={() => {
               setBulkOpen(false);
               selection.setSelecting(false);

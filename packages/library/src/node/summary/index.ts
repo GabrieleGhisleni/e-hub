@@ -561,18 +561,15 @@ export function looksLikeLanguage(text: string, code: string): boolean {
 
 function chapterSystem(langName: string, code: string): string {
   return [
-    "Sei un assistente che riassume i capitoli di libri per una biblioteca personale.",
     `Scrivi in ${langName} (codice ${code}).`,
-    "Scrivi con parole tue: non copiare frasi dal testo e non citare mai più di dieci parole consecutive.",
-    'Niente premesse (come "Ecco il riassunto"), niente titoli, niente elenchi, niente markdown: un solo paragrafo.',
+    "Un paragrafo con parole tue, senza citazioni, premesse, titoli, elenchi o Markdown.",
   ].join("\n");
 }
 
 function bookSystem(langName: string, code: string): string {
   return [
-    "Sei un assistente che scrive la sintesi di un libro per una biblioteca personale.",
     `Scrivi in ${langName} (codice ${code}).`,
-    "Scrivi con parole tue, senza citazioni e senza premesse, niente titoli né elenchi: uno o due paragrafi.",
+    "Uno o due paragrafi con parole tue, senza citazioni, premesse, titoli o elenchi.",
   ].join("\n");
 }
 
@@ -632,10 +629,6 @@ function bookPrompt(
   chapters: ChapterSummary[],
 ): string {
   const summarized = chapters.filter((c) => c.summary !== null);
-  const structure =
-    summarized.length > 0
-      ? summarized.map((c) => `- ${c.title}`).join("\n")
-      : "(nessun capitolo sintetizzato)";
   const chapterList =
     summarized.length > 0
       ? summarized.map((c) => `Capitolo ${c.n} - ${c.title}: ${c.summary}`).join("\n\n")
@@ -644,15 +637,10 @@ function bookPrompt(
     bookLine({ title: book.title, authors: book.authors }),
     `Descrizione: ${book.description ?? "non disponibile"}`,
     "",
-    "Titoli dei capitoli sintetizzati, in ordine (la struttura del libro è solo questa):",
-    structure,
-    "",
-    "Sintesi dei capitoli:",
-    "",
+    "Capitoli sintetizzati, in ordine:",
     chapterList,
     "",
-    "Non citare numeri di capitoli, pagine o altre cifre che non compaiono in questo messaggio.",
-    "Scrivi una sintesi del libro di 150-250 parole: tesi principale, struttura e idee chiave.",
+    "In 150-250 parole, riassumi tesi, struttura e idee chiave. Usa solo dettagli presenti qui.",
   ].join("\n");
 }
 

@@ -46,6 +46,11 @@ function CardBody({
   selected?: boolean;
 }) {
   const authors = formatAuthors(book.authors);
+  const edition = [
+    book.pages !== undefined ? `${book.pages} ${book.pages === 1 ? "pagina" : "pagine"}` : null,
+    book.year,
+    book.publisher,
+  ].filter(Boolean).join(" · ");
   return (
     <>
       <BookCover book={book} eager={eager}>
@@ -82,6 +87,9 @@ function CardBody({
       </span>
       {authors ? (
         <span className="mt-1 line-clamp-2 block text-sm text-muted-foreground">{authors}</span>
+      ) : null}
+      {edition ? (
+        <span className="mt-1 block text-xs text-muted-foreground">{edition}</span>
       ) : null}
     </>
   );

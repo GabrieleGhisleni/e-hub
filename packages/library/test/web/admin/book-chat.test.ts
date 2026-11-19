@@ -27,12 +27,12 @@ describe("book admin actions", () => {
       createElement(
         MemoryRouter,
         null,
-        createElement(BookAdminActions, { book, index: undefined }),
+        createElement(BookAdminActions, { book, index: undefined, placement: "toolbar" }),
       ),
     );
     expect(html).toContain("Chatta");
     expect(html).toContain("Modifica");
-    expect(html).toContain("Genera sintesi");
+    expect(html).toContain("Opzioni del libro");
   });
 });
 

@@ -17,6 +17,8 @@ import {
   TopicsResponseSchema,
   UploadResponseSchema,
   apiPaths,
+  emptyReconcileReport,
+  mergeReconcileReports,
   type BookPatch,
   type BookWriteResponse,
   type BulkUpdateRequest,
@@ -155,6 +157,25 @@ export const adminApi = {
 
   deleteBook(id: string): Promise<DeleteBookResponse> {
     return written(request("DELETE", apiPaths.book(id), DeleteBookResponseSchema));
+  },
+
+  async bulkDelete(ids: readonly string[]) {
+    const report = emptyReconcileReport();
+    const deletedIds: string[] = [];
+    const failures = new Map<string, unknown>();
+
+    // Keep the per-book delete semantics and order, and reload the index once for the batch.
+    for (const id of ids) {
+      try {
+        const response = await request("DELETE", apiPaths.book(id), DeleteBookResponseSchema);
+        deletedIds.push(id);
+        mergeReconcileReports(report, response.report);
+      } catch (error) {
+        failures.set(id, error);
+      }
+    }
+    void refreshSiteData();
+    return { deletedIds, failures, report };
   },
 
   coverCandidates(id: string, signal?: AbortSignal): Promise<CoverCandidatesResponse> {

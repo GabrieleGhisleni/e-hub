@@ -20,6 +20,7 @@ import {
   readBookSummary,
   readTopics,
 } from "../repo/index.ts";
+import { publicationHighlight } from "../repo/highlights.ts";
 import { renderMarkdown } from "./markdown.ts";
 
 export interface SiteDataProblem {
@@ -84,7 +85,7 @@ async function publicHighlights(
     const file = await readBookHighlights(dataDir, id);
     if (!file || file.highlights.length === 0) return undefined;
     return file.highlights.map((h) => ({
-      text: h.text,
+      text: publicationHighlight(h).text,
       ...(h.note ? { note: h.note } : {}),
       ...(h.chapter ? { chapter: h.chapter } : {}),
       ...(h.page ? { page: h.page } : {}),
@@ -147,7 +148,7 @@ export async function buildSiteData(
       topic: book.topic,
       status: book.status,
       tags: book.tags ?? [],
-      ...optional(book, "rating", "startedAt", "finishedAt"),
+      ...optional(book, "rating", "startedAt", "finishedAt", "publisher", "year", "pages"),
       coverUrl,
     });
     const [notes, recall, study] = await Promise.all([
@@ -163,9 +164,6 @@ export async function buildSiteData(
         book,
         "isbn",
         "openLibraryCoverId",
-        "publisher",
-        "year",
-        "pages",
         "translators",
         "language",
         "description",
