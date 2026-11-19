@@ -244,6 +244,9 @@ export function BookPage() {
   const full = detail.data;
   const topic = book && index.data ? topicLabel(index.data, book.topic) : null;
   const study = full ? studySection(full) : null;
+  const summaryAction = __ELIB_ADMIN__ && full ? (
+    <BookAdminActionsSlot book={full} index={index.data} placement="summary" />
+  ) : null;
   const highlights = full?.highlights ?? [];
   const hasChapters = full?.summary ? summarizedChapters(full.summary).length > 0 : false;
   // In-page navigation, in page order: summary, notes, chapters, highlights, study.
@@ -312,7 +315,7 @@ export function BookPage() {
               }
               actions={
                 __ELIB_ADMIN__ && full ? (
-                  <BookAdminActionsSlot book={full} index={index.data} />
+                  <BookAdminActionsSlot book={full} index={index.data} placement="toolbar" />
                 ) : undefined
               }
             />
@@ -344,7 +347,11 @@ export function BookPage() {
                   <span aria-hidden className="h-px flex-1 bg-border" />
                 </h2>
                 <div className="mt-5 grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-5 sm:grid-cols-2 sm:gap-6">
-                  <BookCover book={book} alt={`Copertina di ${book.title}`} eager className="w-full" />
+                  {__ELIB_ADMIN__ && full ? (
+                    <BookAdminActionsSlot book={full} index={index.data} placement="cover" />
+                  ) : (
+                    <BookCover book={book} alt={`Copertina di ${book.title}`} eager className="w-full" />
+                  )}
                   <div className="min-w-0">
                     {full ? (
                       <BookDetails book={full} />
@@ -369,7 +376,11 @@ export function BookPage() {
                   )
                 ) : (
                   <>
-                    {full.summary ? <BookSummarySection summary={full.summary} /> : null}
+                    {full.summary ? (
+                      <BookSummarySection summary={full.summary} action={summaryAction} />
+                    ) : summaryAction ? (
+                      <div className={full.description ? "mb-5" : undefined}>{summaryAction}</div>
+                    ) : null}
                     {full.description ? (
                       <Description text={full.description} folded={Boolean(full.summary)} />
                     ) : null}

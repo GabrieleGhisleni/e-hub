@@ -48,12 +48,9 @@ export function DeleteBookDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Eliminare «{book.title}»?</AlertDialogTitle>
           <AlertDialogDescription>
-            Il libro viene tolto dal Kobo. L’operazione è <strong>irreversibile</strong>: anche i
-            progressi di lettura e le annotazioni di questo libro sul Kobo andranno persi. Il libro,
-            la copertina e la cartella del repository vengono eliminati; il file EPUB resta nella
-            cache sul PC. Se il Kobo è spento o non è sul Wi-Fi, il libro viene comunque tolto dalla
-            libreria e l’allineamento si completa con{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">elib sync</code>.
+            Il libro, la copertina e la cartella del libro vengono eliminati. Se il libro è sul Kobo,
+            perderai anche i progressi e le annotazioni sul dispositivo. L’operazione è
+            <strong> irreversibile</strong>. L’EPUB resta nella cache.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

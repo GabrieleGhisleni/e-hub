@@ -48,13 +48,13 @@ export function BookHighlightsSection({ highlights }: { highlights: readonly Pub
               {group.items.map((h, i) => (
                 <li key={i} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4">
                   <figure className="min-w-0 border-l-2 border-brand/50 pl-4">
-                    <blockquote className="max-w-[70ch] font-serif text-[1.0625rem] leading-relaxed text-foreground/90 sm:text-lg">
+                    <blockquote className="font-serif whitespace-pre-line wrap-break-word text-[1.0625rem] leading-relaxed text-foreground/90 sm:text-lg">
                       {h.text}
                     </blockquote>
                     {h.note ? (
-                      <figcaption className="mt-2 flex max-w-[70ch] gap-2 rounded-lg bg-brand-soft/60 px-3 py-2 text-sm leading-relaxed text-foreground">
+                      <figcaption className="mt-2 flex gap-2 rounded-lg bg-brand-soft/60 px-3 py-2 text-sm leading-relaxed text-foreground">
                         <MessageSquareTextIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-brand" />
-                        <span className="min-w-0 whitespace-pre-wrap">{h.note}</span>
+                        <span className="min-w-0 whitespace-pre-wrap wrap-break-word">{h.note}</span>
                       </figcaption>
                     ) : null}
                   </figure>

@@ -1,4 +1,4 @@
-import { Loader2Icon } from "lucide-react";
+import { Loader2Icon, Trash2Icon } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { BookCard } from "@shared/schema";
 import { statusLabel } from "@shared/labels";
@@ -35,6 +35,7 @@ export function BulkEditDialog({
   topics,
   allTags,
   onApplied,
+  onDeleted,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,9 +44,12 @@ export function BulkEditDialog({
   topics: readonly { id: string; label: string }[];
   allTags: readonly TagUsage[];
   onApplied: () => void;
+  onDeleted: (remainingIds: readonly string[]) => void;
 }) {
   const [state, setState] = useState<BulkFormState>(EMPTY_BULK);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteFailures, setDeleteFailures] = useState<{ title: string; message: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const selectedTags = useMemo(() => collectTags(books), [books]);
   const patch = buildBulkPatch(state);
@@ -78,18 +82,103 @@ export function BulkEditDialog({
     setBusy(false);
   }
 
+  async function remove() {
+    if (busy || !confirmDelete || count === 0) return;
+    setBusy(true);
+    setDeleteFailures([]);
+    const titles = new Map(books.map(({ id, title }) => [id, title]));
+    const { deletedIds, failures, report } = await adminApi.bulkDelete([...titles.keys()]);
+    if (deletedIds.length > 0) {
+      announceWrite(
+        deletedIds.length === 1 ? "1 libro eliminato" : `${deletedIds.length} libri eliminati`,
+        report,
+      );
+    }
+    setBusy(false);
+    if (failures.size > 0) {
+      setDeleteFailures(
+        [...failures].map(([id, error]) => ({
+          title: titles.get(id) ?? id,
+          message: friendlyMessage(error),
+        })),
+      );
+    } else {
+      setState(EMPTY_BULK);
+      setConfirmDelete(false);
+    }
+    onDeleted([...failures.keys()]);
+  }
+
+  function changeOpen(next: boolean) {
+    if (busy) return;
+    if (!next) {
+      setState(EMPTY_BULK);
+      setError(null);
+      setConfirmDelete(false);
+      setDeleteFailures([]);
+    }
+    onOpenChange(next);
+  }
+
+  if (confirmDelete) {
+    return (
+      <Dialog open={open} onOpenChange={changeOpen}>
+        <DialogContent role="alertdialog" className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Eliminare {count === 1 ? "il libro selezionato" : `i ${count} libri selezionati`}?
+            </DialogTitle>
+            <DialogDescription>
+              La cancellazione è irreversibile. Se i libri sono sul Kobo, perderai anche i loro
+              progressi e le loro annotazioni sul dispositivo. Gli EPUB nella cache restano
+              disponibili.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="max-h-40 space-y-1 overflow-y-auto text-sm">
+            {books.map(({ id, title }) => (
+              <li key={id}>{title}</li>
+            ))}
+          </ul>
+          {deleteFailures.length > 0 ? (
+            <div role="alert" className="text-sm text-destructive">
+              <p className="font-medium">Errori durante l’eliminazione</p>
+              <ul className="mt-2 list-disc space-y-1 pl-4">
+                {deleteFailures.map(({ title, message }, i) => (
+                  <li key={i}>
+                    {title} · {message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              autoFocus
+              disabled={busy}
+              onClick={() => {
+                setConfirmDelete(false);
+                setDeleteFailures([]);
+              }}
+            >
+              Annulla
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={busy || count === 0}
+              onClick={() => void remove()}
+            >
+              {busy ? <Loader2Icon className="animate-spin" /> : <Trash2Icon aria-hidden />}
+              {busy ? "Eliminazione…" : count === 1 ? "Elimina il libro" : `Elimina ${count} libri`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (busy) return;
-        if (!next) {
-          setState(EMPTY_BULK);
-          setError(null);
-        }
-        onOpenChange(next);
-      }}
-    >
+    <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
@@ -186,7 +275,16 @@ export function BulkEditDialog({
         ) : null}
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
+          <Button
+            variant="ghost"
+            className="text-destructive sm:mr-auto"
+            onClick={() => setConfirmDelete(true)}
+            disabled={busy || count === 0}
+          >
+            <Trash2Icon aria-hidden />
+            Elimina selezionati…
+          </Button>
+          <Button variant="ghost" onClick={() => changeOpen(false)} disabled={busy}>
             Annulla
           </Button>
           <Button onClick={() => void apply()} disabled={busy || !patch}>

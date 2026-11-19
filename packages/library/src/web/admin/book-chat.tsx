@@ -39,6 +39,7 @@ export function bookNoteItem(book: Pick<BookDetail, "id" | "slug" | "title" | "a
 export function BookChat({ book }: { book: BookDetail }) {
   return (
     <ChatButton
+      iconOnly
       source={{ kind: "book", id: book.id }}
       title={book.title}
       subtitle={book.authors.join(", ")}

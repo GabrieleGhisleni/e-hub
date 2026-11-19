@@ -163,11 +163,13 @@ export function LibraryPage() {
       >
         <SearchToolbar
           activeFilterCount={activeCount}
+          toggleClassName="rounded-md"
           search={
             <SearchField
               value={text}
               onChange={setText}
               inputRef={searchRef}
+              inputClassName="rounded-md"
               label="Cerca per titolo o autore"
               placeholder="Cerca titolo o autore"
             />

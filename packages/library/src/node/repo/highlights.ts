@@ -2,7 +2,7 @@
  * `data/books/<id>/highlights.json`: the passages highlighted on the Kobo, pulled by `elib sync` (kobo/highlights.ts).
  * Validated with `BookHighlightsSchema`; an invalid file is an `InvalidDataError`, the same as an invalid book.json.
  */
-import { BookHighlightsSchema, type BookHighlights } from "../../shared/schema.ts";
+import { BookHighlightsSchema, type BookHighlights, type Highlight } from "../../shared/schema.ts";
 import { InvalidDataError } from "./errors.ts";
 import { formatJson, readTextIfExists, writeFileAtomic } from "./fs.ts";
 import { assertBookId, highlightsPath } from "./paths.ts";
@@ -32,12 +32,27 @@ export async function readBookHighlights(dataDir: string, id: string): Promise<B
   return parsed.data;
 }
 
+const sentences = new Intl.Segmenter("it", { granularity: "sentence" });
+
+/** Highlights live in published data. Store at most two sentences of each quote. */
+export function publicationHighlight(highlight: Highlight): Highlight {
+  let count = 0;
+  for (const { index, segment } of sentences.segment(highlight.text)) {
+    if (!segment.trim()) continue;
+    if (++count > 2) {
+      return { ...highlight, text: `${highlight.text.slice(0, index).trimEnd()} …` };
+    }
+  }
+  return highlight;
+}
+
 /** Validates and writes `highlights.json` atomically (pretty JSON, trailing newline). Returns what was written. */
 export async function writeBookHighlights(dataDir: string, highlights: BookHighlights): Promise<BookHighlights> {
   assertBookId(highlights.bookId);
   const file = highlightsPath(dataDir, highlights.bookId);
   const parsed = BookHighlightsSchema.safeParse(highlights);
   if (!parsed.success) throw InvalidDataError.fromZod(file, parsed.error);
-  await writeFileAtomic(file, formatJson(parsed.data));
-  return parsed.data;
+  const published = { ...parsed.data, highlights: parsed.data.highlights.map(publicationHighlight) };
+  await writeFileAtomic(file, formatJson(published));
+  return published;
 }

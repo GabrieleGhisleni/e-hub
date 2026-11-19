@@ -100,6 +100,15 @@ describe("highlightsFromMetadata", () => {
     });
   });
 
+  it("keeps paragraph breaks when normalizing wrapped lines", () => {
+    const entry = annotation({
+      pos0: pos(2, 1),
+      text: "Prima riga,\n  continuazione.\n\nSecondo paragrafo.",
+    });
+    const [highlight] = highlightsFromMetadata(parseLuaTable(metadataLua([entry])));
+    expect(highlight?.text).toBe("Prima riga, continuazione.\n\nSecondo paragrafo.");
+  });
+
   it("drops exact duplicates", () => {
     const entry = annotation({ chapter: "I", pageno: 3, pos0: pos(2, 1), text: "Uguale." });
     expect(highlightsFromMetadata(parseLuaTable(metadataLua([entry, entry])))).toHaveLength(1);
