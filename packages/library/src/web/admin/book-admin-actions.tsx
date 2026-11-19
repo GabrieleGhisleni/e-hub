@@ -87,12 +87,22 @@ export function BookAdminActions({ book, index, placement }: BookAdminActionsPro
             <ImageIcon aria-hidden />
             Cambia copertina
           </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onSelect={() => setDialog("delete")}>
-            <Trash2Icon aria-hidden />
-            Elimina libro
+          <DropdownMenuItem onSelect={() => setDialog("summary")}>
+            <SparklesIcon aria-hidden />
+            {summaryLabel}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <Button
+        variant="outline"
+        size="icon"
+        aria-label="Elimina libro"
+        title="Elimina libro"
+        className="text-destructive hover:text-destructive"
+        onClick={() => setDialog("delete")}
+      >
+        <Trash2Icon aria-hidden />
+      </Button>
       <EditBookSheet
         book={book}
         index={index}
@@ -100,6 +110,11 @@ export function BookAdminActions({ book, index, placement }: BookAdminActionsPro
         onOpenChange={setOpen("edit")}
       />
       <ChangeCoverDialog book={book} open={dialog === "cover"} onOpenChange={setOpen("cover")} />
+      <SummarizeBookDialog
+        book={book}
+        open={dialog === "summary"}
+        onOpenChange={setOpen("summary")}
+      />
       <DeleteBookDialog book={book} open={dialog === "delete"} onOpenChange={setOpen("delete")} />
     </div>
   );
