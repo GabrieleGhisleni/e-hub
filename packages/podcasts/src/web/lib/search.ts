@@ -81,16 +81,18 @@ export function filterEpisodes(
         .filter((episode): episode is Episode => episode !== undefined)
     : [...catalog.episodes];
 
-  const hasTags = (episode: Episode) => filters.tags.every((tag) => episode.tags.includes(tag));
+  const withFacets = matched.filter((episode) =>
+    (!filters.month || episode.publishedAt?.slice(0, 7) === filters.month) &&
+    filters.tags.every((tag) => episode.tags.includes(tag)),
+  );
   const inShows = (episode: Episode) =>
     filters.shows.length === 0 || filters.shows.includes(episode.show);
 
-  const withTags = matched.filter(hasTags);
-  const episodes = withTags.filter(inShows);
+  const episodes = withFacets.filter(inShows);
   return {
     episodes,
     searched,
-    showCounts: countBy(withTags, (episode) => [episode.show]),
+    showCounts: countBy(withFacets, (episode) => [episode.show]),
     tagCounts: countBy(episodes, (episode) => episode.tags),
   };
 }

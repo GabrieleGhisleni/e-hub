@@ -86,7 +86,7 @@ export function SearchField({
           }
         }}
         className={cn(
-          "h-11 w-full rounded-full border border-input bg-card pr-11 pl-10 text-base shadow-xs outline-none",
+          "h-11 w-full rounded-md border border-input bg-card pr-11 pl-10 text-base shadow-xs outline-none",
           "transition-[border-color,box-shadow] placeholder:text-muted-foreground hover:border-foreground/25",
           "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/25",
           "[&::-webkit-search-cancel-button]:appearance-none",
@@ -125,23 +125,28 @@ export function SearchToolbar({
   search,
   actions,
   activeFilterCount = 0,
+  showToggle = true,
   toggleClassName,
   className,
 }: {
   search: ReactNode;
   actions?: ReactNode;
   activeFilterCount?: number;
+  showToggle?: boolean;
   toggleClassName?: string;
   className?: string;
 }) {
   const { isDesktop, collapsed, searchSlot } = useSidePanel();
+  const toggle = showToggle ? (
+    <SidePanelToggle activeCount={activeFilterCount} className={cn("rounded-md", toggleClassName)} />
+  ) : null;
   // Desktop with the column open: the toggle + search live at the top of the left column; only page actions stay here.
   if (isDesktop && !collapsed && searchSlot) {
     return (
       <>
         {createPortal(
           <>
-            <SidePanelToggle activeCount={activeFilterCount} className={toggleClassName} />
+            {toggle}
             {search}
           </>,
           searchSlot,
@@ -160,7 +165,7 @@ export function SearchToolbar({
       )}
     >
       <div className="flex items-center gap-2">
-        <SidePanelToggle activeCount={activeFilterCount} className={toggleClassName} />
+        {toggle}
         {search}
         {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
       </div>
@@ -388,7 +393,7 @@ export function ActiveFilters({
 }) {
   return (
     <div className="mt-1 mb-5 flex flex-col gap-2.5 sm:mb-7">
-      <div className="flex min-h-9 items-center justify-between gap-3">
+      <div className="flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <p
           className="min-w-0 text-sm text-muted-foreground tabular-nums"
           aria-live="polite"
@@ -396,7 +401,7 @@ export function ActiveFilters({
         >
           {summary}
         </p>
-        {actions}
+        {actions ? <div className="ml-auto flex flex-wrap items-center justify-end gap-1">{actions}</div> : null}
       </div>
       {chips.length > 0 ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

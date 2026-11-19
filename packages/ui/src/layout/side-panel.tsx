@@ -17,6 +17,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "../components/ui/sheet";
+import { buttonVariants } from "../components/ui/button";
 import { cn } from "../utils";
 
 /*
@@ -147,38 +148,44 @@ export const SIDE_PANEL_SHORTCUT = isMac ? "⌘B" : "Ctrl+B";
 export function SidePanelToggle({
   activeCount = 0,
   label = "Filtri",
+  compact = false,
   className,
 }: {
   activeCount?: number;
   label?: string;
+  compact?: boolean;
   className?: string;
 }) {
   const { collapsed, sheetOpen, toggle, isDesktop } = useSidePanel();
   const expanded = isDesktop ? !collapsed : sheetOpen;
-  const Icon = isDesktop
+  const Icon = isDesktop && !compact
     ? collapsed
       ? PanelLeftOpenIcon
       : PanelLeftCloseIcon
     : SlidersHorizontalIcon;
   const action = expanded ? `Nascondi ${label.toLowerCase()}` : `Mostra ${label.toLowerCase()}`;
-  const showLabel = !isDesktop || collapsed;
+  const showLabel = compact || !isDesktop || collapsed;
   return (
     <button
       type="button"
       onClick={toggle}
       aria-expanded={expanded}
-      aria-controls={isDesktop ? "side-panel" : undefined}
+      aria-controls={isDesktop && expanded ? "side-panel" : undefined}
       aria-label={showLabel ? undefined : action}
       title={`${action} (${SIDE_PANEL_SHORTCUT})`}
       className={cn(
-        "relative inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-input bg-card text-sm font-medium shadow-xs outline-none",
-        "transition-[background-color,border-color,box-shadow] hover:bg-accent focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/25",
-        showLabel ? "px-4" : "w-11",
+        compact
+          ? buttonVariants({ variant: "ghost", size: "sm" })
+          : [
+              "relative inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-input bg-card text-sm font-medium shadow-xs outline-none",
+              "transition-[background-color,border-color,box-shadow] hover:bg-accent focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/25",
+              showLabel ? "px-4" : "w-11",
+            ],
         activeCount > 0 && showLabel && "border-brand/40",
         className,
       )}
     >
-      <Icon aria-hidden className="size-[1.125rem] text-muted-foreground" />
+      <Icon aria-hidden className={compact ? "size-4" : "size-[1.125rem] text-muted-foreground"} />
       {showLabel ? <span>{label}</span> : null}
       {activeCount > 0 ? (
         <span

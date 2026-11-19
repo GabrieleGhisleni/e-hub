@@ -845,7 +845,8 @@ export function ChatButton({
   return (
     <>
       <Button
-        variant={open ? "secondary" : "outline"}
+        variant={open ? "secondary" : iconOnly ? "outline" : "default"}
+        className={!open && !iconOnly ? "bg-brand text-brand-foreground hover:bg-brand/90" : undefined}
         size={size}
         aria-label={label}
         title={label}

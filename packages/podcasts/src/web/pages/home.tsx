@@ -15,6 +15,7 @@ import {
   SearchField,
   SearchToolbar,
   SidePanelLayout,
+  SidePanelToggle,
 } from "@ehub/ui";
 import { Button } from "@ehub/ui/components/button";
 import { SheetClose } from "@ehub/ui/components/sheet";
@@ -28,7 +29,7 @@ import {
   toggleValue,
   type Filters,
 } from "@podcasts/lib/filters";
-import { formatMonth, monthKey, plural } from "@podcasts/lib/format";
+import { formatMonth, formatPublicationMonth, monthKey, plural } from "@podcasts/lib/format";
 import { showImageUrl } from "@podcasts/lib/images";
 import { filterEpisodes } from "@podcasts/lib/search";
 import { useSiteData } from "@podcasts/site-data";
@@ -45,7 +46,11 @@ export function HomePage() {
     setSearchParams(filtersToParams({ ...filters, ...next }), { replace: true });
   const toggleTag = (tag: string) => update({ tags: toggleValue(filters.tags, tag) });
   const toggleShow = (show: string) => update({ shows: toggleValue(filters.shows, show) });
-  const clearAll = () => update(EMPTY_FILTERS);
+  const clearAll = () => setSearchParams(filtersToParams(EMPTY_FILTERS), { replace: true });
+  const months = useMemo(
+    () => [...new Set(catalog.episodes.flatMap(({ publishedAt }) => publishedAt ? [publishedAt.slice(0, 7)] : []))].sort().reverse(),
+    [catalog.episodes],
+  );
 
   const showOptions = useMemo<FacetValue[]>(() => {
     const used = new Set(catalog.episodes.map((episode) => episode.show));
@@ -76,7 +81,7 @@ export function HomePage() {
   const groups = result.searched ? undefined : groupByAddedMonth(result.episodes, monthKey);
 
   const showName = (slug: string) => catalog.showsBySlug.get(slug)?.name ?? slug;
-  const activeCount = filters.shows.length + filters.tags.length;
+  const activeCount = filters.shows.length + filters.tags.length + (filters.month ? 1 : 0);
   const chips: ActiveFilterChip[] = [
     ...(filters.q.trim() !== ""
       ? [{ key: "q", label: `“${filters.q.trim()}”`, onRemove: () => update({ q: "" }) }]
@@ -86,6 +91,9 @@ export function HomePage() {
       label: showName(slug),
       onRemove: () => toggleShow(slug),
     })),
+    ...(filters.month
+      ? [{ key: "month", label: formatPublicationMonth(filters.month), onRemove: () => update({ month: undefined }) }]
+      : []),
     ...filters.tags.map((tag) => ({
       key: `tag:${tag}`,
       label: `#${tag}`,
@@ -115,17 +123,20 @@ export function HomePage() {
       ) : (
         <SidePanelLayout
           header={renderHeader}
-          description="Filtra gli episodi per show e tag."
+          description="Filtra gli episodi per show, tag o data di pubblicazione."
           headerAction={
             <ClearFiltersButton
               disabled={activeCount === 0}
-              onClick={() => update({ shows: [], tags: [] })}
+              onClick={() => update({ shows: [], tags: [], month: undefined })}
             />
           }
           panel={
             <FilterPanel
               shows={showOptions}
               tags={tagOptions}
+              months={months}
+              selectedMonth={filters.month}
+              onSelectMonth={(month) => update({ month: filters.month === month ? undefined : month })}
               selectedShows={filters.shows}
               selectedTags={filters.tags}
               onToggleShow={toggleShow}
@@ -141,7 +152,7 @@ export function HomePage() {
           }
         >
           <SearchToolbar
-            activeFilterCount={activeCount}
+            showToggle={false}
             search={
               <SearchField
                 value={filters.q}
@@ -160,11 +171,13 @@ export function HomePage() {
             }
             chips={chips}
             onClear={clearAll}
+            actions={
+              <>
+                <SidePanelToggle activeCount={activeCount} compact />
+                <DevSlot name="home-toolbar" />
+              </>
+            }
           />
-
-          <div className="mb-8 flex items-center justify-end empty:hidden">
-            <DevSlot name="home-toolbar" />
-          </div>
 
           <div className="max-w-4xl">
             {result.episodes.length === 0 ? (

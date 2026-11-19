@@ -137,6 +137,7 @@ function EpisodePage({ episode, show }: { episode: Episode; show: Show | undefin
           role="group"
           aria-label="Azioni per l’episodio"
         >
+          <DevSlot name="episode-chat" episode={episode} show={show} />
           {watchUrl && (
             <Button asChild size="icon">
               <a
@@ -166,7 +167,6 @@ function EpisodePage({ episode, show }: { episode: Episode; show: Show | undefin
           <EpisodeGuests episode={episode} />
           <NotesJumpLink item={noteItem} iconOnly />
           <DevSlot name="episode-actions" episode={episode} show={show} />
-          <DevSlot name="episode-chat" episode={episode} show={show} />
         </div>
       </header>
 

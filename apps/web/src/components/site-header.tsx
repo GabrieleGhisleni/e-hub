@@ -3,6 +3,8 @@ import { cn, Container, Logo } from "@ehub/ui";
 import { LogIn, Settings } from "lucide-react";
 import { currentSession, HOSTED } from "../session";
 
+const logoUrl = `${import.meta.env.BASE_URL}ehub.svg`;
+
 const NAV_ITEMS = [
   { to: "/library", label: "Libreria" },
   { to: "/podcasts", label: "Podcast" },
@@ -45,7 +47,7 @@ export function SiteHeader() {
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
       <Container className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 pt-2 sm:min-h-16 sm:grid-cols-[1fr_auto_1fr] sm:py-0">
         <Link to="/" className="w-fit rounded-md py-1" aria-label="e-hub, torna alla home">
-          <Logo />
+          <Logo src={logoUrl} />
         </Link>
         <nav aria-label="Principale" className="col-span-2 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1">
           <ul className="flex flex-wrap items-center justify-between gap-x-1 sm:justify-center sm:gap-x-3">
@@ -77,7 +79,7 @@ export function SiteFooter() {
     <footer data-module="library" className="mt-auto border-t bg-card">
       <Container className="flex flex-col gap-5 py-7 sm:flex-row sm:items-center sm:justify-between">
         <Link to="/" aria-label="e-hub, torna alla home" className="w-fit rounded-md">
-          <Logo />
+          <Logo src={logoUrl} />
         </Link>
         <nav aria-label="Piè di pagina">
           <ul className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground">

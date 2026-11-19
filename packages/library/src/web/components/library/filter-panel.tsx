@@ -15,6 +15,8 @@ import { StatusDot } from "@library/components/status-badge";
 import {
   type Facets,
   type LibraryQuery,
+  SORT_KEYS,
+  SORT_LABELS,
   STATUS_ORDER,
   toggleTag,
   toggleValue,
@@ -109,6 +111,19 @@ export function FilterPanel({
           ) : null}
         </FacetSection>
       ) : null}
+
+      <FacetSection title="Ordina per">
+        <FacetChips label="Ordina per">
+          {SORT_KEYS.map((sort) => (
+            <FacetChip
+              key={sort}
+              label={SORT_LABELS[sort]}
+              selected={query.sort === sort}
+              onSelect={() => onChange({ ...query, sort })}
+            />
+          ))}
+        </FacetChips>
+      </FacetSection>
     </FacetStack>
   );
 }

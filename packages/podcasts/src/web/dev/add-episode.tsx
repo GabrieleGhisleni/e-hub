@@ -26,13 +26,13 @@ const NO_FEED = "none";
 const CUSTOM_FEED = "custom";
 
 /** Header button + dialog "Aggiungi da URL" (DESIGN.md §8.5). */
-export function AddEpisodeButton({ variant = "ghost" }: { variant?: "ghost" | "default" }) {
+export function AddEpisodeButton() {
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant={variant} size="sm">
-          <Plus aria-hidden /> Aggiungi URL
+        <Button size="sm">
+          <Plus aria-hidden /> Aggiungi podcast
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-xl">

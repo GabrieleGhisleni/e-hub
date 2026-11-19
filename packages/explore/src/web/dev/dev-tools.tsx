@@ -193,7 +193,6 @@ export function ExplorationDevToolbar({
     <div className="flex flex-wrap items-center gap-2">
       <Toaster position="bottom-right" closeButton />
       <ChatButton
-        iconOnly
         source={{ kind: "exploration", id: exploration.id }}
         title={exploration.title}
         subtitle={exploration.question}
@@ -553,7 +552,7 @@ export function NoteDevDelete({
 /** Link to the new-exploration page, in the list's header. */
 export function NewExplorationLink() {
   return (
-    <Button asChild>
+    <Button asChild size="sm">
       <Link to="/explore/new">
         <PlusIcon aria-hidden /> Nuova esplorazione
       </Link>
@@ -1202,8 +1201,8 @@ export function KoboDevButton({
   return (
     <>
       <Button
-        variant="outline"
-        size={iconOnly ? "icon" : "default"}
+        variant={iconOnly ? "outline" : "ghost"}
+        size={iconOnly ? "icon" : "sm"}
         aria-label={iconOnly ? label : undefined}
         title={iconOnly ? label : undefined}
         disabled={ids.length === 0}

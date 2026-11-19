@@ -338,7 +338,7 @@ export function BookPage() {
               ))}
             </div>
 
-            {/* Top: cover + metadata (same width) | summary. Stacked on small screens. */}
+            {/* Top: cover and metadata beside the summary. */}
             <div className="mt-8 grid gap-10 lg:grid-cols-2 lg:gap-14">
               <div className="lg:sticky lg:top-8 lg:self-start">
                 {/* Same heading as "Sintesi" (next column), so the two columns start on the same line. */}
@@ -346,12 +346,14 @@ export function BookPage() {
                   Scheda
                   <span aria-hidden className="h-px flex-1 bg-border" />
                 </h2>
-                <div className="mt-5 grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-5 sm:grid-cols-2 sm:gap-6">
-                  {__ELIB_ADMIN__ && full ? (
-                    <BookAdminActionsSlot book={full} index={index.data} placement="cover" />
-                  ) : (
-                    <BookCover book={book} alt={`Copertina di ${book.title}`} eager className="w-full" />
-                  )}
+                <div className="mt-5 grid items-start gap-6 sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+                  <div className="mx-auto w-full max-w-60 sm:mx-0 sm:max-w-96">
+                    {__ELIB_ADMIN__ && full ? (
+                      <BookAdminActionsSlot book={full} index={index.data} placement="cover" />
+                    ) : (
+                      <BookCover book={book} alt={`Copertina di ${book.title}`} eager className="w-full" />
+                    )}
+                  </div>
                   <div className="min-w-0">
                     {full ? (
                       <BookDetails book={full} />

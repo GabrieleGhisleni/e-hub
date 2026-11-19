@@ -8,6 +8,7 @@ import {
   FacetStack,
   ShowMoreButton,
 } from "@ehub/ui";
+import { formatPublicationMonth } from "@podcasts/lib/format";
 
 export interface FacetValue {
   value: string;
@@ -23,6 +24,9 @@ const TAG_PREVIEW = 18;
 export function FilterPanel({
   shows,
   tags,
+  months,
+  selectedMonth,
+  onSelectMonth,
   selectedShows,
   selectedTags,
   onToggleShow,
@@ -30,6 +34,9 @@ export function FilterPanel({
 }: {
   shows: readonly FacetValue[];
   tags: readonly FacetValue[];
+  months: readonly string[];
+  selectedMonth?: string;
+  onSelectMonth: (month: string) => void;
   selectedShows: readonly string[];
   selectedTags: readonly string[];
   onToggleShow: (show: string) => void;
@@ -90,6 +97,21 @@ export function FilterPanel({
           {selectedTags.length > 1 ? (
             <p className="mt-3 text-xs text-muted-foreground">Episodi con tutti i tag scelti.</p>
           ) : null}
+        </FacetSection>
+      ) : null}
+
+      {months.length > 0 ? (
+        <FacetSection title="Data di pubblicazione">
+          <FacetChips label="Data di pubblicazione">
+            {months.map((month) => (
+              <FacetChip
+                key={month}
+                label={formatPublicationMonth(month)}
+                selected={selectedMonth === month}
+                onSelect={() => onSelectMonth(month)}
+              />
+            ))}
+          </FacetChips>
         </FacetSection>
       ) : null}
     </FacetStack>

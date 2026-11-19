@@ -61,6 +61,7 @@ export function BookAdminActions({ book, index, placement }: BookAdminActionsPro
 
   return (
     <div data-elib-admin={ADMIN_BUNDLE_MARKER} className="flex items-center gap-2">
+      <BookChat book={book} />
       <Button
         variant="outline"
         size="icon"
@@ -70,7 +71,6 @@ export function BookAdminActions({ book, index, placement }: BookAdminActionsPro
       >
         <PencilIcon aria-hidden />
       </Button>
-      <BookChat book={book} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button

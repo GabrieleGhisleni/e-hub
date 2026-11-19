@@ -1,4 +1,4 @@
-import { BookOpenIcon, CompassIcon } from "lucide-react";
+import { BookOpenIcon, CheckSquareIcon, CompassIcon } from "lucide-react";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import {
@@ -60,19 +60,21 @@ function ExplorationCard({
       ) : null}
       <Link
         to={explorationHref(exploration.id)}
-        className="group flex h-full gap-4 rounded-xl border border-border bg-card p-5 shadow-xs transition-colors hover:border-brand/40 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none sm:p-6"
+        className="book-link group grid h-full grid-cols-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-border bg-card shadow-xs transition-colors hover:border-brand/40 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
       >
-        <div className="w-14 shrink-0 sm:w-[4.5rem]">
-          {first && Cover ? (
-            <Cover source={first} explorationId={exploration.id} privateCover={privateCover} />
-          ) : (
-            <div className="flex aspect-[2/3] items-center justify-center rounded-md bg-muted text-muted-foreground" aria-hidden>
-              <BookOpenIcon className="size-5" />
-            </div>
-          )}
+        <div className="flex items-start border-r border-border/70 bg-linear-to-br from-brand-soft via-muted to-card p-3 sm:p-5">
+          <div className="w-24 sm:w-32 xl:w-40">
+            {first && Cover ? (
+              <Cover source={first} explorationId={exploration.id} privateCover={privateCover} />
+            ) : (
+              <div className="flex aspect-[2/3] items-center justify-center rounded-md border border-border bg-card/70 text-muted-foreground" aria-hidden>
+                <BookOpenIcon className="size-8" />
+              </div>
+            )}
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <div className={`flex flex-wrap items-center gap-2 text-sm ${selection ? "pr-6" : ""} text-muted-foreground`}>
+        <div className="min-w-0 p-3 sm:p-6">
+          <div className={`flex min-h-6 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground sm:text-sm ${selection ? "pr-7" : ""}`}>
             <Badge variant={exploration.status === "open" ? "secondary" : "outline"}>
               {STATUS_LABELS[exploration.status]}
             </Badge>
@@ -87,7 +89,7 @@ function ExplorationCard({
               ))}
             </ul>
           ) : null}
-          <h2 className="mt-3 font-serif text-2xl leading-tight font-medium tracking-tight text-balance group-hover:text-brand">
+          <h2 className="mt-3 font-serif text-xl leading-tight font-medium tracking-tight group-hover:text-brand sm:text-2xl">
             {exploration.title}
           </h2>
           <p className="mt-2 text-[0.9375rem] text-foreground/80 italic">{exploration.question}</p>
@@ -222,44 +224,49 @@ export function ExplorationListPage({
               placeholder="Cerca titolo, domanda, libro o autore"
             />
           }
-          actions={
-            devTools && DevExplorationNewLink ? (
-              <Suspense fallback={null}><DevExplorationNewLink /></Suspense>
-            ) : undefined
-          }
         />
         <ExploreErrorBanner store={store} className="mt-4" />
         <ActiveFilters
           summary={`${visible.length} ${visible.length === 1 ? "esplorazione" : "esplorazioni"}`}
           chips={chips}
           onClear={clear}
+          actions={
+            devTools ? (
+              <>
+                {kobo && DevKoboButton ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={visible.length === 0}
+                      onClick={() => setSelected((current) => {
+                        const next = new Set(current);
+                        for (const exploration of visible) {
+                          if (allVisibleSelected) next.delete(exploration.id);
+                          else next.add(exploration.id);
+                        }
+                        return next;
+                      })}
+                    >
+                      <CheckSquareIcon aria-hidden />
+                      {allVisibleSelected ? "Deseleziona le visibili" : "Seleziona le visibili"}
+                    </Button>
+                    <Suspense fallback={null}>
+                      <DevKoboButton
+                        ids={[...selected]}
+                        store={store}
+                        label={selected.size > 0 ? `Aggiungi alla libreria (${selected.size})` : "Aggiungi alla libreria"}
+                      />
+                    </Suspense>
+                  </>
+                ) : null}
+                {DevExplorationNewLink ? (
+                  <Suspense fallback={null}><DevExplorationNewLink /></Suspense>
+                ) : null}
+              </>
+            ) : undefined
+          }
         />
-        {kobo && DevKoboButton ? (
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <Suspense fallback={null}>
-              <DevKoboButton
-                ids={[...selected]}
-                store={store}
-                label={selected.size > 0 ? `Aggiungi alla libreria (${selected.size})` : "Aggiungi alla libreria"}
-              />
-            </Suspense>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={visible.length === 0}
-              onClick={() => setSelected((current) => {
-                const next = new Set(current);
-                for (const exploration of visible) {
-                  if (allVisibleSelected) next.delete(exploration.id);
-                  else next.add(exploration.id);
-                }
-                return next;
-              })}
-            >
-              {allVisibleSelected ? "Deseleziona le visibili" : "Seleziona le visibili"}
-            </Button>
-          </div>
-        ) : null}
 
         {meta.status === "loading" && all.length === 0 ? (
           <p className="mt-10 text-sm text-muted-foreground" aria-busy>Caricamento…</p>
@@ -272,7 +279,7 @@ export function ExplorationListPage({
             <p>Prova a modificare la ricerca o i filtri.</p>
           </MessageState>
         ) : (
-          <ul className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+          <ul className="grid max-w-5xl gap-4">
             {visible.map((exploration) => (
               <ExplorationCard
                 key={exploration.id}

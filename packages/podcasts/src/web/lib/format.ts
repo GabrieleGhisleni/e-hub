@@ -23,6 +23,13 @@ export function formatCalendarDate(date: string, style: "short" | "long" = "shor
   return Number.isNaN(parsed.getTime()) ? date : calendarFormats[style].format(parsed);
 }
 
+const calendarMonth = new Intl.DateTimeFormat(LOCALE, { month: "long", year: "numeric", timeZone: "UTC" });
+
+/** ISO publication month (YYYY-MM), independent of the viewer's time zone. */
+export function formatPublicationMonth(month: string): string {
+  return calendarMonth.format(new Date(`${month}-01T00:00:00Z`));
+}
+
 const instantFormats = {
   short: new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "short", year: "numeric" }),
   long: new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "long", year: "numeric" }),

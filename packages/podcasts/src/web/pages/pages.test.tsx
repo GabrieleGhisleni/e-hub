@@ -99,13 +99,21 @@ describe("home", () => {
       "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg",
     );
     await waitFor(() => expect(document.documentElement.dataset.devFeatures).toBeDefined());
-    expect(await screen.findByRole("button", { name: "Aggiungi URL" })).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Aggiungi podcast" })).toBeVisible();
   });
 
   it("applies filters from the URL and offers to clear them", () => {
     renderAt("/?tag=sleep");
     expect(rowTitles()).toEqual(["Master Your Sleep"]);
     expect(screen.getByText("1 episodio su 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Azzera filtri" }));
+    expect(rowTitles()).toEqual(["Scaling Laws", "Master Your Sleep"]);
+    expect(screen.getByTestId("location")).toHaveTextContent(/^\/podcasts\/$/);
+  });
+
+  it("filters by publication month and clears it", () => {
+    renderAt("/?month=2024-11");
+    expect(rowTitles()).toEqual(["Master Your Sleep"]);
     fireEvent.click(screen.getByRole("button", { name: "Azzera filtri" }));
     expect(rowTitles()).toEqual(["Scaling Laws", "Master Your Sleep"]);
     expect(screen.getByTestId("location")).toHaveTextContent(/^\/podcasts\/$/);

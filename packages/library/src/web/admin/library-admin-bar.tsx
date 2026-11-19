@@ -49,7 +49,7 @@ export function LibraryAdminBar({ index, visibleBooks }: LibraryAdminBarProps) {
       data-elib-admin={ADMIN_BUNDLE_MARKER}
       role="toolbar"
       aria-label="Strumenti di amministrazione"
-      className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm"
+      className="flex flex-wrap items-center justify-end gap-x-1 gap-y-1 text-sm"
     >
       {import.meta.env.VITE_HOSTED !== "1" ? (
         <Popover>

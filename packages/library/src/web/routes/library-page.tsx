@@ -9,7 +9,6 @@ import {
 } from "react";
 import { BookGrid, BookGridSkeleton } from "@library/components/library/book-grid";
 import { FilterPanel } from "@library/components/library/filter-panel";
-import { SortSelect } from "@library/components/library/library-toolbar";
 import {
   type ActiveFilterChip,
   ActiveFilters,
@@ -163,13 +162,11 @@ export function LibraryPage() {
       >
         <SearchToolbar
           activeFilterCount={activeCount}
-          toggleClassName="rounded-md"
           search={
             <SearchField
               value={text}
               onChange={setText}
               inputRef={searchRef}
-              inputClassName="rounded-md"
               label="Cerca per titolo o autore"
               placeholder="Cerca titolo o autore"
             />
@@ -180,9 +177,6 @@ export function LibraryPage() {
           summary={index ? resultCountLabel(visible.length, index.books.length) : " "}
           chips={index ? activeChips(index, query, commit) : []}
           onClear={() => commit(clearFilters(query))}
-          actions={
-            <SortSelect value={query.sort} onChange={(sort) => commit({ ...query, sort })} />
-          }
         />
 
         {__ELIB_ADMIN__ && index ? (
