@@ -23,7 +23,7 @@ import { InvalidUploadIdError } from "../cache/index.ts";
 import { InvalidBookIdError } from "../repo/index.ts";
 import { ServiceError, type Services, startSummaryInBackground } from "../services/index.ts";
 import { ZlibraryClient, zlibraryEnvFrom } from "../zlibrary/index.ts";
-import { currentUserId, userScopedDir } from "@ehub/store";
+import { currentUserId, readUserSettings, userScopedDir } from "@ehub/store";
 import { apiError, jsonBody } from "./http.ts";
 import { securityConfig, securityMiddleware } from "./security.ts";
 import { registerSettingsRoutes } from "./settings-routes.ts";
@@ -277,9 +277,9 @@ function jsonBodyFrom<T extends z.ZodType>(schema: T, raw: unknown): z.output<T>
  * Z-Library client per request. Without a user (local dev) it is the one from the environment; with one (hosted) each
  * user has their own, with the session file under their cache folder and no shared credentials from the environment.
  */
-function perUserZlibrary(cacheDir: string): () => ZlibraryClient {
+function perUserZlibrary(cacheDir: string): () => Promise<ZlibraryClient> {
   const clients = new Map<string, ZlibraryClient>();
-  return () => {
+  return async () => {
     const dir = userScopedDir(cacheDir);
     let client = clients.get(dir);
     if (!client) {
@@ -290,6 +290,8 @@ function perUserZlibrary(cacheDir: string): () => ZlibraryClient {
       );
       clients.set(dir, client);
     }
+    // The mirror is a personal setting and changes often: read it on every request.
+    client.setBaseUrl((await readUserSettings()).zlibraryBaseUrl ?? zlibraryEnvFrom().baseUrl);
     return client;
   };
 }

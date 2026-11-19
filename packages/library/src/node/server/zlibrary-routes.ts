@@ -21,15 +21,15 @@ const STAGE_PATH = "/api/library/zlibrary/books/:id/:hash/stage";
 export function registerZlibraryRoutes(
   app: Hono,
   services: Services,
-  clientOrFactory: ZlibraryClient | (() => ZlibraryClient),
+  clientOrFactory: ZlibraryClient | (() => ZlibraryClient | Promise<ZlibraryClient>),
   jsonLimit: MiddlewareHandler,
 ): void {
   /** One client per request: in the hosted setup each user has their own (own session file). */
-  const pick = (): ZlibraryClient =>
+  const pick = async (): Promise<ZlibraryClient> =>
     typeof clientOrFactory === "function" ? clientOrFactory() : clientOrFactory;
 
   app.get(zlibraryPaths.status, async (c) => {
-    const client = pick();
+    const client = await pick();
     await client.restore();
     const configured = client.configured;
     let quota: ZlibraryStatusResponse["quota"] = null;
@@ -46,7 +46,7 @@ export function registerZlibraryRoutes(
   });
 
   app.post(zlibraryPaths.session, jsonLimit, async (c) => {
-    const client = pick();
+    const client = await pick();
     const { email, password } = await jsonBody(c, ZlibraryLoginRequestSchema);
     await guard(() => client.connect(email, password));
     const body: ZlibraryStatusResponse = {
@@ -60,19 +60,19 @@ export function registerZlibraryRoutes(
   });
 
   app.delete(zlibraryPaths.session, async (c) => {
-    await pick().disconnect();
+    await (await pick()).disconnect();
     return c.json({ ok: true });
   });
 
   app.post(zlibraryPaths.search, jsonLimit, async (c) => {
-    const client = pick();
+    const client = await pick();
     const body = await jsonBody(c, ZlibrarySearchRequestSchema);
     return c.json(await guard(() => client.search(body)));
   });
 
   app.post(EPUB_PATH, async (c) => {
     const book = await downloadEpub(
-      pick(),
+      await pick(),
       services,
       c.req.param("id"),
       c.req.param("hash"),
@@ -89,7 +89,7 @@ export function registerZlibraryRoutes(
 
   app.post(STAGE_PATH, async (c) => {
     const book = await downloadEpub(
-      pick(),
+      await pick(),
       services,
       c.req.param("id"),
       c.req.param("hash"),

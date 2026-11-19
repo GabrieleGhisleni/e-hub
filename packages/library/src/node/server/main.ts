@@ -32,7 +32,8 @@ console.log(
     ? `Z-Library: configurata (${zlibrary.baseUrl})`
     : "Z-Library: non configurata (imposta ZLIBRARY_* in packages/library/.env)",
 );
-const app = createApp(services, config, { zlibrary });
+// No client passed: the app builds its own, which also follows the Z-Library address set in Impostazioni.
+const app = createApp(services, config);
 serve({ fetch: app.fetch, hostname: HOSTNAME, port: config.server.port }, (info) => {
   console.log(`e-library server on http://${HOSTNAME}:${info.port} (data: ${config.dataDir})`);
 });

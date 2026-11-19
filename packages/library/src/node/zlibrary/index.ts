@@ -125,6 +125,11 @@ export class ZlibraryClient {
     await rm(this.sessionFile, { force: true });
   }
 
+  /** Switches the mirror (the session key stays: it belongs to the account, not to the domain). */
+  setBaseUrl(baseUrl: string): void {
+    this.env = { ...this.env, baseUrl: baseUrl.replace(/\/+$/, "") };
+  }
+
   get baseUrl(): string {
     return this.env.baseUrl;
   }

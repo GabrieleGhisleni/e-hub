@@ -28,6 +28,16 @@ function Field({
   );
 }
 
+function Group({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+  return (
+    <fieldset className="flex flex-col gap-3 rounded-md border border-border/70 p-4">
+      <legend className="px-1 text-sm font-medium">{title}</legend>
+      <p className="-mt-1 text-xs text-muted-foreground">{description}</p>
+      {children}
+    </fieldset>
+  );
+}
+
 function keyHint(has: boolean, source: "personal" | "env" | null): string {
   if (!has) return "Non impostata.";
   return source === "env" ? "Impostata in .env.local (solo in locale)." : "Impostata. Lasciala vuota per non cambiarla.";
@@ -96,16 +106,20 @@ export function KeysSettingsCard() {
         Chiavi personali
       </h2>
       <p className="mt-1 mb-4 text-sm text-muted-foreground">
-        Sono solo tue: servono alla chat AI, ai riassunti e alle trascrizioni dei tuoi contenuti. Restano sul server, in
-        un file riservato, e non vengono mai mostrate di nuovo.
+        Sono solo tue e restano sul server, in un file riservato: non vengono mai mostrate di nuovo. Senza le tue, le
+        funzioni qui sotto non sono disponibili.
       </p>
       {!state && !error ? <Loader2Icon className="animate-spin text-muted-foreground" aria-label="Caricamento" /> : null}
       {state ? (
         <form onSubmit={save} className="flex max-w-md flex-col gap-4">
-          <Field id="ai-base-url" label="Chat AI: indirizzo del router" hint="Compatibile OpenAI, ad esempio https://…/v1. Vuoto = predefinito.">
+          <Group
+            title="Chat AI e riassunti"
+            description="Serve alla chat su libri, esplorazioni ed episodi (anche per salvare note) e ai riassunti dei libri. Qualsiasi servizio compatibile OpenAI."
+          >
+          <Field id="ai-base-url" label="Indirizzo del servizio" hint="Ad esempio https://…/v1. Vuoto = router predefinito.">
             <Input id="ai-base-url" type="url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://…/v1" />
           </Field>
-          <Field id="ai-key" label="Chat AI: chiave API" hint={keyHint(state.ai.hasKey, state.ai.source)}>
+          <Field id="ai-key" label="Chiave API" hint={keyHint(state.ai.hasKey, state.ai.source)}>
             <div className="flex gap-2">
               <Input
                 id="ai-key"
@@ -122,10 +136,15 @@ export function KeysSettingsCard() {
               ) : null}
             </div>
           </Field>
-          <Field id="ai-model" label="Chat AI: modello" hint="Vuoto = predefinito («smart»).">
+          <Field id="ai-model" label="Modello" hint="Vuoto = predefinito («smart»).">
             <Input id="ai-model" value={model} onChange={(e) => setModel(e.target.value)} placeholder="smart" />
           </Field>
-          <Field id="groq-key" label="Groq: chiave API" hint={keyHint(state.groq.hasKey, state.groq.source)}>
+          </Group>
+          <Group
+            title="Trascrizioni podcast"
+            description="Serve a trascrivere gli episodi dei podcast con Groq. Senza chiave le trascrizioni non partono."
+          >
+          <Field id="groq-key" label="Chiave Groq" hint={keyHint(state.groq.hasKey, state.groq.source)}>
             <div className="flex gap-2">
               <Input
                 id="groq-key"
@@ -142,6 +161,7 @@ export function KeysSettingsCard() {
               ) : null}
             </div>
           </Field>
+          </Group>
           {error ? (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>

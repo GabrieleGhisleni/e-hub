@@ -22,6 +22,8 @@ export const UserSettingsSchema = z.object({
     })
     .default({}),
   groqApiKey: z.string().min(1).optional(),
+  /** Z-Library mirror (it changes often); default from ZLIBRARY_BASE_URL or the built-in one. */
+  zlibraryBaseUrl: z.url().optional(),
 });
 export type UserSettings = z.infer<typeof UserSettingsSchema>;
 

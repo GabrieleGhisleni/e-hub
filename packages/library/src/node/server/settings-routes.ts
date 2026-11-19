@@ -6,6 +6,7 @@ import {
   settingsPaths,
   type SettingsResponse,
 } from "../../shared/settings.ts";
+import { zlibraryEnvFrom } from "../zlibrary/index.ts";
 import { jsonBody } from "./http.ts";
 
 async function snapshot(): Promise<SettingsResponse> {
@@ -27,6 +28,7 @@ async function snapshot(): Promise<SettingsResponse> {
       hasKey: Boolean(own.groqApiKey ?? env.GROQ_API_KEY?.trim()),
       source: source(Boolean(own.groqApiKey), Boolean(env.GROQ_API_KEY?.trim())),
     },
+    zlibrary: { baseUrl: own.zlibraryBaseUrl ?? null, defaultBaseUrl: zlibraryEnvFrom().baseUrl },
   };
 }
 
@@ -45,6 +47,10 @@ export function registerSettingsRoutes(app: Hono, jsonLimit: MiddlewareHandler):
         model: apply(update.model, current.ai.model),
       },
       groqApiKey: apply(update.groqApiKey, current.groqApiKey),
+      zlibraryBaseUrl: apply(
+        typeof update.zlibraryBaseUrl === "string" ? update.zlibraryBaseUrl.replace(/\/+$/, "") : update.zlibraryBaseUrl,
+        current.zlibraryBaseUrl,
+      ),
     };
     await writeUserSettings(JSON.parse(JSON.stringify(next)), settingsBaseDir());
     return c.json(await snapshot(), 200, { "Cache-Control": "no-store" });
