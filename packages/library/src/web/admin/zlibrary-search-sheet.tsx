@@ -58,6 +58,7 @@ import { friendlyMessage } from "./lib/errors";
 import { ZlibraryConnectForm } from "./zlibrary-connect-form";
 import type { ExplorationsState } from "./zlibrary-explore-menu";
 import {
+  isEpubResult,
   ZlibraryResultCard,
   ZlibraryResultSkeleton,
   type AddedExploration,
@@ -178,13 +179,28 @@ function FilterField({
   );
 }
 
+export interface ZlibrarySelection {
+  key: string;
+  title: string;
+  author: string;
+  download: () => Promise<File>;
+}
+
+export interface ZlibrarySearchSheetProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  selection?: {
+    pick: (book: ZlibrarySelection) => Promise<void> | void;
+    selectedKeys?: ReadonlySet<string>;
+    label: string;
+  };
+}
+
 export function ZlibrarySearchSheet({
   open,
   onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
+  selection,
+}: ZlibrarySearchSheetProps) {
   const navigate = useNavigate();
 
   // Status (quota / configuration), refreshed each time the sheet opens.
@@ -373,6 +389,31 @@ export function ZlibrarySearchSheet({
     }
   }
 
+  async function downloadEpub(book: ZlibraryBook): Promise<File> {
+    const { blob, fileName } = await adminApi.zlibraryEpub(book.id, book.hash).catch((error) => {
+      throw new Error(friendlyMessage(error));
+    });
+    return new File([blob], fileName, { type: "application/epub+zip" });
+  }
+
+  async function pickBook(book: ZlibraryBook) {
+    if (!selection) return;
+    setRowBusy(book, "explore");
+    try {
+      await selection.pick({
+        key: rowKey(book),
+        title: book.title,
+        author: book.author,
+        download: () => downloadEpub(book),
+      });
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossibile aggiungere il libro.");
+    } finally {
+      setRowBusy(book, null);
+    }
+  }
+
   /**
    * Downloads the EPUB and adds it to the exploration returned by `resolveTarget` (which may create it first).
    * A failure in `resolveTarget` leaves the caller's dialog open; later failures are only reported in a toast.
@@ -384,8 +425,7 @@ export function ZlibrarySearchSheet({
     setRowBusy(book, "explore");
     try {
       const target = await resolveTarget();
-      const { blob, fileName } = await adminApi.zlibraryEpub(book.id, book.hash);
-      const file = new File([blob], fileName, { type: "application/epub+zip" });
+      const file = await downloadEpub(book);
       const updated = await addEpubToExploration(target.id, file);
       setAddedRows((current) => ({
         ...current,
@@ -503,6 +543,16 @@ export function ZlibrarySearchSheet({
             }
             onNewExploration={() => openCreate(book)}
             onOpenExploration={openExploration}
+            action={selection ? (
+              <Button
+                size="sm"
+                disabled={!isEpubResult(book) || busyRows[rowKey(book)] !== undefined || selection.selectedKeys?.has(rowKey(book))}
+                onClick={() => void pickBook(book)}
+              >
+                {busyRows[rowKey(book)] ? <Loader2Icon className="animate-spin" /> : <PlusIcon />}
+                {selection.selectedKeys?.has(rowKey(book)) ? "Selezionato" : selection.label}
+              </Button>
+            ) : undefined}
           />
         ))}
       </ul>
@@ -538,7 +588,9 @@ export function ZlibrarySearchSheet({
                   Aggiungi da Z-Library
                 </SheetTitle>
                 <SheetDescription className="mt-0.5 text-xs">
-                  Trova un EPUB e aggiungilo alla biblioteca o a un&apos;esplorazione.
+                  {selection
+                    ? "Seleziona un EPUB per l’esplorazione."
+                    : "Trova un EPUB e aggiungilo alla biblioteca o a un’esplorazione."}
                 </SheetDescription>
               </div>
               {status?.configured && status.account ? (

@@ -3,7 +3,7 @@
  * "Esplorazione" adds the EPUB to an exploration). Only EPUB results can be used.
  */
 import { ArrowRightIcon, BookOpenIcon, CheckIcon, LibraryIcon, Loader2Icon } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { ZLIBRARY_LANGUAGES, type ZlibraryBook } from "@shared/zlibrary";
 import { Button } from "@ehub/ui/components/button";
 import { Skeleton } from "@ehub/ui/components/skeleton";
@@ -96,6 +96,7 @@ export function ZlibraryResultCard({
   onPickExploration,
   onNewExploration,
   onOpenExploration,
+  action,
 }: {
   book: ZlibraryBook;
   busy: BusyKind | undefined;
@@ -106,6 +107,7 @@ export function ZlibraryResultCard({
   onPickExploration: (exploration: ExplorationSummary) => void;
   onNewExploration: () => void;
   onOpenExploration: (id: string) => void;
+  action?: ReactNode;
 }) {
   const epub = isEpubResult(book);
   const anyBusy = busy !== undefined;
@@ -142,23 +144,27 @@ export function ZlibraryResultCard({
         ) : null}
 
         <div className="mt-auto flex flex-wrap items-center gap-2 pt-3">
-          <Button
-            size="sm"
-            disabled={!epub || anyBusy}
-            onClick={onStage}
-            title="Aggiungi alla biblioteca: verrà convertito in KEPUB e caricato sul Kobo"
-          >
-            {busy === "stage" ? <Loader2Icon className="animate-spin" /> : <LibraryIcon />}
-            Biblioteca
-          </Button>
-          <ExploreMenu
-            disabled={!epub || anyBusy}
-            busy={busy === "explore"}
-            state={explorations}
-            onOpen={onLoadExplorations}
-            onPick={onPickExploration}
-            onNew={onNewExploration}
-          />
+          {action ?? (
+            <>
+              <Button
+                size="sm"
+                disabled={!epub || anyBusy}
+                onClick={onStage}
+                title="Aggiungi alla biblioteca: verrà convertito in KEPUB e caricato sul Kobo"
+              >
+                {busy === "stage" ? <Loader2Icon className="animate-spin" /> : <LibraryIcon />}
+                Biblioteca
+              </Button>
+              <ExploreMenu
+                disabled={!epub || anyBusy}
+                busy={busy === "explore"}
+                state={explorations}
+                onOpen={onLoadExplorations}
+                onPick={onPickExploration}
+                onNew={onNewExploration}
+              />
+            </>
+          )}
           {!epub ? <span className="text-xs text-muted-foreground">Solo EPUB</span> : null}
         </div>
 

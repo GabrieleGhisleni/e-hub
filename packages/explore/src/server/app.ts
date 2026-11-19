@@ -30,6 +30,8 @@ import path from "node:path";
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z, ZodError } from "zod";
+import { createSynthesisRunner, type SynthesizeExploration } from "../node/synthesis.ts";
+export { generateExplorationSynthesis } from "../node/synthesis.ts";
 import {
   ExploreError,
   ExplorationPatch,
@@ -237,11 +239,13 @@ export interface ExploreAppOptions {
   deps?: Partial<LibraryDeps>;
   /** Request check for /api/explore (default: loopback only). The hosted server passes its own (docs/hosting.md). */
   access?: MiddlewareHandler;
+  synthesize?: SynthesizeExploration;
 }
 
 export function createExploreApp(options: ExploreAppOptions = {}): Hono {
   const app = new Hono();
   const deps = withLibraryDeps(options.deps);
+  const synthesis = createSynthesisRunner(options.synthesize, deps);
 
   app.onError(handleError);
   app.notFound((c) => c.json({ error: "Endpoint inesistente.", code: "not-found" }, 404));
@@ -306,19 +310,24 @@ export function createExploreApp(options: ExploreAppOptions = {}): Hono {
       new Date(),
       deps,
     );
+    synthesis.start(exploration);
     return c.json(exploration, 201);
   });
 
   app.patch("/api/explore/:id", async (c) => {
     const id = explorationId(c);
     const patch = await readJson(c, ExplorationPatch);
-    return c.json(await updateExploration(id, patch));
+    const exploration = await updateExploration(id, patch);
+    if (patch.title !== undefined || patch.question !== undefined) synthesis.start(exploration);
+    return c.json(exploration);
   });
 
   app.post("/api/explore/:id/books", async (c) => {
     const id = explorationId(c);
     const input = await readJson(c, AddBookBody);
-    return c.json(await addLibraryBook(id, input.bookId, deps), 201);
+    const exploration = await addLibraryBook(id, input.bookId, deps);
+    synthesis.start(exploration);
+    return c.json(exploration, 201);
   });
 
   app.post("/api/explore/:id/epub", epubLimit, async (c) => {
@@ -334,13 +343,36 @@ export function createExploreApp(options: ExploreAppOptions = {}): Hono {
         deps.startExploreSummaryInBackground(source.id, { logger: summaryLogger });
       }
     }
+    synthesis.start(exploration);
     return c.json(exploration, 201);
   });
 
   app.get("/api/explore/:id/summaries", async (c) => {
     const exploration = await readExploration(explorationId(c));
     const books = await summaryStatuses(exploration.sources, deps);
-    return c.json({ books });
+    return c.json({ books, ...(options.synthesize ? { synthesis: { ...synthesis.status(exploration), updatedAt: exploration.updatedAt } } : {}) });
+  });
+
+  app.post("/api/explore/:id/synthesis", async (c) => {
+    if (!options.synthesize) return c.json({ error: "Sintesi automatica non disponibile.", code: "not-found" }, 404);
+    const exploration = await readExploration(explorationId(c));
+    synthesis.start(exploration);
+    return c.json({ state: "running" }, 202);
+  });
+
+  app.get("/api/explore/:id/books/:bookId/cover", async (c) => {
+    const exploration = await readExploration(explorationId(c));
+    const bookId = param(c, "bookId", BookId);
+    if (exploration.sources.some((source) => source.id === bookId && source.origin === "explore")) {
+      const cover = await deps.readExploreBookCover(bookId);
+      if (cover) {
+        return c.body(new Uint8Array(cover), 200, {
+          "content-type": "image/webp",
+          "cache-control": "private, max-age=300",
+        });
+      }
+    }
+    return c.json({ error: "Copertina non disponibile.", code: "not-found" }, 404);
   });
 
   app.post("/api/explore/:id/books/:bookId/summary", async (c) => {
@@ -359,7 +391,9 @@ export function createExploreApp(options: ExploreAppOptions = {}): Hono {
   app.delete("/api/explore/:id/books/:bookId", async (c) => {
     const id = explorationId(c);
     const bookId = param(c, "bookId", BookId);
-    return c.json(await removeBook(id, bookId));
+    const exploration = await removeBook(id, bookId);
+    synthesis.start(exploration);
+    return c.json(exploration);
   });
 
   app.put("/api/explore/:id/verdicts/:bookId", async (c) => {

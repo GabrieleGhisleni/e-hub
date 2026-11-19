@@ -6,6 +6,7 @@
  * that the admin marker string is absent from dist/). In public mode the slots render nothing.
  */
 import { type ComponentType, lazy, Suspense } from "react";
+import type { ZlibrarySearchSheetProps } from "./admin/zlibrary-search-sheet";
 import type { AdminModule, BookAdminActionsProps, LibraryAdminBarProps } from "./admin/types";
 
 let AdminApp: ComponentType | null = null;
@@ -14,9 +15,13 @@ let LibraryAdminBar: ComponentType<LibraryAdminBarProps> | null = null;
 let BookAdminActions: ComponentType<BookAdminActionsProps> | null = null;
 let NewTopicButton: ComponentType | null = null;
 let ZlibrarySettingsCard: ComponentType | null = null;
+let ZlibrarySearchSheet: ComponentType<ZlibrarySearchSheetProps> | null = null;
 let KeysSettingsCard: ComponentType | null = null;
 
 if (__ELIB_ADMIN__) {
+  ZlibrarySearchSheet = lazy(() =>
+    import("./admin/zlibrary-search-sheet").then((m) => ({ default: m.ZlibrarySearchSheet })),
+  );
   const load = (): Promise<AdminModule> => import("./admin/index.tsx");
   AdminApp = lazy(() => load().then((m) => ({ default: m.AdminApp })));
   AdminChrome = lazy(() => load().then((m) => ({ default: m.AdminChrome })));
@@ -93,6 +98,15 @@ export function KeysSettingsSlot() {
   return (
     <Suspense fallback={null}>
       <KeysSettingsCard />
+    </Suspense>
+  );
+}
+
+export function ZlibrarySearchSlot(props: ZlibrarySearchSheetProps) {
+  if (!ZlibrarySearchSheet) return null;
+  return (
+    <Suspense fallback={null}>
+      <ZlibrarySearchSheet {...props} />
     </Suspense>
   );
 }
