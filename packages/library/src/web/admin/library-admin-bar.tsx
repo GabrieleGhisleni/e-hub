@@ -51,24 +51,26 @@ export function LibraryAdminBar({ index, visibleBooks }: LibraryAdminBarProps) {
       aria-label="Strumenti di amministrazione"
       className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm"
     >
-      <Popover>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="mr-auto inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand outline-none hover:border-brand/60 focus-visible:ring-3 focus-visible:ring-ring/40"
-          >
-            Locale
-            <InfoIcon aria-hidden className="size-3.5" />
-            <span className="sr-only">: informazioni sulla modalità locale</span>
-          </button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-64 text-sm">
-          <p className="font-medium">Modalità locale</p>
-          <p className="mt-1 text-muted-foreground">
-            Le modifiche restano sul tuo computer: per pubblicare serve commit e push.
-          </p>
-        </PopoverContent>
-      </Popover>
+      {import.meta.env.VITE_HOSTED !== "1" ? (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="mr-auto inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand outline-none hover:border-brand/60 focus-visible:ring-3 focus-visible:ring-ring/40"
+            >
+              Locale
+              <InfoIcon aria-hidden className="size-3.5" />
+              <span className="sr-only">: informazioni sulla modalità locale</span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-64 text-sm">
+            <p className="font-medium">Modalità locale</p>
+            <p className="mt-1 text-muted-foreground">
+              Le modifiche restano sul tuo computer: per pubblicare serve commit e push.
+            </p>
+          </PopoverContent>
+        </Popover>
+      ) : null}
       <KoboQueueStatus />
       {selection.selecting ? (
         <>

@@ -3,7 +3,8 @@ import { useState } from "react";
 import { KeysSettingsSlot, ZlibrarySettingsSlot } from "@ehub/library/web";
 import { Container, PageHeader, ThemeToggle } from "@ehub/ui";
 import { Button } from "@ehub/ui/components/button";
-import { HOSTED, currentSession, logout } from "../session";
+import { GOOGLE_CLIENT_ID, HOSTED, currentSession, logout } from "../session";
+import { GoogleSignIn } from "../components/account-button";
 
 function Section({ id, title, hint, children }: { id: string; title: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -19,10 +20,19 @@ function Section({ id, title, hint, children }: { id: string; title: string; hin
 
 function AccountSection() {
   const [copied, setCopied] = useState<"idle" | "ok" | "error">("idle");
-  if (!HOSTED || !currentSession) {
+  if (!HOSTED) {
     return (
       <p className="text-sm text-muted-foreground">
         Sviluppo locale: nessun accesso richiesto, i dati sono quelli di questo computer.
+      </p>
+    );
+  }
+  if (!currentSession) {
+    return GOOGLE_CLIENT_ID ? (
+      <GoogleSignIn />
+    ) : (
+      <p role="status" className="text-sm text-muted-foreground">
+        L’accesso con Google non è configurato.
       </p>
     );
   }
