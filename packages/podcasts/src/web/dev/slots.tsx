@@ -17,13 +17,9 @@ import { NoTranscriptBadge } from "./transcript-status";
 export const DEV_ONLY_MARKER = "e-podcasts-dev-only";
 
 export const slots: DevSlots = {
-  "header-actions": () => <AddEpisodeButton />,
+  "home-toolbar": () => <AddEpisodeButton />,
   layout: DevLayout,
-  "home-empty": () => (
-    <div className="mt-4">
-      <AddEpisodeButton variant="default" />
-    </div>
-  ),
+  "home-empty": () => <AddEpisodeButton variant="default" />,
   "episode-actions": ({ episode }) => <EpisodeTools episode={episode} />,
   "episode-chat": ({ episode, show }) => <EpisodeChat episode={episode} show={show} />,
   "episode-transcript": ({ episode, children }) =>

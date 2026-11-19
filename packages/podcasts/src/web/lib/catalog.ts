@@ -51,6 +51,14 @@ export function toEpisode(value: unknown): Episode | undefined {
     addedAt,
     updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : addedAt,
     guests: stringList(value.guests),
+    guestDescriptions: isRecord(value.guestDescriptions)
+      ? Object.fromEntries(
+          Object.entries(value.guestDescriptions).filter(
+            (entry): entry is [string, string] =>
+              typeof entry[1] === "string" && entry[1].trim() !== "",
+          ),
+        )
+      : undefined,
     tags: stringList(value.tags),
     summary: stringList(value.summary),
     notes: typeof value.notes === "string" ? value.notes : "",

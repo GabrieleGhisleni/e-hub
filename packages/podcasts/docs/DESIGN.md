@@ -113,6 +113,7 @@ Gli slug di show ed episodi sono validati con una regex (`^[a-z0-9]+(-[a-z0-9]+)
 ### 4.2 Episodio — `data/episodes/<slug>.json` (in git)
 
 - Metadati: titolo, **ospiti** (`guests: string[]`, anche vuoto: Lex ha episodi con più ospiti, Huberman molti episodi senza), show, **numero di episodio** (`number`, opzionale), link originale, `youtubeId`.
+- **`guestDescriptions`** (opzionale): una breve descrizione per nome dell’ospite, modificabile dall’editor locale o con `pnpm episode save`.
 - Date:
   - **`publishedAt`** (opzionale): data di pubblicazione, da HTML Lex, frontmatter PatrykWajs, feed RSS o pagina YouTube. Serve all'abbinamento con il feed (§7.2) ed è mostrata in lista.
   - **`addedAt`**: automatica (data di aggiunta = data di "ascolto"). Solo per l'**import iniziale** degli episodi già ascoltati la CLI accetta `--added-at <data>`; dalla UI non si modifica.
@@ -346,7 +347,7 @@ Qualità (solo testo normalizzato, minuscolo e senza punteggiatura, sui 20 minut
 
 ### 8.4 Dettaglio episodio
 
-- Metadati e link (episodio originale, YouTube).
+- Metadati, link a episodio originale e YouTube, e dialogo con le presentazioni degli ospiti disponibili nel catalogo.
 - Summary in evidenza, poi notes.
 - I timestamp `[HH:MM:SS]` nelle notes diventano link a YouTube al secondo **solo se** `transcriptTimebase` è `youtube`; altrimenti restano testo.
 - Conversazioni in sezione richiudibile, caricate a richiesta (§8.1).
@@ -357,10 +358,8 @@ Qualità (solo testo normalizzato, minuscolo e senza punteggiatura, sui 20 minut
 Visibili solo con `import.meta.env.DEV` e caricate con un import dinamico dentro quel controllo, così restano fuori dal bundle di produzione (verificato in CI, §11):
 
 - form **"Aggiungi da URL"** (con conferma del feed per gli show nuovi, §4.1);
-- editor di summary / notes / tags / ospiti;
+- editor di summary / notes / tags / ospiti e relative presentazioni;
 - **"Aggiungi conversazione"** (incolla markdown; dice quanti estratti della trascrizione sono stati rimossi, §5.1);
-- **"Copia per l'agente"**: copia negli appunti lo stesso export markdown compatto di `pnpm transcript export` (§4.4), da incollare in qualsiasi agente (claude.ai, ChatGPT, …);
-- **correzione degli speaker** (scambio host/ospite; con più ospiti, nome per ogni speaker);
 - badge "nessuna trascrizione" + comando `pnpm transcribe` da copiare.
 
 Se un salvataggio è rifiutato per conflitto di versione (§5), l'editor lo segnala e propone di ricaricare senza perdere il testo scritto.
@@ -371,7 +370,7 @@ Se un salvataggio è rifiutato per conflitto di versione (§5), l'editor lo segn
 
 - **Hono** su Node, solo in sviluppo, mai deployato.
 - Montato dentro il server di sviluppo di Vite con `@hono/vite-dev-server`: `pnpm dev` è solo `vite`, un processo, nessun proxy.
-- Endpoint sottili sopra `core`: aggiunta episodio, salvataggio appunti (con l'`updatedAt` atteso), aggiunta conversazione, correzione speaker, lettura trascrizione locale (per "Copia per l'agente").
+- Endpoint sottili sopra `core`: aggiunta episodio, salvataggio appunti (con l'`updatedAt` atteso), aggiunta conversazione, correzione speaker, esportazione della trascrizione locale.
 - Sicurezza (il server scrive file che finiscono in un repo pubblico):
   - in ascolto solo su `localhost` (default di Vite; non usare `--host`);
   - le richieste in scrittura devono avere `Content-Type: application/json` e un `Origin` uguale a quello del server di sviluppo: così un sito qualsiasi aperto nel browser non può mandare POST a localhost;

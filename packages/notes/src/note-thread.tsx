@@ -1,4 +1,4 @@
-import { ArrowRightIcon, MessageSquareTextIcon, PinIcon } from "lucide-react";
+import { ArrowRightIcon, MessageSquareTextIcon, NotebookPenIcon, PinIcon } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { SearchField, cn } from "@ehub/ui";
@@ -226,29 +226,43 @@ export function NoteThread({
 export function NotesJumpLink({
   item,
   store = notesStore,
+  iconOnly = false,
 }: {
   item: NoteItemRef;
   store?: NotesStore;
+  iconOnly?: boolean;
 }) {
   const notes = useItemNotes(item, store);
   const meta = useNotesMeta(store);
   const pinned = notes.filter((n) => n.pinned).length;
   if (meta.readOnly && notes.length === 0) return null;
+  const label = notes.length === 0 ? "Aggiungi una nota" : notesCount(notes.length);
+  const iconLabel =
+    pinned > 0 ? `${label}, ${pinned === 1 ? "1 fissata" : `${pinned} fissate`}` : label;
   return (
     <a
       href={`#${NOTES_SECTION_ID}`}
       data-module="notes"
+      aria-label={iconOnly ? iconLabel : undefined}
+      title={iconOnly ? iconLabel : undefined}
       onClick={(event) => {
         event.preventDefault();
         const section = document.getElementById(NOTES_SECTION_ID);
         section?.scrollIntoView({ behavior: "smooth", block: "start" });
         section?.querySelector("textarea")?.focus({ preventScroll: true });
       }}
-      className="inline-flex h-9 items-center gap-1.5 rounded-full border border-brand/30 bg-brand-soft px-3.5 text-sm font-medium text-brand outline-none transition-colors hover:border-brand/60 focus-visible:ring-3 focus-visible:ring-ring/40"
+      className={cn(
+        "inline-flex items-center border border-brand/30 bg-brand-soft text-sm font-medium text-brand outline-none transition-colors hover:border-brand/60 focus-visible:ring-3 focus-visible:ring-ring/40",
+        iconOnly ? "size-9 justify-center rounded-md" : "h-9 gap-1.5 rounded-full px-3.5",
+      )}
     >
-      <MessageSquareTextIcon aria-hidden className="size-4" />
-      {notes.length === 0 ? "Aggiungi una nota" : notesCount(notes.length)}
-      {pinned > 0 ? (
+      {iconOnly ? (
+        <NotebookPenIcon aria-hidden className="size-4" />
+      ) : (
+        <MessageSquareTextIcon aria-hidden className="size-4" />
+      )}
+      {!iconOnly && label}
+      {!iconOnly && pinned > 0 ? (
         <span className="inline-flex items-center gap-0.5 text-xs font-normal opacity-80">
           · <PinIcon aria-hidden className="size-3 fill-current" />
           {pinned}

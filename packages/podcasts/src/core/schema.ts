@@ -137,6 +137,7 @@ export const SUMMARY_MAX_POINTS = 10;
 export const SUMMARY_POINT_MAX_LENGTH = 500;
 export const NOTES_MAX_LENGTH = 200_000;
 export const GUEST_MAX_LENGTH = 200;
+export const GUEST_DESCRIPTION_MAX_LENGTH = 300;
 
 /**
  * Summary = a list of short key points (DESIGN.md §4.2 asks for 3–5; the
@@ -152,6 +153,11 @@ export const Guests = z
   .array(NonEmptyText(GUEST_MAX_LENGTH, "guest name"))
   .refine((guests) => new Set(guests).size === guests.length, "guests must not contain duplicates");
 
+const GuestDescriptions = z.record(
+  NonEmptyText(GUEST_MAX_LENGTH, "guest name"),
+  NonEmptyText(GUEST_DESCRIPTION_MAX_LENGTH, "guest description"),
+);
+
 export const Tags = z
   .array(Tag)
   .refine((tags) => new Set(tags).size === tags.length, "tags must not contain duplicates");
@@ -166,6 +172,7 @@ export const Episode = z
     title: NonEmptyText(500, "title"),
     /** May be empty (many Huberman episodes have no guest). */
     guests: Guests.default([]),
+    guestDescriptions: GuestDescriptions.optional(),
     /** Show slug (`data/shows/<show>.json`). */
     show: Slug,
     number: z.int().positive().optional(),
@@ -307,6 +314,7 @@ export const SaveEpisodeInput = z.strictObject({
     .array(NonEmptyText(GUEST_MAX_LENGTH, "guest name"))
     .transform((guests) => [...new Set(guests)])
     .optional(),
+  guestDescriptions: GuestDescriptions.optional(),
   /** Appended; any whose markdown is already stored is skipped. */
   conversations: z.array(NewConversation).optional(),
 });
@@ -314,7 +322,7 @@ export type SaveEpisodeInput = z.input<typeof SaveEpisodeInput>;
 export type ParsedSaveEpisodeInput = z.output<typeof SaveEpisodeInput>;
 
 /** Fields of the episode that `episode save` can overwrite. */
-export const SAVE_FIELDS = ["summary", "notes", "tags", "guests"] as const;
+export const SAVE_FIELDS = ["summary", "notes", "tags", "guests", "guestDescriptions"] as const;
 export type SaveField = (typeof SAVE_FIELDS)[number];
 
 // ---------------------------------------------------------------------------

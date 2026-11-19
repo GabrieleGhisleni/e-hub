@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { countTags } from "@core/tags";
-import type { Episode } from "@core/schema";
+import { GUEST_DESCRIPTION_MAX_LENGTH, type Episode } from "@core/schema";
 import { Alert, AlertDescription, AlertTitle } from "@ehub/ui/components/alert";
 import { Button } from "@ehub/ui/components/button";
 import {
@@ -38,7 +38,7 @@ export function hasPendingDraft(episode: Episode): boolean {
 }
 
 /**
- * Editor for summary / notes / tags / guests in a dialog (DESIGN.md §8.5).
+ * Editor for summary / notes / tags / guests and their descriptions in a dialog (DESIGN.md §8.5).
  * Every change is mirrored into a `sessionStorage` draft; it is cleared after
  * a successful save. A 409 (the file changed meanwhile) keeps the text and
  * offers to reload the fresh version.
@@ -84,12 +84,24 @@ export function EpisodeEditorDialog({
     setSaving(true);
     setError(undefined);
     try {
+      const guestDescriptions = Object.fromEntries(
+        state.guests.flatMap((name) => {
+          const description = Object.hasOwn(state.guestDescriptions, name)
+            ? state.guestDescriptions[name]?.trim()
+            : undefined;
+          return description ? [[name, description]] : [];
+        }),
+      );
       const result = await api.save(episode.slug, {
         expectedUpdatedAt: episode.updatedAt,
         summary: summaryPoints(state.summary),
         notes: state.notes,
         tags: state.tags,
         guests: state.guests,
+        guestDescriptions:
+          episode.guestDescriptions || Object.keys(guestDescriptions).length > 0
+            ? guestDescriptions
+            : undefined,
       });
       clearDraft(episode.slug);
       setConflict(false);
@@ -99,6 +111,7 @@ export function EpisodeEditorDialog({
         result.written ? `Campi aggiornati: ${result.changedFields.join(", ")}` : undefined,
       );
       onOpenChange(false);
+      if (result.written && import.meta.env.VITE_HOSTED === "1") window.location.reload();
     } catch (e) {
       if (e instanceof ApiError && e.isConflict) {
         setConflict(true);
@@ -206,6 +219,32 @@ export function EpisodeEditorDialog({
           <div className="space-y-1.5">
             <Label>Ospiti</Label>
             <GuestsInput values={state.guests} onChange={(guests) => update({ guests })} />
+            {state.guests.map((name, index) => {
+              const id = `edit-guest-description-${index}`;
+              return (
+                <div key={name} className="mt-3 space-y-1.5">
+                  <Label htmlFor={id}>Presentazione di {name}</Label>
+                  <Textarea
+                    id={id}
+                    rows={2}
+                    maxLength={GUEST_DESCRIPTION_MAX_LENGTH}
+                    value={
+                      Object.hasOwn(state.guestDescriptions, name)
+                        ? state.guestDescriptions[name]
+                        : ""
+                    }
+                    onChange={(event) =>
+                      update({
+                        guestDescriptions: {
+                          ...state.guestDescriptions,
+                          [name]: event.target.value,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -237,6 +276,12 @@ function SavedVersion({ values }: { values: EditorValues }) {
           ["Appunti", values.notes],
           ["Tag", values.tags.join(", ")],
           ["Ospiti", values.guests.join(", ")],
+          [
+            "Presentazioni degli ospiti",
+            Object.entries(values.guestDescriptions)
+              .map(([name, description]) => `${name} — ${description}`)
+              .join("\n"),
+          ],
         ] as const
       ).map(([label, text]) => (
         <div key={label}>

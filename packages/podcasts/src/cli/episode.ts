@@ -17,7 +17,7 @@ import { ADD_USAGE, runAdd as runAddCommand, terminalAddIo } from "./episode-add
 
 const USAGE = `Usage:
   pnpm episode save <slug> --input <file|-> [--expected-updated-at <ts>] [--json]
-      Apply summary/notes/tags/guests/conversations from a JSON file (- = stdin).
+      Apply summary/notes/tags/guests/guestDescriptions/conversations from a JSON file (- = stdin).
       Present fields overwrite, absent ones stay unchanged; conversations are appended (deduplicated).
 ${ADD_USAGE}`;
 

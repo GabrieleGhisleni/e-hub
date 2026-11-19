@@ -103,7 +103,6 @@ export function HomePage() {
           ? "Il catalogo è ancora vuoto."
           : `${plural(total, "episodio", "episodi")} da ${plural(usedShows, "show", "show")}, con sintesi, appunti e conversazioni.`
       }
-      actions={<DevSlot name="header-actions" />}
     />
   );
 
@@ -151,9 +150,6 @@ export function HomePage() {
                 placeholder="Cerca per titolo, ospite, tag, appunti…"
               />
             }
-            actions={
-              <DevSlot name="home-toolbar" episodes={catalog.episodes} shows={catalog.shows} />
-            }
           />
 
           <ActiveFilters
@@ -165,6 +161,10 @@ export function HomePage() {
             chips={chips}
             onClear={clearAll}
           />
+
+          <div className="mb-8 flex items-center justify-end empty:hidden">
+            <DevSlot name="home-toolbar" />
+          </div>
 
           <div className="max-w-4xl">
             {result.episodes.length === 0 ? (
@@ -267,7 +267,6 @@ function NoResults({ query, onClear }: { query: string; onClear: () => void }) {
 }
 
 function EmptyCatalog() {
-  const { catalog } = useSiteData();
   if (!import.meta.env.DEV) {
     return (
       <StateMessage icon={AudioLines} title="Ancora nessun episodio">
@@ -283,7 +282,7 @@ function EmptyCatalog() {
         pnpm episode add &lt;url&gt;
       </code>
       <div className="mt-6 empty:hidden">
-        <DevSlot name="home-empty" shows={catalog.shows} />
+        <DevSlot name="home-empty" />
       </div>
     </StateMessage>
   );

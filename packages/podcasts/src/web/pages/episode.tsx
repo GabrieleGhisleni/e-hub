@@ -12,6 +12,7 @@ import {
 import type { Episode, Show } from "@core/schema";
 import { extractYoutubeId } from "@core/urls";
 import { ConversationsSection } from "@podcasts/components/conversations";
+import { EpisodeGuests } from "@podcasts/components/episode-guests";
 import { EpisodeImage } from "@podcasts/components/episode-image";
 import { Markdown } from "@podcasts/components/lazy-markdown";
 import { useDocumentTitle } from "@podcasts/components/site-layout";
@@ -54,14 +55,6 @@ const SECTION_HEADING =
 const linkToFilters = (filters: Partial<typeof EMPTY_FILTERS>) =>
   homePath(filtersToSearch({ ...EMPTY_FILTERS, ...filters }));
 
-function hostname(url: string): string | undefined {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return undefined;
-  }
-}
-
 function EpisodePage({ episode, show }: { episode: Episode; show: Show | undefined }) {
   useDocumentTitle(episode.title);
   const videoId = timestampVideoId(episode);
@@ -83,10 +76,7 @@ function EpisodePage({ episode, show }: { episode: Episode; show: Show | undefin
 
   return (
     <article className="pt-6 sm:pt-10">
-      <div className="flex items-center justify-between gap-3">
-        <BackLink />
-        <DevSlot name="header-actions" />
-      </div>
+      <BackLink />
 
       <header className="mt-6">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
@@ -142,26 +132,39 @@ function EpisodePage({ episode, show }: { episode: Episode; show: Show | undefin
           </DevSlot>
         </ul>
 
-        <div className="mt-6 flex flex-wrap items-center gap-2">
+        <div
+          className="mt-6 flex flex-wrap items-center gap-2"
+          role="group"
+          aria-label="Azioni per l’episodio"
+        >
           {watchUrl && (
-            <Button asChild>
-              <a href={watchUrl} target="_blank" rel="noopener noreferrer">
-                <CirclePlay aria-hidden /> Guarda su YouTube
+            <Button asChild size="icon">
+              <a
+                href={watchUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Guarda su YouTube"
+                title="Guarda su YouTube"
+              >
+                <CirclePlay aria-hidden />
               </a>
             </Button>
           )}
           {!originalIsVideo && (
-            <Button asChild variant={watchUrl ? "outline" : "default"}>
-              <a href={episode.url} target="_blank" rel="noopener noreferrer">
-                Episodio originale
-                {hostname(episode.url) && (
-                  <span className="font-normal opacity-60">{hostname(episode.url)}</span>
-                )}
+            <Button asChild size="icon" variant={watchUrl ? "outline" : "default"}>
+              <a
+                href={episode.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Episodio originale"
+                title="Episodio originale"
+              >
                 <ArrowUpRight aria-hidden />
               </a>
             </Button>
           )}
-          <NotesJumpLink item={noteItem} />
+          <EpisodeGuests episode={episode} />
+          <NotesJumpLink item={noteItem} iconOnly />
           <DevSlot name="episode-actions" episode={episode} show={show} />
           <DevSlot name="episode-chat" episode={episode} show={show} />
         </div>
