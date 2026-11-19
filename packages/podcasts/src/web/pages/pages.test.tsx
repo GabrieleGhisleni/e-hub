@@ -22,7 +22,8 @@ const episodes = [
     slug: "alpha-sleep",
     title: "Master Your Sleep",
     show: "alpha",
-    guests: ["Matt Walker"],
+    guests: ["Matt Walker", "Alex Rossi"],
+    guestDescriptions: { "Matt Walker": "Ricercatore che studia il sonno." },
     youtubeId: "abcdefghijk",
     transcriptSource: "lex-official",
     transcriptTimebase: "youtube",
@@ -98,6 +99,7 @@ describe("home", () => {
       "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg",
     );
     await waitFor(() => expect(document.documentElement.dataset.devFeatures).toBeDefined());
+    expect(await screen.findByRole("button", { name: "Aggiungi URL" })).toBeVisible();
   });
 
   it("applies filters from the URL and offers to clear them", () => {
@@ -164,6 +166,25 @@ describe("episode page", () => {
       "https://www.youtube.com/watch?v=abcdefghijk&t=3723s",
     );
     expect(document.title).toBe("Master Your Sleep · e-podcasts");
+  });
+
+  it("opens and closes the guest dialog, with a description where available", async () => {
+    renderAt("/episode/alpha-sleep/");
+    const trigger = screen.getByRole("button", { name: /Ospiti dell.episodio/ });
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: /Ospiti dell.episodio/ });
+    expect(within(dialog).getByText("Ricercatore che studia il sonno.")).toBeVisible();
+    expect(within(dialog).getByText("Alex Rossi")).toBeVisible();
+    expect(within(dialog).getByText("Una presentazione non è ancora disponibile.")).toBeVisible();
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+  });
+
+  it("explains when the catalog lists no guests", () => {
+    renderAt("/episode/beta-ai/");
+    fireEvent.click(screen.getByRole("button", { name: /Ospiti dell.episodio/ }));
+    expect(screen.getByText("Il catalogo non indica ospiti per questo episodio.")).toBeVisible();
   });
 
   it("loads conversations only when the section is opened", async () => {

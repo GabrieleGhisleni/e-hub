@@ -4,13 +4,16 @@
   "guests": [
     "Robert Greene"
   ],
+  "guestDescriptions": {
+    "Robert Greene": "Scrittore e saggista, autore di The 48 Laws of Power e Mastery. Nei suoi libri esplora il potere, la natura umana e come si sviluppa la padronanza di un mestiere."
+  },
   "show": "huberman-lab",
   "number": 305,
   "url": "https://www.hubermanlab.com/episode/access-the-sublime-and-live-your-best-life-robert-greene",
   "youtubeId": "y-fRFiTrrg4",
   "publishedAt": "2026-11-02",
   "addedAt": "2026-11-10T06:48:01.069Z",
-  "updatedAt": "2026-11-10T17:20:52.648Z",
+  "updatedAt": "2026-11-19T15:54:36.945Z",
   "transcriptSource": "patrykwajs-wiki",
   "transcriptTimebase": "youtube",
   "tags": [],

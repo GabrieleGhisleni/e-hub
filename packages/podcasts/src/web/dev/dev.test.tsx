@@ -9,7 +9,6 @@ import { conversationOutcome } from "./conversation-dialog";
 import { clearDraft, loadDraft, saveDraft, startingState, valuesOf } from "./drafts";
 import { EpisodeEditorDialog } from "./episode-editor";
 import { api } from "./api";
-import { changedMapping } from "./speakers-dialog";
 
 afterEach(() => {
   cleanup();
@@ -90,15 +89,6 @@ describe("helpers", () => {
     );
     expect(conversationOutcome({ added: 0, skipped: 1, excerptsRemoved: 0 }).kind).toBe("info");
   });
-
-  it("builds the speaker mapping from changed names only (swap included)", () => {
-    const speakers = [
-      { speaker: "A", segments: 1, firstStart: 0 },
-      { speaker: "B", segments: 1, firstStart: 1 },
-    ];
-    expect(changedMapping(speakers, { A: "B", B: "A" })).toEqual({ A: "B", B: "A" });
-    expect(changedMapping(speakers, { A: "A", B: " Bob " })).toEqual({ B: "Bob" });
-  });
 });
 
 describe("EpisodeEditorDialog", () => {
@@ -158,6 +148,29 @@ describe("EpisodeEditorDialog", () => {
     expect(screen.getByLabelText(/Appunti/)).toHaveValue("typed while away");
     expect(screen.getByLabelText(/In breve/)).toHaveValue("Changed elsewhere");
     expect(screen.getByText("Bozza basata su una versione precedente")).toBeInTheDocument();
+  });
+
+  it("keeps guest descriptions in the draft and submits them with the episode", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        written: true,
+        updatedAt: "2026-03-01",
+        changedFields: ["guestDescriptions"],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    renderEditor();
+    fireEvent.change(screen.getByLabelText("Presentazione di Ada"), {
+      target: { value: " Studia informatica. " },
+    });
+    expect(loadDraft("alpha-sleep")?.guestDescriptions).toEqual({ Ada: " Studia informatica. " });
+
+    fireEvent.click(screen.getByRole("button", { name: "Salva" }));
+    await waitFor(() => expect(loadDraft("alpha-sleep")).toBeUndefined());
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(init.body as string).guestDescriptions).toEqual({
+      Ada: "Studia informatica.",
+    });
   });
 
   it("clears the draft after a successful save", async () => {

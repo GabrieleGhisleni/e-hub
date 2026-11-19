@@ -93,7 +93,9 @@ describe("GET /api/podcasts/tags", () => {
 describe("slugs", () => {
   it("rejects invalid slugs before touching the filesystem", async () => {
     for (const slug of ["Bad_Slug", "a%2F..%2Fb", "UPPER"]) {
-      const res = await request("PUT", `/api/podcasts/episodes/${slug}`, { expectedUpdatedAt: "x" });
+      const res = await request("PUT", `/api/podcasts/episodes/${slug}`, {
+        expectedUpdatedAt: "x",
+      });
       expect(res.status, slug).toBe(400);
       expect(await readJson(res)).toMatchObject({ code: "bad-request" });
     }
@@ -128,6 +130,25 @@ describe("PUT /api/podcasts/episodes/:slug", () => {
     expect(stored.tags).toEqual(["sleep", "new-tag"]);
     expect(body.updatedAt).toBe(stored.updatedAt);
     expect(stored.summary).toEqual(["A first point."]); // absent = unchanged
+  });
+
+  it("saves and clears guest descriptions", async () => {
+    const episode = await seedEpisode();
+    const description = "Guest Person studies sleep.";
+    const res = await request("PUT", `/api/podcasts/episodes/${SLUG}`, {
+      expectedUpdatedAt: episode.updatedAt,
+      guestDescriptions: { "Guest Person": description },
+    });
+    expect(res.status).toBe(200);
+    const stored = await readEpisode(SLUG);
+    expect(stored.guestDescriptions).toEqual({ "Guest Person": description });
+
+    const cleared = await request("PUT", `/api/podcasts/episodes/${SLUG}`, {
+      expectedUpdatedAt: stored.updatedAt,
+      guestDescriptions: {},
+    });
+    expect(cleared.status).toBe(200);
+    expect((await readEpisode(SLUG)).guestDescriptions).toEqual({});
   });
 
   it("409 on a stale expectedUpdatedAt, nothing written", async () => {
@@ -297,7 +318,9 @@ describe("add episode", () => {
   const url = `https://www.youtube.com/watch?v=${GENERIC_ID}`;
 
   it("previews, asks for the feed decision, then adds", async () => {
-    const preview = await readJson(await request("POST", "/api/podcasts/episodes/preview", { url }));
+    const preview = await readJson(
+      await request("POST", "/api/podcasts/episodes/preview", { url }),
+    );
     expect(preview).toMatchObject({
       status: "ready",
       show: { status: "new", needsFeedDecision: true },

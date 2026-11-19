@@ -807,16 +807,24 @@ export interface ChatButtonProps extends Omit<ChatPanelProps, "open" | "onOpenCh
   /** Disables the button; `disabledReason` shows as a tooltip. */
   disabled?: boolean;
   disabledReason?: string;
+  iconOnly?: boolean;
 }
 
 /** "Chatta" button that owns the open state and renders the panel. Clicking it again closes the panel. */
-export function ChatButton({ disabled = false, disabledReason, ...panel }: ChatButtonProps) {
+export function ChatButton({
+  disabled = false,
+  disabledReason,
+  iconOnly = false,
+  ...panel
+}: ChatButtonProps) {
   const [open, setOpen] = useState(false);
+  const size = iconOnly ? "icon" : "default";
+  const label = iconOnly ? "Chatta" : undefined;
 
   if (disabled) {
     const button = (
-      <Button variant="outline" disabled>
-        <MessageSquareText aria-hidden /> Chatta
+      <Button variant="outline" size={size} aria-label={label} disabled>
+        <MessageSquareText aria-hidden /> {!iconOnly && "Chatta"}
       </Button>
     );
     if (!disabledReason) return button;
@@ -838,11 +846,14 @@ export function ChatButton({ disabled = false, disabledReason, ...panel }: ChatB
     <>
       <Button
         variant={open ? "secondary" : "outline"}
+        size={size}
+        aria-label={label}
+        title={label}
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="dialog"
         aria-expanded={open}
       >
-        <MessageSquareText aria-hidden /> Chatta
+        <MessageSquareText aria-hidden /> {!iconOnly && "Chatta"}
       </Button>
       <ChatPanel {...panel} open={open} onOpenChange={setOpen} />
     </>

@@ -4,13 +4,16 @@
   "guests": [
     "Joe Liemandt"
   ],
+  "guestDescriptions": {
+    "Joe Liemandt": "Imprenditore tecnologico e dirigente della Alpha School, una scuola che usa strumenti di intelligenza artificiale per adattare lo studio al ritmo di ciascun alunno."
+  },
   "show": "huberman-lab",
   "number": 296,
   "url": "https://www.hubermanlab.com/episode/how-to-accelerate-learning-and-improve-education-joe-liemandt",
   "youtubeId": "Uzoe1RYVjiA",
   "publishedAt": "2026-08-31",
   "addedAt": "2026-11-16T20:43:57.245Z",
-  "updatedAt": "2026-11-16T21:13:47.414Z",
+  "updatedAt": "2026-11-19T15:54:37.332Z",
   "transcriptSource": "patrykwajs-wiki",
   "transcriptTimebase": "youtube",
   "tags": [],

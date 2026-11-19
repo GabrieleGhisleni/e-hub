@@ -37,6 +37,7 @@ const SaveBody = z.strictObject({
   notes: z.string().optional(),
   tags: z.array(z.string()).optional(),
   guests: z.array(z.string()).optional(),
+  guestDescriptions: z.record(z.string(), z.string()).optional(),
 });
 const ConversationBody = z.strictObject({
   expectedUpdatedAt: z.string().min(1).optional(),
@@ -133,7 +134,7 @@ export function createApp(
     return c.json(await addEpisode(url, { feed }, ingest), 201);
   });
 
-  // Save summary / notes / tags / guests (all optional; absent = unchanged).
+  // Save editable episode fields (all optional; absent = unchanged).
   app.put("/api/podcasts/episodes/:slug", async (c) => {
     const slug = c.req.param("slug");
     const { expectedUpdatedAt, ...fields } = await readBody(c, SaveBody);

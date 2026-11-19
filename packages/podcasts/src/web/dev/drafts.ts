@@ -11,6 +11,7 @@ export interface EditorValues {
   notes: string;
   tags: string[];
   guests: string[];
+  guestDescriptions: Record<string, string>;
 }
 
 export interface EditorDraft extends EditorValues {
@@ -35,7 +36,11 @@ export function loadDraft(slug: string): EditorDraft | undefined {
   ) {
     return undefined;
   }
-  return draft as EditorDraft;
+  return {
+    ...(draft as EditorDraft),
+    guestDescriptions: draft.guestDescriptions ?? {},
+    base: { ...draft.base, guestDescriptions: draft.base.guestDescriptions ?? {} },
+  };
 }
 
 export function saveDraft(slug: string, draft: EditorDraft): void {
@@ -51,7 +56,11 @@ export function sameValues(a: EditorValues, b: EditorValues): boolean {
     a.summary === b.summary &&
     a.notes === b.notes &&
     a.tags.join("\n") === b.tags.join("\n") &&
-    a.guests.join("\n") === b.guests.join("\n")
+    a.guests.join("\n") === b.guests.join("\n") &&
+    Object.keys(a.guestDescriptions).length === Object.keys(b.guestDescriptions).length &&
+    Object.entries(a.guestDescriptions).every(
+      ([name, description]) => b.guestDescriptions[name] === description,
+    )
   );
 }
 
@@ -60,12 +69,14 @@ export function valuesOf(episode: {
   notes: string;
   tags: readonly string[];
   guests: readonly string[];
+  guestDescriptions?: Record<string, string>;
 }): EditorValues {
   return {
     summary: episode.summary.join("\n"),
     notes: episode.notes,
     tags: [...episode.tags],
     guests: [...episode.guests],
+    guestDescriptions: episode.guestDescriptions ?? {},
   };
 }
 
@@ -90,7 +101,7 @@ export function startingState(
   const saved = valuesOf(episode);
   if (!draft) return { ...saved, baseUpdatedAt: episode.updatedAt, base: saved };
   if (draft.baseUpdatedAt === episode.updatedAt) return draft;
-  const fields = ["summary", "notes", "tags", "guests"] as const;
+  const fields = ["summary", "notes", "tags", "guests", "guestDescriptions"] as const;
   const merged = { ...saved, baseUpdatedAt: draft.baseUpdatedAt, base: { ...draft.base } };
   for (const field of fields) {
     const touched = !sameValues(

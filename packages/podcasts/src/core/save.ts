@@ -95,16 +95,19 @@ function guardFields(index: TranscriptIndex, input: ParsedSaveEpisodeInput): str
   };
   input.summary?.forEach((point, i) => check(`summary[${i}]`, point));
   if (input.notes !== undefined) check("notes", input.notes);
+  for (const [guest, description] of Object.entries(input.guestDescriptions ?? {})) {
+    check(`guestDescriptions.${guest}`, description);
+  }
   return problems;
 }
 
 /**
  * Applies `input` to episode `slug`:
- * - summary / notes / tags / guests present in the input overwrite; absent ones stay unchanged;
+ * - summary / notes / tags / guests / guest descriptions present in the input overwrite; absent ones stay unchanged;
  * - conversations are appended, skipping any whose markdown hash is already stored
  *   (so re-running the same input adds nothing); transcript excerpts in them are
  *   replaced by `[estratto della trascrizione rimosso]`;
- * - transcript excerpts (≥ 20 consecutive words) in summary/notes → `TranscriptGuardError`;
+ * - transcript excerpts (≥ 20 consecutive words) in summary/notes/guest descriptions → `TranscriptGuardError`;
  * - without a local transcript, a conversation over 200 KB → `TranscriptGuardError`;
  * - `expectedUpdatedAt` different from the file's → `ConflictError`;
  * - invalid input → `ValidationError`; unknown episode → `NotFoundError`.
@@ -135,7 +138,7 @@ export async function saveEpisode(
       const problems = guardFields(index, parsed);
       if (problems.length > 0) {
         throw new TranscriptGuardError(
-          `summary/notes contain transcript excerpts (${TRANSCRIPT_EXCERPT_MIN_WORDS}+ consecutive words): paraphrase them or keep quotes under ${TRANSCRIPT_EXCERPT_MIN_WORDS} words`,
+          `episode content contains transcript excerpts (${TRANSCRIPT_EXCERPT_MIN_WORDS}+ consecutive words): paraphrase them or keep quotes under ${TRANSCRIPT_EXCERPT_MIN_WORDS} words`,
           problems,
         );
       }

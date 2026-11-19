@@ -44,8 +44,13 @@ export function DeleteEpisode({ episode }: { episode: Episode }) {
   return (
     <AlertDialog open={open} onOpenChange={(next) => !busy && setOpen(next)}>
       <AlertDialogTrigger asChild>
-        <Button variant="outline">
-          <Trash2 aria-hidden /> Rimuovi
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Rimuovi episodio"
+          title="Rimuovi episodio"
+        >
+          <Trash2 aria-hidden />
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>

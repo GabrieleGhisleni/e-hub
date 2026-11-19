@@ -18,15 +18,13 @@ import type { Conversation, Episode, Show } from "@core/schema";
 
 /** Props each slot receives (besides `children`). */
 export interface DevSlotPropsMap {
-  /** Site header, right side, on every page (e.g. a global "Aggiungi" button). */
-  "header-actions": Record<never, never>;
   /** Rendered once at the end of the layout, on every page (e.g. sonner's `<Toaster />`, global dev UI). */
   layout: Record<never, never>;
-  /** Home, end of the filter bar (e.g. the "Aggiungi da URL" button). */
-  "home-toolbar": { episodes: readonly Episode[]; shows: readonly Show[] };
+  /** Home, administration toolbar below the filters. */
+  "home-toolbar": Record<never, never>;
   /** Home, inside the "no episodes yet" empty state. */
-  "home-empty": { shows: readonly Show[] };
-  /** Detail header, after the external link buttons (e.g. "Copia per l'agente"). */
+  "home-empty": Record<never, never>;
+  /** Detail header, after the external link buttons. */
   "episode-actions": { episode: Episode; show: Show | undefined };
   /** Detail header, next to the actions. Opens the chat about the episode (`@ehub/chat`). */
   "episode-chat": { episode: Episode; show: Show | undefined };

@@ -32,6 +32,7 @@ export function EpisodeChat({ episode, show }: { episode: Episode; show: Show | 
   const hasTranscript = episode.transcriptSource !== undefined;
   return (
     <ChatButton
+      iconOnly
       source={{ kind: "episode", id: episode.slug }}
       title={episode.title}
       subtitle={show?.name ?? episode.show}

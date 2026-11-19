@@ -45,17 +45,6 @@ export async function apiJson<T>(method: string, path: string, body?: unknown): 
   return (await response.json()) as T;
 }
 
-export async function apiText(path: string): Promise<string> {
-  let response: Response;
-  try {
-    response = await fetch(path);
-  } catch {
-    throw new ApiError(0, { error: "Server locale non raggiungibile.", code: "offline" });
-  }
-  if (!response.ok) throw await parseError(response);
-  return response.text();
-}
-
 /** Message for a failed call, details included (one per line). */
 export function describeError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -119,19 +108,6 @@ export type AddResult =
       warnings: string[];
     };
 
-export interface SpeakerInfo {
-  speaker: string;
-  segments: number;
-  firstStart: number;
-}
-
-export interface SpeakersResponse {
-  available: boolean;
-  source?: string;
-  timebase?: string;
-  speakers: SpeakerInfo[];
-}
-
 export interface SaveResponse {
   written: boolean;
   updatedAt: string;
@@ -162,6 +138,7 @@ export const api = {
       notes?: string;
       tags?: string[];
       guests?: string[];
+      guestDescriptions?: Record<string, string>;
     },
   ) => apiJson<SaveResponse>("PUT", episodeBase(slug), body),
   addConversation: (
@@ -171,9 +148,4 @@ export const api = {
   remove: (slug: string) =>
     // The write guard requires a JSON content type, which `apiJson` only sends with a body.
     apiJson<{ slug: string; title: string }>("DELETE", episodeBase(slug), {}),
-  speakers: (slug: string) =>
-    apiJson<SpeakersResponse>("GET", `${episodeBase(slug)}/transcript/speakers`),
-  renameSpeakers: (slug: string, mapping: Record<string, string>) =>
-    apiJson<SpeakersResponse>("POST", `${episodeBase(slug)}/transcript/speakers`, { mapping }),
-  exportMarkdown: (slug: string) => apiText(`${episodeBase(slug)}/transcript.md`),
 };
