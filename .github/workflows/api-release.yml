@@ -1,0 +1,50 @@
+name: API release for the Pi
+
+# Builds the API bundle (with sharp for linux-arm64) and publishes it as the rolling release "api-latest".
+# The Pi pulls it by itself (deploy/pi/ehub-update.sh, every 2 minutes): no SSH, no secrets, nothing exposed.
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/api/**
+      - packages/**
+      - deploy/pi/**
+      - pnpm-lock.yaml
+      - package.json
+      - .github/workflows/api-release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: api-release
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: deploy/pi/stage.sh "$RUNNER_TEMP/stage"
+      - name: Pack
+        run: |
+          tar -czf "$RUNNER_TEMP/ehub-api.tar.gz" -C "$RUNNER_TEMP/stage" .
+          echo "$GITHUB_SHA $(sha256sum "$RUNNER_TEMP/ehub-api.tar.gz" | cut -d' ' -f1)" > "$RUNNER_TEMP/version.txt"
+          cat "$RUNNER_TEMP/version.txt"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view api-latest >/dev/null 2>&1 || gh release create api-latest --target "$GITHUB_SHA" --title "API (latest)" --notes "Rolling build of the API for the Pi. Installed by deploy/pi/ehub-update.sh." --latest=false
+          # Tarball first, version.txt last: the Pi only moves when version.txt changes.
+          gh release upload api-latest "$RUNNER_TEMP/ehub-api.tar.gz" --clobber
+          gh release upload api-latest "$RUNNER_TEMP/version.txt" --clobber

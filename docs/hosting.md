@@ -139,7 +139,18 @@ Il JSON è salvato come testo: l'ordine delle chiavi si conserva. Il test di `Tu
 2. `/etc/ehub/env` da `deploy/pi/env.example` (permessi 600): qui vivono tutte le chiavi. La chiave SSH del Kobo va in `~ehub/.ssh/` con `known_hosts` per l'alias `ehub-kobo`.
 3. Programmi: Node 22+, `kepubify` (build ARM), `ffmpeg`.
 4. Dal laptop: `deploy/pi/deploy.sh ggabry@<pi>` costruisce il bundle (`pnpm --filter @ehub/api bundle`), scarica `sharp` per linux-arm64 e copia tutto in `/opt/ehub`, poi riavvia `ehub-api`. `sudo systemctl enable --now ehub-api` la prima volta.
-5. Tunnel (da decidere): l'API ascolta su `127.0.0.1:8788`; `cloudflared` o Tailscale Funnel puntano lì. Il dominio e l'origine di Pages stanno in `CORS_ORIGINS`, nessun valore è scritto nel codice.
+5. Aggiornamenti automatici: il primo `deploy.sh` installa e abilita `ehub-update.timer` (vedi sotto). Da lì in poi non serve più.
+6. Tunnel (da decidere): l'API ascolta su `127.0.0.1:8788`; `cloudflared` o Tailscale Funnel puntano lì. Il dominio e l'origine di Pages stanno in `CORS_ORIGINS`, nessun valore è scritto nel codice.
+
+### Aggiornamenti: il Pi tira da GitHub
+
+Ogni push su `main` che tocca l'API (`apps/api`, `packages/`, `deploy/pi/`, lockfile) fa partire `.github/workflows/api-release.yml`. L'azione costruisce il pacchetto con `deploy/pi/stage.sh`, lo stesso che usa `deploy.sh` (bundle, `sharp` linux-arm64, unità systemd, updater). Poi lo pubblica nella release `api-latest`, che si sovrascrive a ogni push, come `ehub-api.tar.gz` più `version.txt` (commit e sha256).
+
+Sul Pi `ehub-update.timer` lancia `/usr/local/bin/ehub-update` ogni 2 minuti, con priorità bassa e `MemoryMax=150M`. Se `version.txt` non è cambiato rispetto a `/opt/ehub/VERSION`, lo script finisce lì. Se è cambiato, scarica e verifica il checksum, scambia `/opt/ehub` con la nuova cartella (la vecchia resta in `/opt/ehub.prev`), copia le unità e riavvia `ehub-api`. Infine aspetta `/api/health` fino a 60 s. Se l'API non risponde, rimette la versione precedente e annota quella rotta in `/var/lib/ehub-update/failed`, così non la riprova. Il Pi non espone nulla e GitHub non ha chiavi né segreti.
+
+- Log: `journalctl -u ehub-update -n 50`. Versione in uso: `cat /opt/ehub/VERSION`.
+- Pausa: `sudo touch /etc/ehub/no-auto-update` (per tenere una build fatta a mano con `deploy.sh`, che altrimenti viene sostituita dalla release entro un paio di minuti). Ripresa: si cancella il file.
+- Forzare una nuova build senza modifiche: «Run workflow» su `API release for the Pi` in GitHub Actions.
 
 Variabili di login sul Pi: `GOOGLE_CLIENT_ID`, `SESSION_SECRET`, `ALLOWED_EMAILS` (obbligatoria), `KOBO_OWNER_EMAIL`. Nella console Google il client OAuth (tipo «Web») ha come «Origini JavaScript autorizzate» l'origine di Pages; non servono URI di reindirizzamento né il segreto del client.
 

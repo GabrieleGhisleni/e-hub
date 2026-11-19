@@ -1,0 +1,13 @@
+[Unit]
+Description=e-hub: install the latest API release from GitHub, if there is a new one
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ehub-update
+# The Pi has little free RAM and the API runs next to it: stay out of its way.
+Nice=19
+IOSchedulingClass=idle
+MemoryMax=150M
+TimeoutStartSec=10min

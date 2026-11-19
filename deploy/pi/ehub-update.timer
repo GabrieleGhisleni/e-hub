@@ -1,0 +1,10 @@
+[Unit]
+Description=e-hub: check GitHub for a new API release every 2 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=2min
+RandomizedDelaySec=15s
+
+[Install]
+WantedBy=timers.target
