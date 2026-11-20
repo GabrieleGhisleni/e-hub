@@ -1,4 +1,6 @@
-/** Error type of the admin API client and its Italian messages (pure, unit-tested). */
+/// <reference types="vite/client" />
+
+/** Error type of the admin API client and its Italian messages. */
 import {
   ReconcileReportSchema,
   type ApiErrorCode,
@@ -37,7 +39,9 @@ export function isServerDownStatus(status: number): boolean {
 
 const HINTS: Partial<Record<string, string>> = {
   network:
-    "Impossibile raggiungere il server locale. Controlla che sia avviato (pnpm dev o pnpm server).",
+    import.meta.env?.VITE_HOSTED === "1"
+      ? "Impossibile comunicare con il server di e-hub. Riprova tra poco."
+      : "Impossibile raggiungere il server locale. Controlla che sia avviato (pnpm dev o pnpm server).",
   "forbidden-host": "Il server locale ha rifiutato l’indirizzo da cui stai aprendo l’interfaccia.",
   "forbidden-origin":
     "Il server locale ha rifiutato l’origine della pagina: aggiungila a server.allowedOrigins in elib.config.json.",

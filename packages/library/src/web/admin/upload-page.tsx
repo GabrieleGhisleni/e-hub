@@ -30,6 +30,11 @@ import { showReport } from "./report-store";
 import { useAdminIndexData } from "./use-admin-data";
 import { libraryPath } from "@library/lib/paths";
 
+const MIB = 1024 * 1024;
+// Leave room for the multipart envelope under Cloudflare's hosted request limit.
+const EPUB_MAX_BYTES = import.meta.env.VITE_HOSTED === "1" ? 99 * MIB : API_LIMITS.epubMaxBytes;
+const EPUB_MAX_MIB = EPUB_MAX_BYTES / MIB;
+
 type Stage =
   | { kind: "pick"; error?: string }
   | { kind: "analyzing"; fileName: string }
@@ -68,8 +73,7 @@ function Dropzone({ onFile, error }: { onFile: (file: File) => void; error?: str
         <FileUpIcon aria-hidden className="size-9 text-brand" />
         <p className="font-serif text-xl">Trascina qui un file EPUB</p>
         <p className="text-sm text-muted-foreground">
-          oppure scegline uno dal computer (fino a{" "}
-          {Math.round(API_LIMITS.epubMaxBytes / 1024 / 1024)} MB)
+          oppure scegline uno dal computer (fino a {EPUB_MAX_MIB} MiB)
         </p>
         <Button onClick={() => input.current?.click()}>Scegli un file…</Button>
         <input
@@ -396,8 +400,8 @@ export function UploadPage() {
       setStage({ kind: "pick", error: "Il file deve avere estensione .epub." });
       return;
     }
-    if (file.size > API_LIMITS.epubMaxBytes) {
-      setStage({ kind: "pick", error: "Il file supera il limite di 200 MB." });
+    if (file.size > EPUB_MAX_BYTES) {
+      setStage({ kind: "pick", error: `Il file supera il limite di ${EPUB_MAX_MIB} MiB.` });
       return;
     }
     setStage({ kind: "analyzing", fileName: file.name });
