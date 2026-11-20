@@ -89,7 +89,12 @@ const NonEmptyText = (max: number, what: string) =>
 // ---------------------------------------------------------------------------
 // Transcript enums
 
-export const TRANSCRIPT_SOURCES = ["lex-official", "patrykwajs-wiki", "whisper-local"] as const;
+export const TRANSCRIPT_SOURCES = [
+  "lex-official",
+  "patrykwajs-wiki",
+  "whisper-local",
+  "askchannel",
+] as const;
 export const TranscriptSource = z.enum(TRANSCRIPT_SOURCES);
 export type TranscriptSource = z.infer<typeof TranscriptSource>;
 
