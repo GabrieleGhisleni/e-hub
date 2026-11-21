@@ -64,6 +64,7 @@ export interface GroqDeps {
 
 interface GroqSegment {
   start: number;
+  end?: number;
   text: string;
 }
 
@@ -157,10 +158,10 @@ async function transcribePart(file: string, job: TranscriberJob, deps: GroqDeps)
       body: form,
     });
     if (response.ok) {
-      const body = (await response.json()) as { segments?: { start?: number; text?: string }[] };
+      const body = (await response.json()) as { segments?: { start?: number; end?: number; text?: string }[] };
       return (body.segments ?? [])
         .filter((s) => typeof s.start === "number" && typeof s.text === "string")
-        .map((s) => ({ start: s.start as number, text: (s.text as string).trim() }))
+        .map((s) => ({ start: s.start as number, end: s.end, text: (s.text as string).trim() }))
         .filter((s) => s.text !== "");
     }
     const retriable = response.status === 429 || response.status >= 500;
@@ -190,7 +191,7 @@ export async function runGroqTranscriber(job: TranscriberJob, deps: GroqDeps): P
 
     const cache = path.join(job.workDir, "asr");
     await mkdir(cache, { recursive: true });
-    const segments: { start: number; text: string }[] = [];
+    const segments: GroqSegment[] = [];
     let offset = 0;
     for (const [index, part] of parts.entries()) {
       const cached = path.join(cache, `${path.basename(part, ".mp3")}.json`);
@@ -203,7 +204,13 @@ export async function runGroqTranscriber(job: TranscriberJob, deps: GroqDeps): P
         result = await transcribePart(part, job, deps);
         await writeFile(cached, JSON.stringify(result));
       }
-      for (const s of result) segments.push({ start: Math.round((offset + s.start) * 100) / 100, text: s.text });
+      for (const segment of result) {
+        const start = Math.round((offset + segment.start) * 100) / 100;
+        const end = typeof segment.end === "number" && segment.end >= segment.start
+          ? Math.round((offset + segment.end) * 100) / 100
+          : undefined;
+        segments.push({ start, end, text: segment.text });
+      }
       if (index < parts.length - 1) offset += await durationOf(part, deps);
     }
     if (segments.length === 0) throw new AudioError("Groq returned no text: the audio may be silent");

@@ -12,7 +12,7 @@ Le correzioni emerse dalla review dello stesso giorno sono integrate nelle sezio
 - Catalogo dei podcast **già ascoltati**, compresi quelli ascoltati prima della nascita del progetto (import iniziale, §4.2) — inizialmente Lex Fridman Podcast e Huberman Lab, ma aperto a qualsiasi podcast/video YouTube.
 - Navigazione veloce e piacevole, con categorie (tag) e ricerca.
 - Per ogni episodio: link, appunti (summary + notes) e le conversazioni avute con un agente sull'episodio.
-- Le **trascrizioni** servono **solo in locale**, come materiale per discutere l'episodio con un agente e produrre gli appunti; non vengono pubblicate.
+- Le **trascrizioni** sono materiale privato per discutere l’episodio con un agente e produrre gli appunti. Nella modalità hosted risiedono nel database per account.
 - Flusso d'uso tipico: ascolto un episodio → lo aggiungo → passo la trascrizione a un agente e ci faccio brainstorming → l'agente produce summary/notes/tag nel formato del progetto → incollo anche la conversazione (ripulita automaticamente da eventuali estratti della trascrizione, §5.1) → tutto finisce nei JSON dell'episodio e sul sito.
 - L'agente con cui discuto può essere **qualsiasi** (claude.ai, ChatGPT, Claude Code…). Inizialmente era fuori dal progetto; poi si è deciso di includere nel repo una **skill di Claude Code** dedicata (§10), mantenendo il supporto agli altri agenti tramite copia/incolla (§8.5).
 
@@ -20,7 +20,9 @@ Le correzioni emerse dalla review dello stesso giorno sono integrate nelle sezio
 
 ## 2. Architettura
 
-### 2.1 Decisione: file JSON nel repo, scritture solo in locale
+### 2.1 Modalità statica originale e modalità hosted
+
+La modalità hosted usa l’API autenticata e Turso per catalogo, conversazioni e trascrizioni. Il flusso di aggiunta offre Groq, Whisper sul PC con upload del JSON, import AskChannel e salvataggio senza trascrizione. Vedi [hosting](../../../docs/hosting.md#trascrizioni-podcast) e [specifica](../../../docs/tasks/podcast-transcriptions.md). Le decisioni seguenti descrivono la modalità statica originale.
 
 - I dati vivono come **file JSON versionati in git**. Nessun database.
 - Le modifiche avvengono **solo in locale** (UI locale, CLI, skill di Claude Code).

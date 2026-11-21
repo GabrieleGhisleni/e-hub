@@ -1,3 +1,5 @@
+import type { TranscriptChoice } from "@core/transcript-import";
+import { TranscriptInput } from "./transcript-input";
 import { useState } from "react";
 import { Link2, Loader2, Plus } from "lucide-react";
 import { useNavigate } from "react-router";
@@ -46,9 +48,11 @@ function AddEpisodeForm({ onDone }: { onDone: () => void }) {
   const navigate = useNavigate();
   const [url, setUrl] = useState("");
   const [preview, setPreview] = useState<AddPreview>();
+  const [progress, setProgress] = useState("");
   const [busy, setBusy] = useState<"preview" | "add">();
   const [error, setError] = useState<string>();
   const [choice, setChoice] = useState<FeedChoice>();
+  const [transcript, setTranscript] = useState<TranscriptChoice | undefined>({ mode: "none" });
   const [customFeed, setCustomFeed] = useState("");
 
   const runPreview = async () => {
@@ -56,6 +60,7 @@ function AddEpisodeForm({ onDone }: { onDone: () => void }) {
     setError(undefined);
     setPreview(undefined);
     setChoice(undefined);
+    setTranscript({ mode: "none" });
     try {
       const result = await api.preview(url.trim());
       setPreview(result);
@@ -85,18 +90,22 @@ function AddEpisodeForm({ onDone }: { onDone: () => void }) {
     (choice === undefined || (choice === CUSTOM_FEED && customFeed.trim() === ""));
 
   const runAdd = async () => {
+    setProgress("");
     setBusy("add");
     setError(undefined);
     try {
-      const result = await api.add(url.trim(), feedValue());
+      const result = await api.add(url.trim(), feedValue(), transcript, setProgress);
       const slug = result.status === "created" ? result.episode.slug : result.existing.slug;
       if (result.status === "created") {
         flashAfterWrite(
           "success",
           `Episodio aggiunto: ${result.episode.title}`,
           result.transcript.status === "none"
-            ? "Nessuna trascrizione: usa «pnpm transcribe» per generarla."
-            : `Trascrizione salvata (${result.transcript.segments} segmenti).`,
+            ? "Nessuna trascrizione selezionata."
+            : `Trascrizione salvata (${result.transcript.segments} segmenti).` +
+                (import.meta.env.VITE_HOSTED === "1"
+                  ? " Disponibile nell’account anche da altri dispositivi."
+                  : ""),
         );
       } else {
         flashAfterWrite("info", "Episodio già presente: aperto quello esistente.");
@@ -147,6 +156,7 @@ function AddEpisodeForm({ onDone }: { onDone: () => void }) {
             placeholder="https://www.youtube.com/watch?v=…"
             className="pl-8"
             value={url}
+            disabled={busy !== undefined}
             onChange={(event) => {
               setUrl(event.target.value);
               setPreview(undefined);
@@ -204,8 +214,22 @@ function AddEpisodeForm({ onDone }: { onDone: () => void }) {
       )}
 
       {preview?.status === "ready" && (
+        <TranscriptInput
+          videoId={preview.youtubeId}
+          onChange={setTranscript}
+          disabled={busy !== undefined}
+          allowSkip
+        />
+      )}
+      {busy === "add" && transcript?.mode === "api" && (
+        <p role="status">{progress || "Trascrizione Groq in corso…"}</p>
+      )}
+      {preview?.status === "ready" && (
         <DialogFooter>
-          <Button onClick={() => void runAdd()} disabled={busy !== undefined || needsChoice}>
+          <Button
+            onClick={() => void runAdd()}
+            disabled={busy !== undefined || needsChoice || !transcript}
+          >
             {busy === "add" && <Loader2 className="animate-spin" aria-hidden />}
             {busy === "add" ? "Aggiungo…" : "Aggiungi episodio"}
           </Button>
@@ -228,7 +252,7 @@ function PreviewSummary({
   customFeed: string;
   onCustomFeed: (value: string) => void;
 }) {
-  const { episode, show, transcript } = preview;
+  const { episode, show } = preview;
   return (
     <div className="space-y-4 text-sm">
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
@@ -247,12 +271,6 @@ function PreviewSummary({
           {show.status === "new" && (
             <span className="ml-2 rounded-full border px-2 py-0.5 text-xs">nuovo</span>
           )}
-        </dd>
-        <dt className="text-muted-foreground">Trascrizione</dt>
-        <dd>
-          {transcript.status === "available"
-            ? `disponibile (${transcript.source})`
-            : `nessuna — ${transcript.reason}`}
         </dd>
       </dl>
 

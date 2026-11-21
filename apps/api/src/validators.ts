@@ -9,7 +9,7 @@ import {
   TopicsFileSchema,
 } from "@ehub/library/schema";
 import { NotesFile } from "@ehub/notes/schema";
-import { ConversationsFile, Episode, Show } from "@ehub/podcasts/schema";
+import { ConversationsFile, Episode, Show, Transcript } from "@ehub/podcasts/schema";
 
 export const TABLE_SCHEMAS: Record<string, ZodType> = {
   books: BookSchema,
@@ -18,6 +18,7 @@ export const TABLE_SCHEMAS: Record<string, ZodType> = {
   topics: TopicsFileSchema,
   shows: Show,
   episodes: Episode,
+  podcast_transcripts: Transcript,
   conversations: ConversationsFile,
   notes: NotesFile,
   explorations: Exploration,

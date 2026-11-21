@@ -2,7 +2,7 @@
  * Episode creation and duplicate detection (Node only). Used by ingest
  * (phase 4: `pnpm episode add`, the local "Aggiungi da URL" form).
  */
-import { rm } from "node:fs/promises";
+import { removeFile, tryFileBatch } from "@ehub/store";
 import { DuplicateEpisodeError, ValidationError } from "./errors";
 import { z } from "zod";
 import {
@@ -136,8 +136,19 @@ export async function createEpisode(
     const parsed = Episode.safeParse(candidate);
     if (!parsed.success) throw new ValidationError("invalid episode", formatIssues(parsed.error));
 
-    if (transcript) await writeTranscriptFile(slug, transcript);
-    return writeEpisode(parsed.data, { now });
+    if (transcript) {
+      if (await tryFileBatch([
+        { file: files.episode(slug), content: JSON.stringify(parsed.data) },
+        { file: files.transcript(slug), content: JSON.stringify(transcript) },
+      ])) return parsed.data;
+      await writeTranscriptFile(slug, transcript);
+    }
+    try {
+      return await writeEpisode(parsed.data, { now });
+    } catch (error) {
+      if (transcript) await removeFile(files.transcript(slug));
+      throw error;
+    }
   });
 }
 
@@ -150,10 +161,13 @@ export async function deleteEpisode(slug: string): Promise<{ slug: string; title
   assertSlug(slug, "episode slug");
   return withLock(`episode:${slug}`, async () => {
     const episode = await readEpisode(slug);
+    if (await tryFileBatch([files.conversations(slug), files.transcript(slug), files.episode(slug)].map((file) => ({ file })))) {
+      return { slug, title: episode.title };
+    }
     // The episode file goes last: if anything fails midway the episode is still listed and can be retried.
-    await rm(files.conversations(slug), { force: true });
-    await rm(files.transcript(slug), { force: true });
-    await rm(files.episode(slug));
+    await removeFile(files.conversations(slug));
+    await removeFile(files.transcript(slug));
+    await removeFile(files.episode(slug));
     return { slug, title: episode.title };
   });
 }

@@ -20,7 +20,7 @@ export function createApi(options: ApiOptions): Hono {
     cors({
       origin: (origin) => (options.corsOrigins.includes(origin) ? origin : null),
       allowMethods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowHeaders: ["Authorization", "Content-Type"],
+      allowHeaders: ["Authorization", "Content-Type", "Prefer"],
       maxAge: 600,
     }),
   );

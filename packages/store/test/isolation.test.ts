@@ -17,6 +17,7 @@ import {
   runAsUser,
   scopedBlobs,
   unmountAll,
+  tryFileBatch,
   userScopedDir,
   writeFileAtomic,
 } from "../src/index.ts";
@@ -178,4 +179,22 @@ describe("login and owner claim", () => {
     await loginUser(docs, null, { sub: "1", email: "a@x.it", name: "A" });
     await expect(loginUser(docs, null, { sub: "2", email: "a@x.it", name: "A" })).rejects.toBeInstanceOf(UserConflictError);
   });
+});
+
+
+it("rolls back an episode insert if the transcript insert fails", async () => {
+  const { client, files, docs } = await database();
+  await applyMigrations(client as never, files);
+  mountHosted(ROOTS, docs, new MemoryBlobStore());
+  await client.execute("CREATE TRIGGER reject_transcript BEFORE INSERT ON podcast_transcripts BEGIN SELECT RAISE(ABORT, 'test failure'); END");
+  const changes = [
+    { file: "/x/pod/episodes/demo.json", content: "{}" },
+    { file: "/x/pod/transcripts/demo.json", content: "{}" },
+  ];
+  await expect(runAsUser("u1", () => tryFileBatch(changes))).rejects.toThrow(/test failure/);
+  expect(await docs.forUser("u1").get("episodes", "demo")).toBeNull();
+  await client.execute("DROP TRIGGER reject_transcript");
+  expect(await runAsUser("u1", () => tryFileBatch(changes))).toBe(true);
+  expect(await docs.forUser("u1").get("podcast_transcripts", "demo")).not.toBeNull();
+  expect(await docs.forUser("u2").get("podcast_transcripts", "demo")).toBeNull();
 });

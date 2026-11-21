@@ -1,11 +1,15 @@
 /**
- * The local write server (DESIGN.md §9): thin Hono routes over core and
- * ingest. Dev only, mounted in Vite's dev server by `src/server/index.ts`.
+ * Podcast routes over core and ingest, shared by Vite dev and the authenticated API.
  */
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
-import { isValidSlug } from "../core/schema";
+import { ConflictError } from "../core/errors";
+import { extractYoutubeId } from "../core/urls";
+import { importTranscript, TranscriptChoice } from "../core/transcript-import";
+import { createTranscriptionJobs } from "./transcription-jobs";
+import { transcribeWithGroq } from "./transcription";
+import { isValidSlug, Transcript } from "../core/schema";
 import { listSpeakers, type SpeakerInfo } from "../core/speakers";
 import {
   listEpisodes,
@@ -13,6 +17,8 @@ import {
   readConversations,
   readEpisode,
   readTranscriptIfExists,
+  withLock,
+  setEpisodeTranscript,
 } from "../core/store";
 import { saveEpisode } from "../core/save";
 import { countTags } from "../core/tags";
@@ -24,10 +30,27 @@ import { BadRequestError, handleError } from "./errors";
 import { localOnly } from "./security";
 
 /** Largest accepted request body (a pasted conversation can be long). */
-const MAX_BODY_BYTES = 8 * 1024 * 1024;
+const DEFAULT_BODY_BYTES = 8 * 1024 * 1024;
+
+const TranscriptUpdate = z.strictObject({
+  expectedUpdatedAt: z.string().min(1),
+  transcript: TranscriptChoice,
+});
+
+function prepareTranscript(
+  choice: z.output<typeof TranscriptChoice>,
+  episode: { youtubeId?: string; title: string },
+  now: Date,
+  progress?: (message: string) => void,
+) {
+  if (choice.mode === "none") return undefined;
+  if (choice.mode === "api") return transcribeWithGroq(episode, now, progress);
+  return importTranscript(choice, episode.youtubeId, now);
+}
 
 const UrlBody = z.strictObject({ url: z.string().trim().min(1).max(2000) });
 const AddBody = UrlBody.extend({
+  transcript: TranscriptChoice.optional(),
   /** Confirmed podcast feed URL, or `null` for "no feed". Absent = not decided. */
   feed: z.string().trim().min(1).max(2000).nullable().optional(),
 });
@@ -77,20 +100,28 @@ function speakersPayload(transcript: Awaited<ReturnType<typeof readTranscriptIfE
 }
 
 /** `access`: request check (default: loopback only); the hosted server passes its own (docs/hosting.md). */
-export function createApp(
-  options: { ingest?: IngestDeps; access?: MiddlewareHandler } = {},
-): Hono {
+export function createApp(options: { ingest?: IngestDeps; access?: MiddlewareHandler } = {}): Hono {
   const app = new Hono();
   const ingest = options.ingest ?? {};
+  const jobs = createTranscriptionJobs();
+  const bodyBytes = z.coerce
+    .number()
+    .int()
+    .positive()
+    .safeParse(process.env.E_PODCASTS_MAX_BODY_BYTES);
 
   app.onError(handleError);
   app.notFound((c) => c.json({ error: "Endpoint inesistente.", code: "not-found" }, 404));
 
   app.use("/api/podcasts/*", options.access ?? localOnly);
+  app.use("/api/podcasts/*", async (c, next) => {
+    c.header("Cache-Control", "no-store");
+    await next();
+  });
   app.use(
     "/api/podcasts/*",
     bodyLimit({
-      maxSize: MAX_BODY_BYTES,
+      maxSize: bodyBytes.success ? bodyBytes.data : DEFAULT_BODY_BYTES,
       onError: (c) => c.json({ error: "Richiesta troppo grande.", code: "too-large" }, 413),
     }),
   );
@@ -106,6 +137,18 @@ export function createApp(
       throw new BadRequestError("Slug non valido.");
     }
     await next();
+  });
+
+  app.get("/api/podcasts/transcription-jobs/:id", (c) => {
+    const status = jobs.get(c.req.param("id"));
+    const headers = { "Cache-Control": "no-store" };
+    return status
+      ? c.json(status, 200, headers)
+      : c.json(
+          { error: "Elaborazione non trovata. Riprova per riprendere.", code: "not-found" },
+          404,
+          headers,
+        );
   });
 
   app.get("/api/podcasts/health", (c) => c.json({ ok: true }));
@@ -129,9 +172,25 @@ export function createApp(
     return c.json(await previewAdd(url, ingest));
   });
   app.post("/api/podcasts/episodes", async (c) => {
-    const { url, feed } = await readBody(c, AddBody);
+    const { url, feed, transcript } = await readBody(c, AddBody);
     // `addedAt` is CLI-only (initial import): never accepted from the UI.
-    return c.json(await addEpisode(url, { feed }, ingest), 201);
+    const add = (progress?: (message: string) => void) =>
+      withLock("episodes:add", () =>
+        addEpisode(
+          url,
+          {
+            feed,
+            prepareTranscript:
+              transcript &&
+              (async (episode, now) => prepareTranscript(transcript, episode, now, progress)),
+          },
+          ingest,
+        ),
+      );
+    if (transcript?.mode === "api" && c.req.header("Prefer") === "respond-async") {
+      return c.json({ jobId: jobs.start(JSON.stringify(["add", url, feed]), add) }, 202);
+    }
+    return c.json(await add(), 201);
   });
 
   // Save editable episode fields (all optional; absent = unchanged).
@@ -168,6 +227,43 @@ export function createApp(
       conversations: result.conversations,
       transcriptChecked: result.transcriptChecked,
     });
+  });
+
+  app.get("/api/podcasts/episodes/:slug/transcript", async (c) => {
+    const slug = c.req.param("slug");
+    const episode = await readEpisode(slug);
+    const transcript = await readTranscriptIfExists(slug);
+    return c.json({ transcript: transcript ?? null, updatedAt: episode.updatedAt }, 200, {
+      "Cache-Control": "no-store",
+    });
+  });
+
+  app.put("/api/podcasts/episodes/:slug/transcript", async (c) => {
+    const slug = c.req.param("slug");
+    const { expectedUpdatedAt, transcript } = await readBody(c, TranscriptUpdate);
+    const update = (progress?: (message: string) => void) =>
+      withLock(`episode:${slug}`, async () => {
+        const episode = await readEpisode(slug);
+        if (episode.updatedAt !== expectedUpdatedAt)
+          throw new ConflictError(slug, expectedUpdatedAt, episode.updatedAt);
+        const result = await prepareTranscript(
+          transcript,
+          {
+            title: episode.title,
+            youtubeId: episode.youtubeId ?? extractYoutubeId(episode.url),
+          },
+          new Date(),
+          progress,
+        );
+        return { episode: await setEpisodeTranscript(episode, result && Transcript.parse(result)) };
+      });
+    if (transcript.mode === "api" && c.req.header("Prefer") === "respond-async") {
+      return c.json(
+        { jobId: jobs.start(JSON.stringify(["update", slug, expectedUpdatedAt]), update) },
+        202,
+      );
+    }
+    return c.json(await update(), 200, { "Cache-Control": "no-store" });
   });
 
   // Speakers of the local transcript, and their correction.

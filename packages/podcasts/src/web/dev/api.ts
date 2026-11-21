@@ -1,3 +1,4 @@
+import type { TranscriptChoice } from "@core/transcript-import";
 /** Client for the local write server (`src/server/`). Dev only. */
 
 export class ApiError extends Error {
@@ -30,12 +31,23 @@ async function parseError(response: Response): Promise<ApiError> {
   return new ApiError(response.status, body);
 }
 
-export async function apiJson<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function apiJson<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  background = false,
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
       method,
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      headers:
+        body === undefined
+          ? undefined
+          : {
+              "Content-Type": "application/json",
+              ...(background ? { Prefer: "respond-async" } : {}),
+            },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -43,6 +55,32 @@ export async function apiJson<T>(method: string, path: string, body?: unknown): 
   }
   if (!response.ok) throw await parseError(response);
   return (await response.json()) as T;
+}
+
+type JobStatus<T> =
+  | { state: "running"; progress: string }
+  | { state: "done"; result: T }
+  | { state: "failed"; status: number; error: Record<string, unknown> };
+
+async function transcriptRequest<T>(
+  method: string,
+  path: string,
+  body: unknown,
+  transcript?: TranscriptChoice,
+  onProgress?: (message: string) => void,
+): Promise<T> {
+  if (transcript?.mode !== "api") return apiJson<T>(method, path, body);
+  const { jobId } = await apiJson<{ jobId: string }>(method, path, body, true);
+  for (;;) {
+    const job = await apiJson<JobStatus<T>>(
+      "GET",
+      `/api/podcasts/transcription-jobs/${encodeURIComponent(jobId)}`,
+    );
+    if (job.state === "done") return job.result;
+    if (job.state === "failed") throw new ApiError(job.status, job.error);
+    onProgress?.(job.progress);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
 }
 
 /** Message for a failed call, details included (one per line). */
@@ -88,6 +126,7 @@ export type AddPreview =
       status: "ready";
       source: "lex" | "huberman" | "youtube";
       url: string;
+      youtubeId?: string;
       episode: { title: string; guests: string[]; number?: number; publishedAt?: string };
       show: ShowPreview;
       transcript: { status: "available"; source: string } | { status: "none"; reason: string };
@@ -124,11 +163,31 @@ const episodeBase = (slug: string) => `/api/podcasts/episodes/${encodeURICompone
 
 export const api = {
   preview: (url: string) => apiJson<AddPreview>("POST", "/api/podcasts/episodes/preview", { url }),
-  add: (url: string, feed: string | null | undefined) =>
-    apiJson<AddResult>(
+  add: (
+    url: string,
+    feed: string | null | undefined,
+    transcript?: TranscriptChoice,
+    onProgress?: (message: string) => void,
+  ) =>
+    transcriptRequest<AddResult>(
       "POST",
       "/api/podcasts/episodes",
-      feed === undefined ? { url } : { url, feed },
+      { url, feed, transcript },
+      transcript,
+      onProgress,
+    ),
+  updateTranscript: (
+    slug: string,
+    expectedUpdatedAt: string,
+    transcript: TranscriptChoice,
+    onProgress?: (message: string) => void,
+  ) =>
+    transcriptRequest(
+      "PUT",
+      `${episodeBase(slug)}/transcript`,
+      { expectedUpdatedAt, transcript },
+      transcript,
+      onProgress,
     ),
   save: (
     slug: string,

@@ -140,13 +140,14 @@ export interface AddEpisodeOptions {
    * says `needsFeedDecision`; ignored (with a warning) for existing shows.
    */
   feed?: string | null;
+  prepareTranscript?: (episode: { youtubeId?: string; title: string }, now: Date) => Promise<TranscriptInput | undefined>;
 }
 
 export type TranscriptOutcome =
   | {
       status: "saved";
-      source: "lex-official" | "patrykwajs-wiki";
-      timebase: "youtube";
+      source: TranscriptInput["source"];
+      timebase: TranscriptInput["timebase"];
       segments: number;
       chapters: number;
       /** Wiki paragraphs whose start was interpolated between timestamps. */
@@ -561,6 +562,21 @@ interface FetchedTranscript {
   number?: number;
 }
 
+function explicitTranscript(input: TranscriptInput | undefined): FetchedTranscript {
+  if (!input) return { outcome: { status: "none", reason: "Nessuna trascrizione richiesta." } };
+  return {
+    input,
+    outcome: {
+      status: "saved",
+      source: input.source,
+      timebase: input.timebase,
+      segments: input.segments.length,
+      chapters: input.chapters?.length ?? 0,
+      estimatedStarts: false,
+    },
+  };
+}
+
 async function fetchTranscript(
   ctx: Context,
   plan: TranscriptPlan,
@@ -723,8 +739,17 @@ export async function addEpisode(
   if ("duplicate" in resolved) return { status: "duplicate", ...resolved.duplicate, warnings: [] };
   const warnings = [...resolved.warnings];
 
+  if (options.prepareTranscript && resolved.show.status === "new" && options.feed === undefined) {
+    const { input, feedCandidates } = resolved.show.proposal;
+    if (feedCandidates.length > 0) throw new FeedDecisionRequiredError(input.name, feedCandidates);
+  }
+
   // Transcript first: a network failure here must not leave a half-created show.
-  const transcript = await fetchTranscript(ctx, resolved.transcript, warnings);
+  const transcript = options.prepareTranscript
+    ? explicitTranscript(await options.prepareTranscript(
+        { youtubeId: resolved.youtubeId, title: resolved.draft.title }, ctx.now(),
+      ))
+    : await fetchTranscript(ctx, resolved.transcript, warnings);
   let youtubeId = resolved.youtubeId;
   if (transcript.youtubeId && transcript.youtubeId !== youtubeId) {
     if (youtubeId)

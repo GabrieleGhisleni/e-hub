@@ -53,7 +53,7 @@ Ogni persona che fa login vede e modifica **solo i propri dati**. L'isolamento s
 - **Allowlist obbligatoria**: `ALLOWED_EMAILS` elenca le email che possono entrare; **vuota = non entra nessuno** (l'API non parte senza). Un'email fuori lista riceve 403 («Account non abilitato.», mostrato nel banner del sito) e non crea nessun utente; l'elenco è controllato a ogni richiesta, quindi togliere un'email blocca subito la persona.
 - **Tutte le tabelle di dati** hanno `user_id` e chiave primaria `(user_id, id)`; `topics` ('all') è una riga per utente. `0002` ricrea le tabelle copiando le righe esistenti sotto l'utente `legacy` (un database appena creato non ne ha).
 - **Impossibile dimenticare il filtro**: `DocClient` espone solo `forUser(userId)`, e ogni query del handle restituito porta `WHERE user_id = ?` (o lo scrive in INSERT). Non esiste una lettura o scrittura senza proprietario. Il middleware di autenticazione esegue ogni richiesta dentro `runAsUser(sub, …)` (`AsyncLocalStorage`); il backend montato (`HostedBackend`) legge l'utente da lì a **ogni** operazione e **lancia `NoUserError`** se non c'è. Quindi i repository dei pacchetti (che chiamano `readTextIfExists` & co.) non cambiano e non possono uscire dal perimetro dell'utente. Le rotte `/api/store/…` delle CLI passano dallo stesso percorso.
-- **File**: R2 `users/<sub>/books/<id>.epub` e `users/<sub>/covers/<id>.webp` (`scopedBlobs` aggiunge il prefisso e rifiuta `..`). Cache su disco del Pi in `<cache>/users/<sub>/…` (EPUB, KEPUB, testo, upload, esplorazioni; trascrizioni dei podcast in `<dati>/podcasts/users/<sub>/transcripts`), tramite `userScopedDir`. Cache e stato in memoria (riassunti in corso) sono per utente.
+- **File**: R2 `users/<sub>/books/<id>.epub` e `users/<sub>/covers/<id>.webp` (`scopedBlobs` aggiunge il prefisso e rifiuta `..`). Cache su disco del Pi in `<cache>/users/<sub>/…` (EPUB, KEPUB, testo, upload, esplorazioni), tramite `userScopedDir`. Cache e stato in memoria (riassunti in corso) sono per utente.
 - **Kobo**: un solo dispositivo, nella LAN del proprietario. `KOBO_OWNER_EMAIL` decide chi lo usa: per tutti gli altri ogni operazione Kobo (sync, coda, evidenziazioni, cancellazioni) è un no-op silenzioso e la sezione non compare (`/auth/me` e il login rispondono `kobo: true|false`; la coda è vuota). Host, porta e chiave SSH (`ELIB_KOBO_*`) valgono solo per lui. Il timer `ehub-kobo-sync` svuota la coda del proprietario; finché non ha fatto login non fa nulla.
 - **Chat e trascrizioni** lavorano sui dati dell'utente della richiesta (stesso contesto). Il router freeway e la chiave Groq sono condivisi: le quote sono di tutti.
 - **Frontend**: nel build hosted, senza sessione il sito mostra la demo (sezione sotto); una risposta 401 a una sessione esistente la cancella e ricarica la pagina.
@@ -95,7 +95,7 @@ Flusso di un libro nuovo: upload dalla UI o da `elib` → il Pi salva l'EPUB su 
 
 - Lo script Python lanciato con `uv` viene sostituito da un client HTTP in TypeScript verso Groq.
 - Groq accetta file fino a 25 MB: il Pi ricodifica l'audio con `ffmpeg` in mono a 32 kbps (circa 14 MB l'ora), o lo divide in pezzi.
-- Le trascrizioni restano sul disco del Pi; lo script che committa i dati dei podcast in git (`core/ingest/git.ts`) sparisce.
+- Le trascrizioni sono documenti privati in Turso (`podcast_transcripts`, chiave utente/episodio). Il ripristino del database include questi documenti.
 
 ## Fasi
 
@@ -123,7 +123,7 @@ Flusso di un libro nuovo: upload dalla UI o da `elib` → il Pi salva l'EPUB su 
 | 3. Backend sul Pi | fatta nel codice, **da installare a mano** | `apps/api` (Hono unico: CORS, login Google gestito dall'API + token di sessione + allowlist, GET pubbliche), EPUB su R2 (`cache/remote.ts`), bundle esbuild, `deploy/pi/` (unità systemd, env, `deploy.sh`). Vedi «Installazione sul Pi». |
 | 4. Kobo | fatta nel codice, **da attivare sul Pi** | Coda `kobo_queue` (`kobo/queue.ts`): con `ELIB_KOBO_QUEUE=1` i servizi mettono in coda invece di fallire; la coda si svuota a mano con «Sincronizza ora» (`reconcile`, mai `--prune`; il timer `ehub-kobo-sync.timer` non è abilitato); ricerca dell'IP sulla `/24` come riserva (`kobo/discovery.ts`); host, porta e alias da `ELIB_KOBO_*`; rotte `GET /api/library/kobo/queue` e `POST /api/library/kobo/sync` («sincronizza ora»). La UI arriva in fase 5. |
 | 5. Frontend | fatta nel codice | Build «hosted» (`pnpm --filter @ehub/web build:hosted`, `VITE_HOSTED=1`, `VITE_API_URL`): niente dati nel bundle, tutto dall'API (`/api/library/site/*`, `/api/podcasts/catalog`, `/api/notes`, `/api/explore`); login con Google (`apps/web/src/session.ts`); coda del Kobo con «Sincronizza ora» nella barra admin della libreria; workflow Pages aggiornato. `site-data/build.ts` resta, ma ora lo usa l'API a runtime. |
-| 6. CLI e skill `explore` | fatta (solo `explore`) | `/api/store/<radice>/<chiave>` (solo con sessione, validazione Zod per tabella sul Pi) e `RemoteBackend` nel client: con `EHUB_API_URL` + `EHUB_API_TOKEN` la CLI `explore` lavora sui dati hosted; la skill lo spiega. `elib` e `episode` NON sono collegate: servono cache EPUB, Kobo e trascrizioni, che stanno sul Pi (si usano lì o dall'app). |
+| 6. CLI e skill `explore` | fatta (solo `explore`) | `/api/store/<radice>/<chiave>` (solo con sessione, validazione Zod per tabella sul Pi) e `RemoteBackend` nel client: con `EHUB_API_URL` + `EHUB_API_TOKEN` la CLI `explore` lavora sui dati hosted; la skill lo spiega. `elib` e `episode` NON sono collegate: restano da collegare le CLI; cache EPUB e Kobo sono gestiti sul Pi (si usano lì o dall'app). |
 | 7. Podcast | fatta nel codice, **serve `GROQ_API_KEY` e `yt-dlp` sul Pi** | `src/cli/transcribe/groq.ts`: scarica l'audio (yt-dlp o feed), `ffmpeg` mono 16 kHz 32 kbps, divide in parti da 90 minuti se supera 24 MB, una chiamata a Groq per parte con ripresa e attesa sui 429. Le trascrizioni non hanno più speaker (Groq non li dà). `transcriber/` (Python) rimosso. (Nota: `core/ingest/git.ts` non è uno script che committa i dati, come scritto sopra: è il runner di `git` per il clone del wiki di Huberman, e resta.) |
 | 8. Chiusura | **in parte** | Backup notturno **tolto dal piano** (si usa il ripristino di Turso). **Non fatto di proposito**: rimozione di `packages/*/data` (aspetta la conferma che la migrazione è avvenuta e verificata) e dei server `*-dev.ts` (dipende dalla scelta sullo sviluppo locale, punto ancora aperto). |
 
@@ -184,3 +184,26 @@ Nell'ordine in cui conviene farlo:
 8. **Chiusura (fase 8)**, solo dopo la conferma: togliere `packages/*/data` dal repo e dal build, e i server `*-dev.ts` una volta scelto come si sviluppa in locale (`API_LOCAL_DEV=1 pnpm --filter @ehub/api start` è già un'opzione: stessa API su file locali, senza login).
 
 Da sapere: il build non hosted (`pnpm build`) e i server di dev funzionano ancora come prima; `elib` e `episode` restano strumenti del Pi (servono cache EPUB, Kobo, trascrizioni).
+
+
+### Trascrizioni podcast
+
+Applica la migrazione `0003_podcast_transcripts.sql` prima di avviare il nuovo backend.
+L’API salva episodio e trascrizione nella stessa transazione. Il testo si legge con la sessione dell’account e si può esportare in Markdown
+dall’episodio. Per i vecchi file del Pi in `podcasts/users/<sub>/transcripts`, prepara
+una migrazione separata per ogni proprietario, ponendo quei file sotto `transcripts/`
+nella radice podcast di staging usata dal migratore. Non usare lo staging di un altro utente.
+
+La modalità API usa `GROQ_API_KEY` sul backend e richiede `yt-dlp`, `ffmpeg` e
+`ffprobe`. Le tre modalità interattive richiedono un ID YouTube verificabile.
+Il limite del corpo delle richieste podcast è 8 MiB, configurabile sul server con
+`E_PODCASTS_MAX_BODY_BYTES`.
+
+Durante un tentativo Groq, le parti completate restano in una cache privata del
+server per riprendere da «Riprova». Configura `E_PODCASTS_JOB_CACHE` se vuoi
+controllare dove risiede questa cache (predefinita nella directory temporanea).
+Il server rimuove l’audio di lavoro a fine tentativo e la cache dopo un’elaborazione riuscita.
+La UI interroga lo stato del job API e indica la parte in lavorazione. Se il
+backend si riavvia, un nuovo tentativo riusa le parti disponibili nella cache.
+In modalità PC l’avanzamento è nel terminale. Il file risultante resta nella
+cartella personale per poter ripetere l’upload.

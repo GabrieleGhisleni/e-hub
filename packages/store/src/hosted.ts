@@ -1,9 +1,9 @@
 /**
  * The hosted backend: maps the file layout of each package (`books/<id>/book.json`, `shows/<slug>.json`, …) onto
  * Turso tables (`id`, `data jsonb`, `updated_at`) and an R2 bucket. Keys that no route claims stay on disk
- * (the Pi keeps podcast audio, transcripts and caches there).
+ * (the Pi keeps podcast audio and caches there).
  */
-import { type Backend, type DirEntry, mountBackend } from "./backend.ts";
+import { type Backend, type DirEntry, type FileChange, mountBackend } from "./backend.ts";
 import { type BlobStore, scopedBlobs } from "./blobs.ts";
 import { type DocClient, type UserDocs } from "./docs.ts";
 import { requireUserId } from "./user-context.ts";
@@ -122,6 +122,14 @@ export class HostedBackend implements Backend {
     const data = route.kind === "text" ? { text } : (JSON.parse(text) as unknown);
     await docs.put(route.table, route.id(m), data);
     return true;
+  }
+
+  async batch(changes: FileChange[]): Promise<void> {
+    await this.scope().docs.batch(changes.map(({ key, content }) => {
+      const hit = this.route(key);
+      if (!hit || hit.route.kind !== "json") throw new Error("Batch requires JSON documents");
+      return { table: hit.route.table, id: hit.route.id(hit.m), data: content === undefined ? undefined : JSON.parse(content) };
+    }));
   }
 
   async remove(key: string): Promise<boolean> {
@@ -249,11 +257,12 @@ export const notesLayout: Layout = {
   ],
 };
 
-/** `packages/podcasts/data`: shows, episodes, conversations. Transcripts, audio and caches stay on disk. */
+/** Podcast documents are scoped to the authenticated user; audio and caches stay on disk. */
 export const podcastsLayout: Layout = {
   routes: [
     { match: /^shows\/([^/.][^/]*)\.json$/, kind: "json", table: "shows", id: (m) => m[1]! },
     { match: /^episodes\/([^/.][^/]*)\.json$/, kind: "json", table: "episodes", id: (m) => m[1]! },
+    { match: /^transcripts\/([^/.][^/]*)\.json$/, kind: "json", table: "podcast_transcripts", id: (m) => m[1]! },
     {
       match: /^conversations\/([^/.][^/]*)\.json$/,
       kind: "json",
@@ -264,6 +273,7 @@ export const podcastsLayout: Layout = {
   listings: [
     { dir: "shows", table: "shows", as: "files" },
     { dir: "episodes", table: "episodes", as: "files" },
+    { dir: "transcripts", table: "podcast_transcripts", as: "files" },
     { dir: "conversations", table: "conversations", as: "files" },
   ],
 };

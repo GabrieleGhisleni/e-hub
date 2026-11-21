@@ -52,7 +52,7 @@ async function walk(dir: string, base = ""): Promise<string[]> {
 
 export interface MigrationPlan {
   items: MigrationItem[];
-  /** Files in the data dirs that no route claims (they stay on disk: transcripts, audio…). */
+  /** Files in the data dirs that no route claims (they stay on disk: audio, caches…). */
   skipped: string[];
 }
 

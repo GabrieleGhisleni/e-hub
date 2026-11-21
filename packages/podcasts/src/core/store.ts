@@ -7,7 +7,7 @@
  * Prefer the higher-level helpers (episodes.ts, shows.ts, save.ts,
  * transcripts.ts) over the raw writers here.
  */
-import { listDir } from "@ehub/store";
+import { currentUserId, listDir, removeFile, tryFileBatch } from "@ehub/store";
 import path from "node:path";
 import type { z } from "zod";
 import { NotFoundError, ValidationError } from "./errors";
@@ -78,6 +78,7 @@ const locks = new Map<string, Promise<unknown>>();
  * processes the `updatedAt` version check is the guard.
  */
 export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  key = `${currentUserId() ?? ""}:${key}`;
   const previous = locks.get(key) ?? Promise.resolve();
   const run = previous.then(fn, fn);
   const settled = run.catch(() => {});
@@ -226,4 +227,30 @@ export async function writeTranscriptFile(
   const transcript = canonical(parseOrThrow(Transcript, input, `transcript of '${slug}'`));
   await writeJsonAtomic(files.transcript(slug), transcript);
   return transcript;
+}
+
+/** Updates the transcript and its episode metadata together on the hosted store. */
+export async function setEpisodeTranscript(episode: Episode, transcript?: Transcript): Promise<Episode> {
+  const updated = Episode.parse({
+    ...episode,
+    transcriptSource: transcript?.source,
+    transcriptTimebase: transcript?.timebase,
+    updatedAt: nextUpdatedAt(episode.updatedAt),
+  });
+  if (await tryFileBatch([
+    { file: files.episode(episode.slug), content: JSON.stringify(updated) },
+    { file: files.transcript(episode.slug), content: transcript && JSON.stringify(transcript) },
+  ])) return updated;
+
+  const previous = await readTranscriptIfExists(episode.slug);
+  const write = async (value?: Transcript) => value
+    ? writeTranscriptFile(episode.slug, value)
+    : removeFile(files.transcript(episode.slug));
+  await write(transcript);
+  try {
+    return await writeEpisode(updated, { now: new Date(updated.updatedAt) });
+  } catch (error) {
+    await write(previous);
+    throw error;
+  }
 }

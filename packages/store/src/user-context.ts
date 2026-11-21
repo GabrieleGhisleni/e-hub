@@ -55,8 +55,7 @@ export function requireUserId(): string {
 }
 
 /**
- * `base` for local use; `<base>/users/<id>` inside a user's request. The Pi's disk caches (EPUB, KEPUB, text, audio,
- * transcripts) go through this, so users never share a file. Ids that are not plain `[A-Za-z0-9_-]` never reach a disk.
+ * `base` for local use; `<base>/users/<id>` inside a user's request. The Pi's disk caches (EPUB, KEPUB, text, audio) go through this, so users never share a file. Ids that are not plain `[A-Za-z0-9_-]` never reach a disk.
  */
 export function userScopedDir(base: string): string {
   const id = currentUserId();

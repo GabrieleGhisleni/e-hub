@@ -20,7 +20,10 @@ export interface DirEntry {
 }
 
 /** A store addressed by posix keys relative to its mounted root (`books/ab12cd34/book.json`). */
+export type FileChange = { key: string; content?: string };
+
 export interface Backend {
+  batch?(changes: FileChange[]): Promise<void>;
   readBytes(key: string): Promise<Uint8Array | null>;
   /** `undefined` when the key is not routed here: the caller falls back to the real file system. */
   write(key: string, content: string | Uint8Array): Promise<boolean>;
@@ -104,6 +107,19 @@ export async function writeFileAtomic(file: string, content: string | Uint8Array
     await rm(tmp, { force: true });
     throw error;
   }
+}
+
+/** Apply changes together when all paths belong to a transactional backend. */
+export async function tryFileBatch(changes: { file: string; content?: string }[]): Promise<boolean> {
+  const backend = changes[0] && resolveMount(changes[0].file)?.backend;
+  if (!backend?.batch) return false;
+  const mapped = changes.map(({ file, content }) => {
+    const mount = resolveMount(file);
+    return mount?.backend === backend && backend.handles(mount.key) ? { key: mount.key, content } : null;
+  });
+  if (mapped.some((change) => change === null)) return false;
+  await backend.batch(mapped.filter((change) => change !== null));
+  return true;
 }
 
 /** Removes one file; no-op when it does not exist. */

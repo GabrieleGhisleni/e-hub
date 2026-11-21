@@ -76,6 +76,7 @@ export function createStoreRoutes(
     const key = keyOf(c);
     const hit = key ? routeFor(LAYOUTS[root], key) : null;
     if (!key || !hit) return bad(c, "Chiave non valida.");
+    if (hit.route.table === "podcast_transcripts") return bad(c, "Usa l’API dell’episodio per aggiornare la trascrizione.");
     const body = new Uint8Array(await c.req.arrayBuffer());
     if (body.length > MAX_BYTES && hit.route.kind !== "blob") return bad(c, "Documento troppo grande.", 413);
     if (hit.route.kind === "json") {
@@ -106,7 +107,9 @@ export function createStoreRoutes(
       await removeTree(path.join(dirs[root], key));
       return c.body(null, 204);
     }
-    if (!routeFor(LAYOUTS[root], key)) return bad(c, "Chiave non valida.");
+    const hit = routeFor(LAYOUTS[root], key);
+    if (!hit) return bad(c, "Chiave non valida.");
+    if (hit.route.table === "podcast_transcripts") return bad(c, "Usa l’API dell’episodio per rimuovere la trascrizione.");
     await removeFile(path.join(dirs[root], key));
     return c.body(null, 204);
   });

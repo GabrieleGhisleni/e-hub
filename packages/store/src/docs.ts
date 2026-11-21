@@ -13,12 +13,15 @@ export interface Doc {
 }
 
 /** One user's documents. */
+export type DocChange = { table: string; id: string; data?: unknown };
+
 export interface UserDocs {
   get(table: string, id: string): Promise<Doc | null>;
   list(table: string): Promise<Doc[]>;
   /** Insert or replace; `updatedAt` is set by the store. */
   put(table: string, id: string, data: unknown): Promise<void>;
   delete(table: string, id: string): Promise<void>;
+  batch(changes: DocChange[]): Promise<void>;
 }
 
 export interface UserRecord {
@@ -54,6 +57,7 @@ export const DATA_TABLES = [
   "topics",
   "shows",
   "episodes",
+  "podcast_transcripts",
   "conversations",
   "notes",
   "explorations",
@@ -119,6 +123,16 @@ export class MemoryDocClient implements DocClient {
           updatedAt: new Date().toISOString(),
         });
       },
+      batch: async (changes) => {
+        const prepared = changes.map(({ table, id, data }) => ({
+          rows: this.rows(table, userId), id,
+          doc: data === undefined ? undefined : { id, data: JSON.parse(JSON.stringify(data)), updatedAt: new Date().toISOString() },
+        }));
+        for (const { rows, id, doc } of prepared) {
+          if (doc) rows.set(id, doc);
+          else rows.delete(id);
+        }
+      },
       delete: async (table, id) => {
         this.rows(table, userId).delete(id);
       },
@@ -130,7 +144,10 @@ export class MemoryDocClient implements DocClient {
  * The one method of a libSQL client we use (`@libsql/client` implements it; tests pass `node:sqlite` behind it).
  * Rows come back as objects keyed by column name.
  */
+type Statement = { sql: string; args: (string | number | null)[] };
+
 export interface SqlClient {
+  batch?(statements: Statement[], mode: "write"): Promise<unknown>;
   execute(statement: { sql: string; args: (string | number | null)[] }): Promise<{
     rows: ArrayLike<Record<string, unknown>>[] | Record<string, unknown>[];
   }>;
@@ -183,6 +200,16 @@ export class TursoDocClient implements DocClient {
            ON CONFLICT(user_id, id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
           [userId, id, JSON.stringify(data), new Date().toISOString()],
         );
+      },
+      async batch(changes) {
+        if (!db.batch) throw new Error("Database transactions unavailable");
+        await db.batch(changes.map(({ table, id, data }): Statement => data === undefined
+          ? { sql: `DELETE FROM ${assertTable(table)} WHERE user_id = ? AND id = ?`, args: [userId, id] }
+          : {
+            sql: `INSERT INTO ${assertTable(table)} (user_id, id, data, updated_at) VALUES (?, ?, ?, ?)
+              ON CONFLICT(user_id, id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+            args: [userId, id, JSON.stringify(data), new Date().toISOString()],
+          }), "write");
       },
       async delete(table, id) {
         await rows(`DELETE FROM ${assertTable(table)} WHERE user_id = ? AND id = ?`, [userId, id]);

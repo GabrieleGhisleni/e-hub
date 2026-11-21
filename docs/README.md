@@ -4,6 +4,7 @@
 - [Chat con l'AI](chat.md): pannello, prompt e tool, note dalla chat, modalità Appunti, Feel rich.
 - [Esplorazioni](esplorazioni.md): esplorare libri con l'agente prima di leggerli, dalla skill `explore` o dalla chat dell'app (v1 fatta, solo libri).
 - [Hosting](hosting.md): visione per portare l'app fuori dal laptop (Turso come unica fonte dei dati, R2, Pi come backend, GitHub Pages, Kobo in coda).
+- [Task trascrizioni podcast](tasks/podcast-transcriptions.md): trascrizione API/locale/copia-incolla, import AskChannel e persistenza per utente nel database.
 
 Documenti specifici dei moduli:
 

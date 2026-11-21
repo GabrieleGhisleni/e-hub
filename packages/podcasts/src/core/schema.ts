@@ -94,6 +94,7 @@ export const TRANSCRIPT_SOURCES = [
   "patrykwajs-wiki",
   "whisper-local",
   "askchannel",
+  "api",
 ] as const;
 export const TranscriptSource = z.enum(TRANSCRIPT_SOURCES);
 export type TranscriptSource = z.infer<typeof TranscriptSource>;
@@ -238,8 +239,9 @@ export const TranscriptSegment = z.strictObject({
   speaker: NonEmptyText(200, "speaker").optional(),
   /** Seconds from the start of the audio named by `timebase`. */
   start: z.number().nonnegative(),
+  end: z.number().nonnegative().optional(),
   text: z.string(),
-});
+}).refine(({ start, end }) => end === undefined || end >= start, "end precedes start");
 export type TranscriptSegment = z.infer<typeof TranscriptSegment>;
 
 export const TranscriptChapter = z.strictObject({
@@ -258,6 +260,7 @@ export type TranscriptAudio = z.infer<typeof TranscriptAudio>;
 
 export const Transcript = z
   .strictObject({
+    schemaVersion: z.literal(1).optional(),
     source: TranscriptSource,
     timebase: Timebase,
     /** Audio actually transcribed (whisper only, DESIGN.md §7.2). */

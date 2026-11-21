@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pencil } from "lucide-react";
 import type { Episode } from "@core/schema";
 import { Button } from "@ehub/ui/components/button";
+import { TranscriptDialog } from "./transcript-dialog";
 import { DeleteEpisode } from "./delete-episode";
 import { EpisodeEditorDialog, hasPendingDraft } from "./episode-editor";
 
@@ -21,6 +22,7 @@ export function EpisodeTools({ episode }: { episode: Episode }) {
       >
         <Pencil aria-hidden />
       </Button>
+      <TranscriptDialog episode={episode} />
       <DeleteEpisode episode={episode} />
       <EpisodeEditorDialog episode={episode} open={editing} onOpenChange={setEditing} />
     </>

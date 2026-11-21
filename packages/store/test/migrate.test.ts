@@ -27,6 +27,7 @@ describe("migration", () => {
     await put(path.join(roots.explore, "2026-01-01-x.json"), "{}");
     await put(path.join(roots.podcasts, "shows/s.json"), '{"slug":"s"}');
     await put(path.join(roots.podcasts, "transcripts/t.json"), "{}");
+    await put(path.join(roots.podcasts, "audio/t.mp3"), "audio");
     await put(path.join(cache, "books/ab12cd34/book.epub"), "epub");
     await put(path.join(cache, "books/zz/book.kepub.epub"), "k");
 
@@ -36,15 +37,18 @@ describe("migration", () => {
       "library:books/ab12cd34/cover.webp",
       "explore:2026-01-01-x.json",
       "podcasts:shows/s.json",
+      "podcasts:transcripts/t.json",
       "epub:books/ab12cd34.epub",
     ]);
-    expect(plan.skipped).toEqual(["podcasts/transcripts/t.json"]);
+    expect(plan.skipped).toEqual(["podcasts/audio/t.mp3"]);
 
     const docs = new MemoryDocClient();
     const blobs = new MemoryBlobStore();
     const result = await runMigration(plan, docs, blobs, "owner1");
-    expect(result).toEqual({ documents: 3, blobs: 2, failed: [] });
+    expect(result).toEqual({ documents: 4, blobs: 2, failed: [] });
     expect((await docs.forUser("owner1").get("books", "ab12cd34"))?.data).toEqual({ id: "ab12cd34" });
+    expect(await docs.forUser("owner1").get("podcast_transcripts", "t")).not.toBeNull();
+    expect(await docs.forUser("owner2").get("podcast_transcripts", "t")).toBeNull();
     expect([...blobs.objects.keys()].sort()).toEqual(["users/owner1/books/ab12cd34.epub", "users/owner1/covers/ab12cd34.webp"]);
   });
 
