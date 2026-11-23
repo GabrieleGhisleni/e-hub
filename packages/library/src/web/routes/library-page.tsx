@@ -18,6 +18,8 @@ import {
   SearchField,
   SearchToolbar,
   SidePanelLayout,
+  moveInOrder,
+  useManualOrder,
 } from "@ehub/ui";
 import { SheetClose } from "@ehub/ui/components/sheet";
 import { STATUS_LABELS } from "@shared/labels";
@@ -85,9 +87,18 @@ export function LibraryPage() {
 
   const deferredQuery = useDeferredValue(query);
   const books = index?.books;
+  const [order, setOrder] = useManualOrder("ehub:library-order");
   const visible = useMemo(
-    () => (books ? applyLibraryQuery(books, deferredQuery) : []),
-    [books, deferredQuery],
+    () => (books ? applyLibraryQuery(books, deferredQuery, order) : []),
+    [books, deferredQuery, order],
+  );
+  // Drag and drop: the list as shown becomes the manual order, and the sort switches to it.
+  const moveBook = useCallback(
+    (id: string, target: string) => {
+      setOrder(moveInOrder(visible.map((b) => b.id), order, id, target));
+      if (query.sort !== "manual") commit({ ...query, sort: "manual" }, true);
+    },
+    [visible, order, setOrder, query, commit],
   );
   const facets = useMemo(
     () => (books ? computeFacets(books, deferredQuery) : null),
@@ -174,7 +185,35 @@ export function LibraryPage() {
         />
 
         <ActiveFilters
-          summary={index ? resultCountLabel(visible.length, index.books.length) : " "}
+          summary={
+            index ? (
+              <>
+                {resultCountLabel(visible.length, index.books.length)}
+                {!query.showRead && query.statuses.length === 0 && stats.read > 0 ? (
+                  <>
+                    {" "}
+                    · letti nascosti ·{" "}
+                    <button
+                      type="button"
+                      className="font-medium text-brand underline-offset-4 hover:underline"
+                      onClick={() => commit({ ...query, showRead: true })}
+                    >
+                      mostra
+                    </button>
+                  </>
+                ) : null}
+              </>
+            ) : (
+              " "
+            )
+          }
+          actions={
+            index && query.showRead ? (
+              <Button size="sm" variant="ghost" onClick={() => commit({ ...query, showRead: false })}>
+                Nascondi i letti
+              </Button>
+            ) : undefined
+          }
           chips={index ? activeChips(index, query, commit) : []}
           onClear={() => commit(clearFilters(query))}
         />
@@ -211,7 +250,7 @@ export function LibraryPage() {
             <p>Nessun libro corrisponde alla ricerca e ai filtri scelti.</p>
           </MessageState>
         ) : (
-          <BookGrid books={visible} librarySearch={librarySearch} />
+          <BookGrid books={visible} librarySearch={librarySearch} onMove={moveBook} />
         )}
       </SidePanelLayout>
     </Container>

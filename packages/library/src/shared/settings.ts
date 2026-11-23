@@ -32,3 +32,23 @@ export const SettingsResponseSchema = z.object({
   zlibrary: z.object({ baseUrl: z.string().nullable(), defaultBaseUrl: z.string() }),
 });
 export type SettingsResponse = z.infer<typeof SettingsResponseSchema>;
+
+/** Health of the services the app depends on (Impostazioni → Stato dei servizi). */
+export const healthPaths = { services: "/api/library/health/services" } as const;
+
+export const ServiceCheckSchema = z.object({
+  id: z.enum(["backend", "db", "ai", "zlibrary"]),
+  label: z.string(),
+  /** `ok` works, `error` is configured but fails, `off` is not configured. */
+  status: z.enum(["ok", "error", "off"]),
+  detail: z.string(),
+  /** Round trip of the check, in milliseconds (null when nothing was called). */
+  ms: z.number().nullable(),
+});
+export type ServiceCheck = z.infer<typeof ServiceCheckSchema>;
+
+export const ServicesHealthResponseSchema = z.object({
+  checkedAt: z.string(),
+  checks: z.array(ServiceCheckSchema),
+});
+export type ServicesHealthResponse = z.infer<typeof ServicesHealthResponseSchema>;

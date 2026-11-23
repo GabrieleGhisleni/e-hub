@@ -82,6 +82,37 @@ Solo in locale (`pnpm dev`): pulsante "Chatta" nella pagina di un libro, di un e
 - **Feel rich**: interruttore accanto ad "Appunti". La domanda va al modello più potente (`EHUB_AI_RICH_MODEL`, default `gpt-6-luna`) invece che a `smart`. Non viene ricordato: si spegne ricaricando la pagina.
 - **Ingrandisci**: la chat diventa una finestra centrata con il testo più grande.
 
+## Log del servizio
+
+**In locale** (`pnpm dev`): i log dei server Hono escono nel terminale dove gira `pnpm dev`. Dall'app, *Impostazioni → Stato dei servizi* mostra in un colpo solo backend, database, AI e Z-Library, con il motivo dell'errore.
+
+**Sul Raspberry Pi** (API hosted, unità systemd `ehub-api`):
+
+```bash
+alias rpi="ssh -i ~/.ssh/id_ed25519_py ggabry@100.84.50.10"
+rpi 'journalctl -u ehub-api -f'                    # in diretta (Ctrl-C per uscire)
+rpi 'journalctl -u ehub-api -n 200 --no-pager'     # ultime 200 righe
+rpi 'journalctl -u ehub-api --since "1 hour ago" -p err'   # solo errori dell'ultima ora
+rpi 'systemctl status ehub-api'                    # attivo? riavvii recenti?
+rpi 'journalctl -u ehub-update --no-pager -n 50'   # aggiornamenti automatici da GitHub
+curl -s https://<api>/api/health                   # {"ok":true} se risponde
+```
+
+All'avvio il server scrive su cosa è montato (`Turso + R2` o `file locali`). Un `listing-failed` o un timeout SSH dal Kobo non è un guasto: vuol dire che è spento.
+
+## Libreria locale e account (`elib db`)
+
+I libri aggiunti in locale (`pnpm dev`) e quelli aggiunti dall'app hosted vivono in posti diversi: file in `packages/library/data` + EPUB nella cache da una parte, database Turso + R2 dall'altra. `elib db` li confronta e riempie i buchi in entrambe le direzioni. Servono `EHUB_API_URL` e `EHUB_API_TOKEN` (il token si copia da Impostazioni dopo il login; vanno bene in `.env.local`).
+
+```bash
+pnpm --filter @ehub/library elib db status                   # solo locale / solo account / diversi
+pnpm --filter @ehub/library elib db sync                     # anteprima del piano
+pnpm --filter @ehub/library elib db sync --apply             # copia ciò che manca da una parte all'altra
+pnpm --filter @ehub/library elib db sync --apply --prefer local   # per i file diversi vince il locale (o `remote`)
+```
+
+Senza `--prefer`, i file presenti da entrambe le parti ma diversi non si toccano. `--epubs` confronta anche gli EPUB di ogni libro (scarica quelli dell'account: lento); per un libro che manca da una parte l'EPUB viaggia comunque.
+
 ## Deploy
 
 Ogni push su `main` esegue [`.github/workflows/pages.yml`](.github/workflows/pages.yml): build con `BASE_PATH=/<nome-repo>/` e pubblicazione su GitHub Pages.

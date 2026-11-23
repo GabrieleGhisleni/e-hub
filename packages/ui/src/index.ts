@@ -1,4 +1,5 @@
 export { cn } from "./utils";
+export { moveInOrder, useDragReorder, useManualOrder } from "./manual-order";
 export {
   applyTheme,
   readThemePreference,

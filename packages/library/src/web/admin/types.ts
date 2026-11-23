@@ -40,5 +40,6 @@ export interface AdminModule {
   ZlibrarySettingsCard: () => ReactNode;
   /** Personal AI / Groq keys card of the app settings page. */
   KeysSettingsCard: () => ReactNode;
+  ServicesHealthCard: () => ReactNode;
   NewTopicButton: (props: { onCreated?: (topic: { id: string; label: string }) => void }) => ReactNode;
 }

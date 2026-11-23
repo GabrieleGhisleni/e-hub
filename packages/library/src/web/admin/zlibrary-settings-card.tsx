@@ -14,6 +14,7 @@ export function ZlibrarySettingsCard() {
   const [status, setStatus] = useState<ZlibraryStatusResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [changing, setChanging] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
 
   const [domain, setDomain] = useState("");
@@ -42,6 +43,7 @@ export function ZlibrarySettingsCard() {
     setConnectError(null);
     try {
       setStatus(await adminApi.zlibraryConnect(email, password));
+      setChanging(false);
       void refresh();
     } catch (error) {
       setConnectError(friendlyMessage(error));
@@ -102,7 +104,13 @@ export function ZlibrarySettingsCard() {
             <AlertDescription>{status.error}</AlertDescription>
           </Alert>
         ) : null}
-        <div>
+        {changing ? (
+          <ZlibraryConnectForm onConnect={connect} busy={connecting} error={connectError} />
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => setChanging((v) => !v)}>
+            {changing ? "Annulla" : "Cambia account"}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => void disconnect()}>
             Scollega
           </Button>

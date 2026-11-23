@@ -1,4 +1,5 @@
 import { BookOpenIcon, CheckSquareIcon, CompassIcon } from "lucide-react";
+import type React from "react";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import {
@@ -13,6 +14,9 @@ import {
   SearchField,
   SearchToolbar,
   SidePanelLayout,
+  moveInOrder,
+  useDragReorder,
+  useManualOrder,
   type ActiveFilterChip,
 } from "@ehub/ui";
 import { SheetClose } from "@ehub/ui/components/sheet";
@@ -34,7 +38,10 @@ function ExplorationCard({
   selection,
   cover: Cover,
   privateCover,
+  dragProps,
 }: {
+  /** Drag-and-drop props of the `<li>` (see `useDragReorder`). */
+  dragProps?: React.HTMLAttributes<HTMLLIElement>;
   exploration: Exploration;
   cover?: SourceCover;
   privateCover: boolean;
@@ -46,7 +53,10 @@ function ExplorationCard({
   const summary = exploration.summary ?? exploration.synthesis?.body;
   const hidden = exploration.sources.length - shown.length;
   return (
-    <li className="relative">
+    <li
+      className="relative rounded-xl transition-opacity data-[dragging]:opacity-40 data-[drop-target]:outline-2 data-[drop-target]:outline-offset-4 data-[drop-target]:outline-brand"
+      {...dragProps}
+    >
       {selection && DevKoboSelectBox ? (
         <div className="absolute top-4 right-4 z-10 sm:top-5 sm:right-5">
           <Suspense fallback={null}>
@@ -140,7 +150,11 @@ export function ExplorationListPage({
   );
   const normalize = (value: string) => value.toLocaleLowerCase("it").normalize("NFD").replace(/\p{M}/gu, "");
   const terms = normalize(query.trim()).split(/\s+/).filter(Boolean);
-  const visible = all.filter((exploration) => {
+  const [order, setOrder] = useManualOrder("ehub:exploration-order");
+  // The user's own order first-class; explorations without a place yet (new ones) stay on top, newest first.
+  const rank = new Map(order.map((id, i) => [id, i]));
+  const ordered = all.toSorted((a, b) => (rank.get(a.id) ?? -1) - (rank.get(b.id) ?? -1));
+  const visible = ordered.filter((exploration) => {
     if (tagFilter && !exploration.tags?.includes(tagFilter)) return false;
     if (status && exploration.status !== status) return false;
     const searchable = normalize([
@@ -168,6 +182,9 @@ export function ExplorationListPage({
       else next.delete(id);
       return next;
     });
+  const { itemProps } = useDragReorder((id, target) =>
+    setOrder(moveInOrder(visible.map((e) => e.id), ordered.map((e) => e.id), id, target)),
+  );
   const allVisibleSelected = visible.length > 0 && visible.every((e) => selected.has(e.id));
 
   useEffect(() => {
@@ -284,6 +301,7 @@ export function ExplorationListPage({
               <ExplorationCard
                 key={exploration.id}
                 exploration={exploration}
+                dragProps={itemProps(exploration.id) as React.HTMLAttributes<HTMLLIElement>}
                 cover={cover}
                 privateCover={!meta.readOnly && devTools}
                 selection={kobo ? {

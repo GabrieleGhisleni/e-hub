@@ -54,6 +54,11 @@ function CardBody({
   return (
     <>
       <BookCover book={book} eager={eager}>
+        {book.status === "read" ? (
+          <span className="absolute top-3 left-0 z-10 rounded-r-sm bg-status-read px-2.5 py-0.5 text-[0.6875rem] font-semibold tracking-wide text-white shadow-sm">
+            Letto
+          </span>
+        ) : null}
         {book.status === "reading" ? (
           <span className="absolute bottom-2 left-2.5 z-10 inline-flex items-center gap-1.5 rounded-full bg-background/90 px-2 py-0.5 text-[0.6875rem] font-medium tracking-wide text-foreground shadow-sm backdrop-blur-sm">
             <span aria-hidden className="size-1.5 rounded-full bg-status-reading" />

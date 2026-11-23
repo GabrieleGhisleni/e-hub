@@ -12,7 +12,7 @@ import { foldToAscii } from "../../shared/text.ts";
 // Query model
 // ---------------------------------------------------------------------------------------------
 
-export const SORT_KEYS = ["title", "author", "recent"] as const;
+export const SORT_KEYS = ["title", "author", "recent", "manual"] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 export const DEFAULT_SORT: SortKey = "title";
 
@@ -20,6 +20,7 @@ export const SORT_LABELS: Readonly<Record<SortKey, string>> = {
   title: "Titolo",
   author: "Autore",
   recent: "Letture recenti",
+  manual: "Il mio ordine",
 };
 
 /** Statuses in display order (the enum order). Taken from the labels so zod never enters the bundle. */
@@ -34,6 +35,8 @@ export interface LibraryQuery {
   tags: string[];
   /** Selected statuses (a book must have one of them). */
   statuses: BookStatus[];
+  /** Show the books already read even when no status is selected (default: hidden, the list is "what is left"). */
+  showRead: boolean;
   sort: SortKey;
 }
 
@@ -42,6 +45,7 @@ export const EMPTY_QUERY: Readonly<LibraryQuery> = Object.freeze({
   topic: null,
   tags: [],
   statuses: [],
+  showRead: false,
   sort: DEFAULT_SORT,
 });
 
@@ -51,6 +55,8 @@ export const QUERY_PARAMS = {
   topic: "topic",
   tag: "tag",
   status: "status",
+  /** `?letti=1`: include the read books. */
+  showRead: "letti",
   sort: "sort",
 } as const;
 
@@ -91,6 +97,7 @@ export function parseLibraryQuery(params: URLSearchParams): LibraryQuery {
     topic: topic === "" ? null : topic,
     tags,
     statuses: STATUS_ORDER.filter((s) => wanted.has(s)),
+    showRead: params.get(QUERY_PARAMS.showRead) === "1",
     sort: isSortKey(sort) ? sort : DEFAULT_SORT,
   };
 }
@@ -106,6 +113,7 @@ export function serializeLibraryQuery(query: LibraryQuery): URLSearchParams {
   for (const status of STATUS_ORDER) {
     if (statuses.has(status)) params.append(QUERY_PARAMS.status, status);
   }
+  if (query.showRead) params.set(QUERY_PARAMS.showRead, "1");
   if (query.sort !== DEFAULT_SORT) params.set(QUERY_PARAMS.sort, query.sort);
   return params;
 }
@@ -203,6 +211,8 @@ interface Matcher {
   topic: string | null;
   tagKeys: string[];
   statuses: ReadonlySet<BookStatus>;
+  /** Books already read are left out when no status is chosen and `showRead` is off. */
+  hideRead: boolean;
 }
 
 function matcher(query: LibraryQuery): Matcher {
@@ -211,12 +221,16 @@ function matcher(query: LibraryQuery): Matcher {
     topic: query.topic,
     tagKeys: uniqueBy(query.tags.map(tagKey), (k) => k),
     statuses: new Set(query.statuses),
+    hideRead: !query.showRead && query.statuses.length === 0,
   };
 }
 
 function matches(book: BookCard, m: Matcher, skip?: Facet): boolean {
   if (skip !== "topic" && m.topic !== null && book.topic !== m.topic) return false;
-  if (skip !== "statuses" && m.statuses.size > 0 && !m.statuses.has(book.status)) return false;
+  if (skip !== "statuses") {
+    if (m.statuses.size > 0 && !m.statuses.has(book.status)) return false;
+    if (m.hideRead && book.status === "read") return false;
+  }
   if (skip !== "tags" && m.tagKeys.length > 0) {
     const keys = new Set(book.tags.map(tagKey));
     if (!m.tagKeys.every((k) => keys.has(k))) return false;
@@ -345,18 +359,31 @@ function byRecent(a: BookCard, b: BookCard): number {
   return byTitle(a, b);
 }
 
-const COMPARATORS: Readonly<Record<SortKey, (a: BookCard, b: BookCard) => number>> = {
+const COMPARATORS: Readonly<Record<Exclude<SortKey, "manual">, (a: BookCard, b: BookCard) => number>> = {
   title: byTitle,
   author: byAuthor,
   recent: byRecent,
 };
 
-/** New sorted array: title (Italian collation), author surname, or most recent reading activity first. */
-export function sortBooks(books: readonly BookCard[], sort: SortKey): BookCard[] {
-  return books.toSorted(COMPARATORS[sort]);
+/**
+ * New sorted array: title (Italian collation), author surname, most recent reading activity first, or the user's own
+ * order (`order`: ids; books not in it come after, by title).
+ */
+export function sortBooks(books: readonly BookCard[], sort: SortKey, order: readonly string[] = []): BookCard[] {
+  if (sort !== "manual") return books.toSorted(COMPARATORS[sort]);
+  const rank = new Map(order.map((id, i) => [id, i]));
+  return books.toSorted((a, b) => {
+    const ra = rank.get(a.id) ?? Number.POSITIVE_INFINITY;
+    const rb = rank.get(b.id) ?? Number.POSITIVE_INFINITY;
+    return ra === rb ? byTitle(a, b) : ra < rb ? -1 : 1;
+  });
 }
 
 /** Filter + sort in one go. */
-export function applyLibraryQuery(books: readonly BookCard[], query: LibraryQuery): BookCard[] {
-  return sortBooks(filterBooks(books, query), query.sort);
+export function applyLibraryQuery(
+  books: readonly BookCard[],
+  query: LibraryQuery,
+  order: readonly string[] = [],
+): BookCard[] {
+  return sortBooks(filterBooks(books, query), query.sort, order);
 }

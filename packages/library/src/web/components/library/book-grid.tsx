@@ -1,4 +1,5 @@
 import type { BookCard as BookCardData } from "@shared/schema";
+import { useDragReorder } from "@ehub/ui";
 import { Skeleton } from "@ehub/ui/components/skeleton";
 import { useLibrarySelection } from "@library/selection";
 import { BookCard } from "./book-card";
@@ -12,15 +13,23 @@ const EAGER_COUNT = 6;
 export function BookGrid({
   books,
   librarySearch,
+  onMove,
 }: {
   books: readonly BookCardData[];
   librarySearch: string;
+  /** Drag and drop: `id` was dropped on `target`. Without it the grid is not reorderable. */
+  onMove?: (id: string, target: string) => void;
 }) {
   const selection = useLibrarySelection();
+  const { itemProps } = useDragReorder(onMove ?? (() => undefined), onMove !== undefined && !selection.selecting);
   return (
     <ul className={GRID} aria-label="Libri">
       {books.map((book, i) => (
-        <li key={book.id} className="min-w-0">
+        <li
+          key={book.id}
+          className="min-w-0 rounded-md transition-opacity data-[dragging]:opacity-40 data-[drop-target]:outline-2 data-[drop-target]:outline-offset-4 data-[drop-target]:outline-brand"
+          {...itemProps(book.id)}
+        >
           <BookCard
             book={book}
             librarySearch={librarySearch}

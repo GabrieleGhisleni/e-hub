@@ -26,6 +26,7 @@ import { ZlibraryClient, zlibraryEnvFrom } from "../zlibrary/index.ts";
 import { currentUserId, readUserSettings, userScopedDir } from "@ehub/store";
 import { apiError, jsonBody } from "./http.ts";
 import { securityConfig, securityMiddleware } from "./security.ts";
+import { registerHealthRoutes } from "./health-routes.ts";
 import { registerSettingsRoutes } from "./settings-routes.ts";
 import { registerSiteRoutes } from "./site-routes.ts";
 import { registerZlibraryRoutes } from "./zlibrary-routes.ts";
@@ -173,12 +174,9 @@ export function createApp(
 
   registerSettingsRoutes(app, jsonLimit);
 
-  registerZlibraryRoutes(
-    app,
-    services,
-    options.zlibrary ?? perUserZlibrary(services.ctx.cacheDir),
-    jsonLimit,
-  );
+  const zlibrary = options.zlibrary ?? perUserZlibrary(services.ctx.cacheDir);
+  registerZlibraryRoutes(app, services, zlibrary, jsonLimit);
+  registerHealthRoutes(app, services, async () => (typeof zlibrary === "function" ? zlibrary() : zlibrary));
 
   app.notFound((c) =>
     apiError(c, 404, "not-found", `Nessun endpoint ${c.req.method} ${c.req.path}.`),

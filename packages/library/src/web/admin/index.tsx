@@ -10,3 +10,4 @@ export { ADMIN_BUNDLE_MARKER } from "./marker";
 export { AdminChrome } from "./admin-chrome";
 export { ZlibrarySettingsCard } from "./zlibrary-settings-card";
 export { KeysSettingsCard } from "./keys-settings-card";
+export { ServicesHealthCard } from "./services-health-card";

@@ -46,6 +46,9 @@ import {
 } from "@shared/zlibrary";
 import {
   SettingsResponseSchema,
+  healthPaths,
+  ServicesHealthResponseSchema,
+  type ServicesHealthResponse,
   settingsPaths,
   type SettingsResponse,
   type SettingsUpdate,
@@ -233,6 +236,10 @@ export const adminApi = {
 
   saveSettings(update: SettingsUpdate): Promise<SettingsResponse> {
     return request("PUT", settingsPaths.keys, SettingsResponseSchema, update);
+  },
+
+  servicesHealth(): Promise<ServicesHealthResponse> {
+    return request("GET", healthPaths.services, ServicesHealthResponseSchema);
   },
 
   zlibraryStatus(): Promise<ZlibraryStatusResponse> {

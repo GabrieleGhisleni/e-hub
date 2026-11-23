@@ -71,7 +71,8 @@ const confessioni = card({
 const books = [promessi, delitto, principe, moby, confessioni];
 
 function q(partial: Partial<LibraryQuery>): LibraryQuery {
-  return { ...EMPTY_QUERY, ...partial };
+  // showRead on: these tests are about search and filters, not the default "hide the read" view.
+  return { ...EMPTY_QUERY, showRead: true, ...partial };
 }
 
 describe("normalizeText / searchTokens", () => {
@@ -190,6 +191,7 @@ describe("URL state", () => {
       topic: "narrativa",
       tags: ["classici", "russi"],
       statuses: ["reading", "read"],
+      showRead: false,
       sort: "author",
     });
   });
@@ -202,6 +204,7 @@ describe("URL state", () => {
       topic: null,
       tags: ["Classici"],
       statuses: ["read"],
+      showRead: false,
       sort: "title",
     });
   });
@@ -210,11 +213,12 @@ describe("URL state", () => {
   });
   it("serializes canonically (defaults omitted, statuses in enum order, q trimmed)", () => {
     const params = serializeLibraryQuery(
-      q({ q: "  dante ", tags: ["poesia"], statuses: ["read", "to-read"], sort: "title" }),
+      { ...EMPTY_QUERY, q: "  dante ", tags: ["poesia"], statuses: ["read", "to-read"], sort: "title" },
     );
     expect(params.toString()).toBe("q=dante&tag=poesia&status=to-read&status=read");
     expect(libraryQueryString(EMPTY_QUERY)).toBe("");
-    expect(libraryQueryString(q({ sort: "recent" }))).toBe("?sort=recent");
+    expect(libraryQueryString({ ...EMPTY_QUERY, sort: "recent" })).toBe("?sort=recent");
+    expect(libraryQueryString({ ...EMPTY_QUERY, showRead: true })).toBe("?letti=1");
   });
   it("round-trips", () => {
     const query = q({
@@ -225,6 +229,25 @@ describe("URL state", () => {
       sort: "recent",
     });
     expect(parseLibraryQuery(serializeLibraryQuery(query))).toEqual(query);
+  });
+});
+
+describe("read books and manual order", () => {
+  it("hides the read books by default, unless a status is chosen or showRead is on", () => {
+    const all = [promessi, delitto, principe, moby, confessioni];
+    const read = all.filter((b) => b.status === "read");
+    expect(read.length).toBeGreaterThan(0);
+    const hidden = filterBooks(all, EMPTY_QUERY);
+    expect(hidden.some((b) => b.status === "read")).toBe(false);
+    expect(filterBooks(all, { ...EMPTY_QUERY, showRead: true })).toHaveLength(all.length);
+    expect(filterBooks(all, { ...EMPTY_QUERY, statuses: ["read"] })).toHaveLength(read.length);
+  });
+  it("sorts by the manual order, unknown books after by title", () => {
+    const all = [promessi, delitto, principe, moby, confessioni];
+    const order = [confessioni.id, moby.id];
+    const sorted = sortBooks(all, "manual", order).map((b) => b.id);
+    expect(sorted.slice(0, 2)).toEqual(order);
+    expect(sorted).toHaveLength(all.length);
   });
 });
 
@@ -242,7 +265,7 @@ describe("query helpers", () => {
     );
   });
   it("clears filters but keeps the sort", () => {
-    expect(clearFilters(q({ q: "x", topic: "a", sort: "author" }))).toEqual(q({ sort: "author" }));
+    expect(clearFilters(q({ q: "x", topic: "a", sort: "author" }))).toEqual({ ...EMPTY_QUERY, sort: "author" });
   });
   it("toggles values and tags", () => {
     expect(toggleValue(["a", "b"], "a")).toEqual(["b"]);

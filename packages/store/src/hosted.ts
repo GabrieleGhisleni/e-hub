@@ -207,6 +207,14 @@ export const libraryLayout: Layout = {
       id: () => "",
       blobKey: (m) => `covers/${m[1]}.webp`,
     },
+    // The original EPUB (R2 `books/<id>.epub`). Not a file of the data dir: only the remote client (`elib db`) uses it.
+    {
+      match: new RegExp(`^books/${ID}/book\\.epub$`),
+      kind: "blob",
+      table: "",
+      id: () => "",
+      blobKey: (m) => `books/${m[1]}.epub`,
+    },
   ],
   listings: [
     { dir: "books", table: "books", as: "dirs" },

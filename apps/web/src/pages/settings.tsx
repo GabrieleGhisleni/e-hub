@@ -1,6 +1,6 @@
 import { KeyRound, LogOut } from "lucide-react";
 import { useState } from "react";
-import { KeysSettingsSlot, ZlibrarySettingsSlot } from "@ehub/library/web";
+import { KeysSettingsSlot, ServicesHealthSlot, ZlibrarySettingsSlot } from "@ehub/library/web";
 import { Container, PageHeader, ThemeToggle } from "@ehub/ui";
 import { Button } from "@ehub/ui/components/button";
 import { GOOGLE_CLIENT_ID, HOSTED, currentSession, logout } from "../session";
@@ -80,6 +80,7 @@ export function SettingsPage() {
           <Section id="settings-account" title="Account">
             <AccountSection />
           </Section>
+          <ServicesHealthSlot />
           <KeysSettingsSlot />
           <ZlibrarySettingsSlot />
         </div>

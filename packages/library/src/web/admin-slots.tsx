@@ -17,6 +17,7 @@ let NewTopicButton: ComponentType | null = null;
 let ZlibrarySettingsCard: ComponentType | null = null;
 let ZlibrarySearchSheet: ComponentType<ZlibrarySearchSheetProps> | null = null;
 let KeysSettingsCard: ComponentType | null = null;
+let ServicesHealthCard: ComponentType | null = null;
 
 if (__ELIB_ADMIN__) {
   ZlibrarySearchSheet = lazy(() =>
@@ -28,6 +29,7 @@ if (__ELIB_ADMIN__) {
   LibraryAdminBar = lazy(() => load().then((m) => ({ default: m.LibraryAdminBar })));
   BookAdminActions = lazy(() => load().then((m) => ({ default: m.BookAdminActions })));
   ZlibrarySettingsCard = lazy(() => load().then((m) => ({ default: m.ZlibrarySettingsCard as ComponentType })));
+  ServicesHealthCard = lazy(() => load().then((m) => ({ default: m.ServicesHealthCard as ComponentType })));
   KeysSettingsCard = lazy(() => load().then((m) => ({ default: m.KeysSettingsCard as ComponentType })));
   NewTopicButton = lazy(() => load().then((m) => ({ default: m.NewTopicButton as ComponentType })));
 }
@@ -88,6 +90,16 @@ export function ZlibrarySettingsSlot() {
   return (
     <Suspense fallback={null}>
       <ZlibrarySettingsCard />
+    </Suspense>
+  );
+}
+
+/** Health of the connected services, for the app settings page (nothing in the public build). */
+export function ServicesHealthSlot() {
+  if (!ServicesHealthCard) return null;
+  return (
+    <Suspense fallback={null}>
+      <ServicesHealthCard />
     </Suspense>
   );
 }

@@ -67,6 +67,8 @@ export class ZlibraryClient {
   private session: Session | null = null;
   private savedEmail: string | undefined;
   private loginInFlight: Promise<Session> | null = null;
+  /** Who produced the next saved session: the user typing credentials in the app, or the environment. */
+  private loginSource: "ui" | "env" = "env";
 
   constructor(env: ZlibraryEnv, cacheDir: string) {
     this.env = env;
@@ -89,10 +91,14 @@ export class ZlibraryClient {
   async restore(): Promise<void> {
     if (this.session) return;
     try {
-      const saved = JSON.parse(await readFile(this.sessionFile, "utf8")) as Partial<Session> & { email?: string };
+      const saved = JSON.parse(await readFile(this.sessionFile, "utf8")) as Partial<Session> & {
+        email?: string;
+        source?: string;
+      };
       if (!saved.userId || !saved.userKey) return;
-      // With credentials in the environment the saved session must belong to the same account.
-      if (this.env.email && saved.email !== this.env.email) return;
+      // A session the user created in the app wins over the environment. One saved from the environment's own
+      // credentials must still belong to the same account (the .env may have changed).
+      if (saved.source !== "ui" && this.env.email && saved.email !== this.env.email) return;
       this.session = { userId: saved.userId, userKey: saved.userKey };
       this.savedEmail = saved.email;
     } catch {
@@ -110,10 +116,12 @@ export class ZlibraryClient {
     const previous = this.env;
     this.env = { ...previous, userId: undefined, userKey: undefined, email, password };
     this.session = null;
+    this.loginSource = "ui";
     try {
       await this.login();
       this.savedEmail = email;
     } finally {
+      this.loginSource = "env";
       this.env = { ...previous, userId: undefined, userKey: undefined, email: undefined, password: undefined };
     }
   }
@@ -216,7 +224,7 @@ export class ZlibraryClient {
   private async saveSession(session: Session): Promise<void> {
     try {
       await mkdir(path.dirname(this.sessionFile), { recursive: true });
-      await writeFile(this.sessionFile, JSON.stringify({ ...session, email: this.env.email }), { mode: 0o600 }); // never the password
+      await writeFile(this.sessionFile, JSON.stringify({ ...session, email: this.env.email, source: this.loginSource }), { mode: 0o600 }); // never the password
       await chmod(this.sessionFile, 0o600);
     } catch {
       // best effort: the in-memory session still works

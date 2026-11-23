@@ -13,7 +13,7 @@ import { SelectionProvider } from "./selection";
 
 export { BookCover } from "./components/book-cover";
 export { useSiteIndex } from "./data/site-data";
-export { KeysSettingsSlot, ZlibrarySearchSlot, ZlibrarySettingsSlot } from "./admin-slots";
+export { KeysSettingsSlot, ServicesHealthSlot, ZlibrarySearchSlot, ZlibrarySettingsSlot } from "./admin-slots";
 export { LIBRARY_BASE } from "./lib/paths";
 
 /** Layout of the library subtree: no header/footer/skip-link (the shell owns them). */
