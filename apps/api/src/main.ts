@@ -3,6 +3,7 @@
  * against the same database. Secrets come from the environment (systemd EnvironmentFile or .env.local), never from the
  * repo.
  */
+import { Sentry } from "./sentry.ts"; // first: starts Sentry before the rest
 import { serve } from "@hono/node-server";
 import type { Hono } from "hono";
 import { createServiceContext, createServices } from "@ehub/library/services";
@@ -58,6 +59,8 @@ for (const user of await docs.users.list()) {
 if (removed > 0) console.log(`removed ${removed} stale upload staging dir(s)`);
 
 const app = createApi({
+  // Sentry request/response middleware: must be the first one (per-route timings, errors of the handlers).
+  instrument: (a) => Sentry.honoMiddleware(a),
   auth,
   corsOrigins: env.CORS_ORIGINS,
   modules: [

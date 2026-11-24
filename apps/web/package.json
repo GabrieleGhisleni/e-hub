@@ -18,6 +18,7 @@
     "@ehub/podcasts": "workspace:*",
     "@ehub/store": "workspace:*",
     "@ehub/ui": "workspace:*",
+    "@sentry/react": "^11.16.0",
     "lucide-react": "^1.70.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

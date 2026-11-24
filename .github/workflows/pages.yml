@@ -33,6 +33,8 @@ jobs:
           # Public address of the API (the Pi behind its tunnel): repository variable, not a secret.
           VITE_API_URL: ${{ vars.API_URL }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          # DSN of the ehub-web Sentry project: public by design (it only allows sending events).
+          VITE_SENTRY_DSN: https://69a2118aed0521b604fcfb5777355de7@o4508131010412544.ingest.de.sentry.io/4512486347440208
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

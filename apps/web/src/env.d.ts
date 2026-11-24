@@ -10,4 +10,6 @@ interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
   /** Google OAuth client id for the login button. */
   readonly VITE_GOOGLE_CLIENT_ID?: string;
+  /** DSN of the Sentry browser project (public). Empty: Sentry off. */
+  readonly VITE_SENTRY_DSN?: string;
 }

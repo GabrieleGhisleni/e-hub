@@ -8,6 +8,8 @@ export interface ApiOptions {
   auth: AuthOptions;
   /** Origins allowed to call the API from a browser (the GitHub Pages origin, `http://127.0.0.1:5173` in dev). */
   corsOrigins: readonly string[];
+  /** Monitoring middleware (Sentry), registered before everything else so it sees every request. */
+  instrument?: (app: Hono) => MiddlewareHandler;
 }
 
 /** For the modules' `access` option: the checks are done once, by the API. */
@@ -15,6 +17,7 @@ export const passThrough: MiddlewareHandler = (_c, next) => next();
 
 export function createApi(options: ApiOptions): Hono {
   const app = new Hono();
+  if (options.instrument) app.use("*", options.instrument(app));
   app.use(
     "*",
     cors({
