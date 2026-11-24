@@ -27,6 +27,15 @@ L'app gira su http://127.0.0.1:5173.
 | `pnpm typecheck` | Typecheck di tutti i pacchetti                   |
 | `pnpm test`      | Test di tutti i pacchetti                        |
 
+Le stesse cose, più i comandi per i log del Pi e per `elib db`, sono scorciatoie del [Makefile](Makefile): `make help` le elenca.
+
+| Scorciatoia | Cosa fa |
+| --- | --- |
+| `make check` | Typecheck + test + build, prima di un commit |
+| `make db-status` / `make db-sync` / `make db-push` | Confronto locale ↔ account, anteprima, allineamento |
+| `make logs` / `make logs-errors` / `make status` | Log in diretta, errori dell'ultima ora, stato di `ehub-api` sul Pi |
+| `make health API_URL=https://…` | Controlla `/api/health` |
+
 ## CLI `elib`
 
 `elib` non è un comando globale: si lancia dalla radice del repo con pnpm. Per scriverlo come `elib`, aggiungi in `~/.zshrc`: `alias elib='pnpm --dir ~/projects/e-hub --filter @ehub/library elib'`.

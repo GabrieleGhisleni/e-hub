@@ -257,6 +257,9 @@ export class ZlibraryClient {
     if (options.authed !== false) {
       const s = await this.getSession();
       headers.Cookie = `remix_userid=${s.userId}; remix_userkey=${s.userKey}`;
+      // POST endpoints (search) reject the cookie alone with 400 "Access denied": they want the key in headers too.
+      headers["remix-userid"] = s.userId;
+      headers["remix-userkey"] = s.userKey;
     }
     let body: string | undefined;
     if (options.form) {

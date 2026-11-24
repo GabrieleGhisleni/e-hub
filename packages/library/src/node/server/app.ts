@@ -29,6 +29,7 @@ import { securityConfig, securityMiddleware } from "./security.ts";
 import { registerHealthRoutes } from "./health-routes.ts";
 import { registerSettingsRoutes } from "./settings-routes.ts";
 import { registerSiteRoutes } from "./site-routes.ts";
+import { LibgenClient } from "../zlibrary/libgen.ts";
 import { registerZlibraryRoutes } from "./zlibrary-routes.ts";
 
 export interface AppOptions {
@@ -175,7 +176,7 @@ export function createApp(
   registerSettingsRoutes(app, jsonLimit);
 
   const zlibrary = options.zlibrary ?? perUserZlibrary(services.ctx.cacheDir);
-  registerZlibraryRoutes(app, services, zlibrary, jsonLimit);
+  registerZlibraryRoutes(app, services, zlibrary, jsonLimit, new LibgenClient());
   registerHealthRoutes(app, services, async () => (typeof zlibrary === "function" ? zlibrary() : zlibrary));
 
   app.notFound((c) =>

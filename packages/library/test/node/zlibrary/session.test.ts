@@ -49,4 +49,22 @@ describe("Z-Library per-user session", () => {
     await after.restore();
     expect(after.configured).toBe(false);
   });
+
+  it("search sends the session key in headers as well as in the cookie", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      new Response(JSON.stringify({ success: 1, books: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new ZlibraryClient({ baseUrl: "https://z.example", userId: "7", userKey: "KEY" }, dir);
+    await client.search({ query: "stoici" } as Parameters<ZlibraryClient["search"]>[0]);
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const headers = init.headers as Record<string, string>;
+    expect(init.method).toBe("POST");
+    expect(headers["remix-userid"]).toBe("7");
+    expect(headers["remix-userkey"]).toBe("KEY");
+    expect(headers.Cookie).toContain("remix_userkey=KEY");
+  });
 });

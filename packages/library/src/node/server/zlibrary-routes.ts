@@ -12,6 +12,7 @@ import {
   ZlibraryError,
   safeFileStem,
 } from "../zlibrary/index.ts";
+import { LIBGEN_ID, LibgenClient } from "../zlibrary/libgen.ts";
 import { jsonBody } from "./http.ts";
 
 const EPUB_PATH = "/api/library/zlibrary/books/:id/:hash/epub";
@@ -23,6 +24,8 @@ export function registerZlibraryRoutes(
   services: Services,
   clientOrFactory: ZlibraryClient | (() => ZlibraryClient | Promise<ZlibraryClient>),
   jsonLimit: MiddlewareHandler,
+  /** Search fallback and download source for `id === "libgen"` books; absent = Z-Library only. */
+  libgen?: LibgenClient,
 ): void {
   /** One client per request: in the hosted setup each user has their own (own session file). */
   const pick = async (): Promise<ZlibraryClient> =>
@@ -67,7 +70,19 @@ export function registerZlibraryRoutes(
   app.post(zlibraryPaths.search, jsonLimit, async (c) => {
     const client = await pick();
     const body = await jsonBody(c, ZlibrarySearchRequestSchema);
-    return c.json(await guard(() => client.search(body)));
+    // Z-Library first; when it is not connected or fails, LibGen (no account) answers instead.
+    try {
+      return c.json(await client.search(body));
+    } catch (error) {
+      if (libgen && error instanceof ZlibraryError) {
+        try {
+          return c.json(await libgen.search(body));
+        } catch {
+          // LibGen is down too: report Z-Library's own error
+        }
+      }
+      return await guard(() => Promise.reject(error));
+    }
   });
 
   app.post(EPUB_PATH, async (c) => {
@@ -77,6 +92,7 @@ export function registerZlibraryRoutes(
       c.req.param("id"),
       c.req.param("hash"),
       "scaricati",
+      libgen,
     );
     const stem = `${safeFileStem(book.displayName)}.epub`;
     const asciiFallback = stem.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "");
@@ -94,6 +110,7 @@ export function registerZlibraryRoutes(
       c.req.param("id"),
       c.req.param("hash"),
       "caricati",
+      libgen,
     );
     const fileName = `${safeFileStem(book.displayName)}.epub`;
     const pages = Number(c.req.query("pages"));
@@ -113,9 +130,12 @@ async function downloadEpub(
   id: string,
   hash: string,
   purpose: string,
+  libgen?: LibgenClient,
 ): Promise<DownloadedFile> {
   const book = await guard(() =>
-    client.download(id, hash, services.ctx.limits.epubMaxBytes, "epub"),
+    id === LIBGEN_ID
+      ? (libgen ?? failNoLibgen()).download(hash, services.ctx.limits.epubMaxBytes, "epub")
+      : client.download(id, hash, services.ctx.limits.epubMaxBytes, "epub"),
   );
   const extension = book.extension.toUpperCase();
   if (extension !== "EPUB") {
@@ -150,4 +170,8 @@ async function guard<T>(fn: () => Promise<T>): Promise<T> {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function failNoLibgen(): never {
+  throw new ServiceError("zlibrary-failed", 502, "LibGen non è abilitato.");
 }
