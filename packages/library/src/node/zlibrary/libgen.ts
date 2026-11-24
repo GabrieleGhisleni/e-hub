@@ -1,15 +1,15 @@
 /**
- * LibGen fallback (libgen.li layout): HTML search + download, no account. Used when Z-Library cannot answer.
+ * LibGen fallback (libgen.gl/.li layout): HTML search + download, no account. Used when Z-Library cannot answer.
  * Results are mapped to `ZlibraryBook` with `id = "libgen"` and `hash = md5`, so the existing routes and UI work as is.
  *
- *   LIBGEN_BASE_URL   mirror, default https://libgen.li (comma-separated list: the first that answers wins)
+ *   LIBGEN_BASE_URL   mirror, default https://libgen.gl (comma-separated list: the first that answers wins)
  */
 import type { ZlibraryBook, ZlibrarySearchRequest, ZlibrarySearchResponse } from "../../shared/zlibrary.ts";
 import { ZlibrarySearchRequestSchema } from "../../shared/zlibrary.ts";
 import { type DownloadedFile, ZlibraryError } from "./index.ts";
 
 export const LIBGEN_ID = "libgen";
-const DEFAULT_BASE_URL = "https://libgen.li";
+const DEFAULT_BASE_URL = "https://libgen.gl";
 const USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 const PAGE_SIZE = 25;
 
@@ -155,7 +155,7 @@ export function parseLibgenResults(html: string): ZlibraryBook[] {
     if (cells.length < 8) continue;
     seen.add(md5);
     const titleCell = /<td[\s>][\s\S]*?<\/td>/i.exec(row)![0];
-    const titleLink = /<a[^>]+href=["'][^"']*edition\.php[^>]*>([\s\S]*?)<\/a>/i.exec(titleCell)?.[1];
+    const titleLink = /href=["']edition\.php[^"']*["'][^>]*>([\s\S]*?)<\/a>/i.exec(titleCell)?.[1];
     const year = Number(/\d{4}/.exec(cells[3] ?? "")?.[0]);
     const pages = Number(/\d+/.exec(cells[5] ?? "")?.[0]);
     const sizeLabel = cells[6] || null;
@@ -163,7 +163,7 @@ export function parseLibgenResults(html: string): ZlibraryBook[] {
       id: LIBGEN_ID,
       hash: md5,
       title: textOf(titleLink ?? cells[0] ?? "") || "Senza titolo",
-      author: cells[1] || "Autore sconosciuto",
+      author: cells[1]?.replace(/[,\s]+$/, "") || "Autore sconosciuto",
       year: year > 0 ? year : null,
       extension: (cells[7] || "?").toUpperCase(),
       size: sizeLabel ? parseSize(sizeLabel) : null,
