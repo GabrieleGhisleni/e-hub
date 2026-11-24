@@ -112,4 +112,15 @@ describe("buildSiteData", () => {
     const data = await buildSiteData(tmp.dataDir, opts);
     expect(data.index.books.map((b) => b.title)).toEqual(["alba", "Eco", "Èra", "Zeta"]);
   });
+  it("reuses a fresh cover hash instead of reading the cover again, and re-reads it once stale", async () => {
+    await writeFakeBook(tmp.dataDir, { id: "aaaaaaaa", title: "Uno" }, { "cover.webp": Buffer.from("prima") });
+    let clock = 0;
+    const coverHashes = new Map<string, { hash: string; at: number }>();
+    const build = () => buildSiteData(tmp.dataDir, { ...opts, coverHashes, now: () => clock });
+    const first = (await build()).index.books[0]!.coverUrl;
+    await writeFakeBook(tmp.dataDir, { id: "aaaaaaaa", title: "Uno" }, { "cover.webp": Buffer.from("dopo") });
+    expect((await build()).index.books[0]!.coverUrl).toBe(first); // trusted: the cover was not read again
+    clock = 11 * 60_000;
+    expect((await build()).index.books[0]!.coverUrl).not.toBe(first); // stale: read again
+  });
 });

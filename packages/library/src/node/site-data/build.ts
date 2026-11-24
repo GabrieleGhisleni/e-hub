@@ -42,7 +42,16 @@ export interface BuildSiteDataOptions {
   basePath: string;
   /** Absolute prefix of the cover URLs (the hosted API serves them): `<coverBase><file>`. Default: under `basePath`. */
   coverBase?: string;
+  /**
+   * Cover hashes already computed (cover path → hash), kept by the caller between builds. Hashing means downloading the
+   * whole cover from R2, so a fresh entry is reused instead; the caller empties it on writes.
+   */
+  coverHashes?: Map<string, { hash: string; at: number }>;
+  now?: () => number;
 }
+
+/** How long a cover hash is trusted without re-reading the cover (writes through the API empty the cache earlier). */
+const COVER_HASH_TTL_MS = 10 * 60_000;
 
 function coverHash(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex").slice(0, 8);
@@ -133,9 +142,21 @@ export async function buildSiteData(
     }
     let coverUrl: string | null = null;
     let coverEntry: [string, string] | null = null;
-    const bytes = await readCover(dataDir, book.id);
-    if (bytes !== null) {
-      const fileName = coverFileName(book.id, coverHash(bytes));
+    const path = coverPath(dataDir, book.id);
+    const clock = options.now ?? Date.now;
+    const known = options.coverHashes?.get(path);
+    let hash = known && clock() - known.at < COVER_HASH_TTL_MS ? known.hash : null;
+    if (hash === null) {
+      const bytes = await readCover(dataDir, book.id);
+      if (bytes !== null) {
+        hash = coverHash(bytes);
+        options.coverHashes?.set(path, { hash, at: clock() });
+      } else {
+        options.coverHashes?.delete(path);
+      }
+    }
+    if (hash !== null) {
+      const fileName = coverFileName(book.id, hash);
       coverEntry = [fileName, coverPath(dataDir, book.id)];
       coverUrl = options.coverBase === undefined ? urls.coverUrl(fileName) : `${options.coverBase}${fileName}`;
     }

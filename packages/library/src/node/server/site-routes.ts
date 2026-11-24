@@ -7,7 +7,8 @@ import { currentUserId, readBytesIfExists } from "@ehub/store";
 import type { Hono } from "hono";
 import { type SiteData, buildSiteData } from "../site-data/build.ts";
 
-const TTL_MS = 5000;
+/** Fresh for this long; after it the old data is served at once while one rebuild runs in the background. */
+const TTL_MS = 30_000;
 const SITE = "/api/library/site";
 
 export interface SiteRoutesOptions {
@@ -25,19 +26,42 @@ export function registerSiteRoutes(app: Hono, options: SiteRoutesOptions): SiteC
   const now = options.now ?? Date.now;
   // One entry per user: the data (and cover paths) of one user must never be served to another.
   const cache = new Map<string, { at: number; origin: string; data: SiteData }>();
+  // Cover hashes per user (downloading a cover just to hash it is the slowest part of a build).
+  const coverHashes = new Map<string, Map<string, { hash: string; at: number }>>();
+  // A build in progress per user and origin: concurrent requests share it instead of each rebuilding everything.
+  const building = new Map<string, Promise<SiteData>>();
   let generation = 0;
+
+  const rebuild = (owner: string, origin: string): Promise<SiteData> => {
+    const key = `${owner}\n${origin}`;
+    const running = building.get(key);
+    if (running) return running;
+    const started = generation;
+    let hashes = coverHashes.get(owner);
+    if (!hashes) coverHashes.set(owner, (hashes = new Map()));
+    const promise = buildSiteData(options.dataDir, {
+      basePath: "/",
+      coverBase: `${origin}${SITE}/covers/`,
+      coverHashes: hashes,
+      now,
+    })
+      .then((data) => {
+        if (started === generation) cache.set(owner, { at: now(), origin, data });
+        return data;
+      })
+      .finally(() => building.delete(key));
+    building.set(key, promise);
+    return promise;
+  };
 
   const load = async (origin: string): Promise<SiteData> => {
     const owner = currentUserId() ?? "";
     const cached = cache.get(owner);
-    if (cached && cached.origin === origin && now() - cached.at < TTL_MS) return cached.data;
-    const started = generation;
-    const data = await buildSiteData(options.dataDir, {
-      basePath: "/",
-      coverBase: `${origin}${SITE}/covers/`,
-    });
-    if (started === generation) cache.set(owner, { at: now(), origin, data });
-    return data;
+    if (cached && cached.origin === origin) {
+      if (now() - cached.at >= TTL_MS) void rebuild(owner, origin).catch(() => {}); // stale: refresh behind the reply
+      return cached.data;
+    }
+    return rebuild(owner, origin);
   };
   const originOf = (url: string) => (options.publicUrl ?? new URL(url).origin).replace(/\/+$/, "");
 
@@ -64,6 +88,8 @@ export function registerSiteRoutes(app: Hono, options: SiteRoutesOptions): SiteC
     invalidate() {
       generation += 1;
       cache.clear();
+      coverHashes.clear();
+      building.clear();
     },
   };
 }
