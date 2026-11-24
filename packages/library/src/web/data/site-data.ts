@@ -1,14 +1,10 @@
 /**
  * Site data store: `index.json` fetched once, `books/<id>.json` on demand, both cached in memory.
  *
- * - Same URLs in dev (Vite plugin middleware) and on Pages (static files), see `@shared/site-urls`.
- * - Dev: the Vite plugin sends `elib:data-changed` when anything under data/ changes; we refetch everything
- *   already loaded, keeping the current data on screen while it reloads (no skeleton flash).
  * - `refreshSiteData()` is the hook for the admin UI (W4a): call it after a write to see the new data.
  */
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import type { BookCard, BookDetail, SiteIndex } from "@shared/schema";
-import { DATA_CHANGED_EVENT, siteDataUrls } from "@shared/site-urls";
 
 export type Resource<T> =
   | { status: "idle" }
@@ -27,15 +23,12 @@ export class HttpError extends Error {
   }
 }
 
-// Hosted build: the API serves the same documents (and absolute cover URLs) at runtime; otherwise static files.
-const HOSTED = import.meta.env.VITE_HOSTED === "1";
-const urls = HOSTED
-  ? {
-      indexUrl: "/api/library/site/index.json",
-      bookUrl: (id: string) => `/api/library/site/books/${id}.json`,
-      coverUrl: (fileName: string) => `/api/library/site/covers/${fileName}`,
-    }
-  : siteDataUrls(import.meta.env.BASE_URL);
+// The API serves the documents (and the covers) at runtime.
+const urls = {
+  indexUrl: "/api/library/site/index.json",
+  bookUrl: (id: string) => `/api/library/site/books/${id}.json`,
+  coverUrl: (fileName: string) => `/api/library/site/covers/${fileName}`,
+};
 
 const IDLE = { status: "idle" } as const;
 let indexState: Resource<SiteIndex> = IDLE;
@@ -170,12 +163,6 @@ export function refreshSiteData(): Promise<void> {
 /** Warms the cache for a book page (hover/focus on a card). Errors are ignored here. */
 export function prefetchBook(id: string): void {
   void loadBook(id);
-}
-
-if (import.meta.hot) {
-  import.meta.hot.on(DATA_CHANGED_EVENT, () => {
-    void refreshSiteData();
-  });
 }
 
 // ---------------------------------------------------------------------------------------------

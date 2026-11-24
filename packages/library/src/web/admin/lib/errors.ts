@@ -39,9 +39,7 @@ export function isServerDownStatus(status: number): boolean {
 
 const HINTS: Partial<Record<string, string>> = {
   network:
-    import.meta.env?.VITE_HOSTED === "1"
-      ? "Impossibile comunicare con il server di e-hub. Riprova tra poco."
-      : "Impossibile raggiungere il server locale. Controlla che sia avviato (pnpm dev o pnpm server).",
+    "Impossibile comunicare con il server di e-hub. Riprova tra poco.",
   "forbidden-host": "Il server locale ha rifiutato l’indirizzo da cui stai aprendo l’interfaccia.",
   "forbidden-origin":
     "Il server locale ha rifiutato l’origine della pagina: aggiungila a server.allowedOrigins in elib.config.json.",

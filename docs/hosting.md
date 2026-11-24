@@ -35,7 +35,7 @@ Stato: **in implementazione** (2026-11-18). Dal ramo `per-user-data` l'app è **
 - **Niente rotte pubbliche, tranne la demo.** Tutte le rotte dell'API, `GET` incluse, richiedono il token di sessione (senza: 401); fanno eccezione `POST /auth/google`, `GET /api/health`, il preflight CORS e le letture della demo (sezione sotto). Il token lo emette l'API dopo il login con Google (Google Identity Services: il browser ottiene l'ID token di Google e lo posta a `POST /auth/google`; `apps/api/src/google.ts` ne verifica firma, `aud` e email verificata, crea o aggiorna l'utente e controlla l'allowlist, se c'è). La risposta è un token firmato HS256 con `SESSION_SECRET`, valido 30 giorni, con lo `sub` di Google come soggetto, che il sito manda come `Authorization: Bearer`. Niente cookie e niente redirect: sito e API stanno su domini diversi.
 - **Le chiavi stanno solo sul Pi**: token di Turso, segreto del client Google e `SESSION_SECRET`, chiavi R2, token di freeway e Groq, chiave SSH del Kobo. Le CLI del laptop (`elib`, `explore`) chiamano l'API del Pi con il token dell'utente.
 - **Validazione invariata**: gli schemi Zod di oggi validano ogni scrittura, sul Pi.
-- **I dati escono da git.** Dopo la migrazione `packages/*/data` sparisce dal repo pubblico: i dati non vengono più pubblicati con il sito. Resta la regola per ciò che il sito mostra: citazioni di al massimo due frasi, testo dei libri mai esposto.
+- **I dati sono fuori da git.** `packages/*/data` è stato tolto dal repo pubblico (verificato: tutto era già in Turso sotto l'utente proprietario): i dati non vengono più pubblicati con il sito. Resta la regola per ciò che il sito mostra: citazioni di al massimo due frasi, testo dei libri mai esposto.
 
 ## Dati
 
@@ -69,7 +69,7 @@ Ogni persona che fa login vede e modifica **solo i propri dati**. L'isolamento s
 
 ### Il proprietario e la migrazione dei dati esistenti
 
-`pnpm --filter @ehub/store migrate --owner-email tu@example.com [--apply]` assegna **tutti** i dati attuali (`packages/*/data`, EPUB, copertine) a quell'utente. Se non ha ancora mai fatto login, lo `sub` non si conosce: la riga `users` e tutti i dati prendono l'id provvisorio `email:<indirizzo>`. Al **primo login con quell'email (verificata da Google)** l'API collega il proprietario: rinomina le righe di tutte le tabelle in una volta sola (`UserStore.reassign`, ripetibile se si interrompe) e sposta gli oggetti R2 da `users/email:<indirizzo>/` a `users/<sub>/` (`moveUserBlobs`). Un secondo account Google con la stessa email ma `sub` diverso viene rifiutato (403). Se invece il proprietario ha già fatto login, la migrazione scrive direttamente sotto il suo `sub`.
+**Storico.** La migrazione una tantum (`pnpm --filter @ehub/store migrate --owner-email …`, ora rimossa) ha assegnato **tutti** i dati di allora (`packages/*/data`, EPUB, copertine) al proprietario. Se non ha ancora mai fatto login, lo `sub` non si conosce: la riga `users` e tutti i dati prendono l'id provvisorio `email:<indirizzo>`. Al **primo login con quell'email (verificata da Google)** l'API collega il proprietario: rinomina le righe di tutte le tabelle in una volta sola (`UserStore.reassign`, ripetibile se si interrompe) e sposta gli oggetti R2 da `users/email:<indirizzo>/` a `users/<sub>/` (`moveUserBlobs`). Un secondo account Google con la stessa email ma `sub` diverso viene rifiutato (403). Se invece il proprietario ha già fatto login, la migrazione scrive direttamente sotto il suo `sub`.
 
 ## Il Pi
 
@@ -111,7 +111,7 @@ Flusso di un libro nuovo: upload dalla UI o da `elib` → il Pi salva l'EPUB su 
 ## Da decidere
 
 - Dominio per Cloudflare Tunnel, oppure Tailscale Funnel.
-- ~~Sviluppo locale~~ risolto: il client libSQL accetta `TURSO_DATABASE_URL=file:./dev.db` (o `:memory:`), senza token né rete (`localDbFromEnv`); resta anche `API_LOCAL_DEV=1` con file JSON e senza login. Rimane da decidere solo quando togliere i server `*-dev.ts`.
+- ~~Sviluppo locale~~ risolto: non c'è più una modalità su file né un database locale. `pnpm dev` avvia l'API sul laptop collegata allo stesso Turso/R2 di produzione (`API_DEV_OWNER_EMAIL`, `POST /auth/dev`: sessione per il proprietario, solo con `Host` di loopback e senza header di proxy); le CLI si collegano direttamente a Turso/R2 come `EHUB_OWNER_EMAIL`.
 - Limiti esatti dei piani gratuiti (Turso, Groq, R2): verificarli sulle pagine ufficiali prima della fase 1.
 
 ## Stato delle fasi
@@ -125,7 +125,7 @@ Flusso di un libro nuovo: upload dalla UI o da `elib` → il Pi salva l'EPUB su 
 | 5. Frontend | fatta nel codice | Build «hosted» (`pnpm --filter @ehub/web build:hosted`, `VITE_HOSTED=1`, `VITE_API_URL`): niente dati nel bundle, tutto dall'API (`/api/library/site/*`, `/api/podcasts/catalog`, `/api/notes`, `/api/explore`); login con Google (`apps/web/src/session.ts`); coda del Kobo con «Sincronizza ora» nella barra admin della libreria; workflow Pages aggiornato. `site-data/build.ts` resta, ma ora lo usa l'API a runtime. |
 | 6. CLI e skill `explore` | fatta (solo `explore`) | `/api/store/<radice>/<chiave>` (solo con sessione, validazione Zod per tabella sul Pi) e `RemoteBackend` nel client: con `EHUB_API_URL` + `EHUB_API_TOKEN` la CLI `explore` lavora sui dati hosted; la skill lo spiega. `elib` e `episode` NON sono collegate: restano da collegare le CLI; cache EPUB e Kobo sono gestiti sul Pi (si usano lì o dall'app). |
 | 7. Podcast | fatta nel codice, **serve `GROQ_API_KEY` e `yt-dlp` sul Pi** | `src/cli/transcribe/groq.ts`: scarica l'audio (yt-dlp o feed), `ffmpeg` mono 16 kHz 32 kbps, divide in parti da 90 minuti se supera 24 MB, una chiamata a Groq per parte con ripresa e attesa sui 429. Le trascrizioni non hanno più speaker (Groq non li dà). `transcriber/` (Python) rimosso. (Nota: `core/ingest/git.ts` non è uno script che committa i dati, come scritto sopra: è il runner di `git` per il clone del wiki di Huberman, e resta.) |
-| 8. Chiusura | **in parte** | Backup notturno **tolto dal piano** (si usa il ripristino di Turso). **Non fatto di proposito**: rimozione di `packages/*/data` (aspetta la conferma che la migrazione è avvenuta e verificata) e dei server `*-dev.ts` (dipende dalla scelta sullo sviluppo locale, punto ancora aperto). |
+| 8. Chiusura | **fatta** | Backup notturno **tolto dal piano** (si usa il ripristino di Turso). Tolti `packages/*/data`, i server `*-dev.ts`, i plugin Vite che leggevano i file, gli store statici di note ed esplorazioni, `elib validate` e `elib db`, `migrate` (la migrazione è stata eseguita). Lo sviluppo locale usa l'API collegata al database vero. |
 
 ## Strato di storage (`@ehub/store`)
 
@@ -164,7 +164,7 @@ Nessuna rotta è pubblica (nemmeno i `GET`), salvo le letture della demo. Cancel
 
 ## Frontend hosted
 
-- **Build**: `VITE_HOSTED=1 VITE_API_URL=https://<api> pnpm --filter @ehub/web build:hosted` (il workflow di Pages lo fa; `API_URL` è una *variabile* del repository GitHub, non un segreto). Emette anche `404.html` per i link diretti.
+- **Build**: `VITE_API_URL=https://<api> pnpm --filter @ehub/web build` (il workflow di Pages lo fa; `API_URL` è una *variabile* del repository GitHub, non un segreto). Emette anche `404.html` per i link diretti.
 - **Admin dopo il login**: i controlli di scrittura (`__ELIB_ADMIN__` e `import.meta.env.DEV`) nel build hosted diventano un unico flag a runtime (`globalThis.__EHUB_ADMIN__`), impostato da `src/session.ts` prima che qualsiasi modulo lo legga. Accedere e uscire ricarica la pagina. Il codice admin è nel bundle (il repo è pubblico: non c'è nulla da nascondere); a proteggere le scritture è l'API.
 - **Login**: il pulsante «Accedi con Google» (Google Identity Services, `VITE_GOOGLE_CLIENT_ID`) dà un ID token, `POST /auth/google` lo scambia con il token di sessione, che finisce in `localStorage`. `fetch` è avvolta (`apiFetch`) e manda il token solo alle chiamate `/api/…` e `/auth/…`.
 - **Se il Pi è spento** le chiamate falliscono e il sito mostra gli errori di rete già gestiti dai moduli (nessun dato in cache: scelta fatta).
@@ -178,12 +178,12 @@ Nell'ordine in cui conviene farlo:
 2. **R2**: bucket privato e token S3 (`R2_*`).
 3. **Demo**: dopo `db:migrate --apply`, `pnpm --filter @ehub/store seed-demo`.
 4. **Google**: client OAuth «Web» con l'origine di Pages tra le origini JavaScript autorizzate; `GOOGLE_CLIENT_ID`, `SESSION_SECRET`, `ALLOWED_EMAILS` (obbligatoria), `KOBO_OWNER_EMAIL`, e la variabile GitHub `GOOGLE_CLIENT_ID` per il build.
-5. **Migrazione dei dati**: prima `db:migrate --apply` (applica 0001 e 0002), poi `pnpm --filter @ehub/store migrate --owner-email <la tua email>` (a secco), poi `--apply` solo dopo aver controllato l'elenco; confrontare i conti con la UI.
+5. **Migrazione dei dati**: fatta (storico): `db:migrate --apply` applica le migrazioni in `turso/migrations/`; i dati di partenza sono stati caricati con lo script di migrazione, poi rimosso.
 6. **Pi**: installazione una tantum (sezione sopra), `deploy/pi/deploy.sh`, chiave SSH e `known_hosts` del Kobo, `kepubify`, `ffmpeg`, `yt-dlp`, `GROQ_API_KEY`.
 7. **Tunnel**: Cloudflare Tunnel (serve un dominio) o Tailscale Funnel verso `127.0.0.1:8788`; poi `CORS_ORIGINS` e la variabile `API_URL` del repository GitHub.
-8. **Chiusura (fase 8)**, solo dopo la conferma: togliere `packages/*/data` dal repo e dal build, e i server `*-dev.ts` una volta scelto come si sviluppa in locale (`API_LOCAL_DEV=1 pnpm --filter @ehub/api start` è già un'opzione: stessa API su file locali, senza login).
+8. **Chiusura (fase 8)**: fatta, vedi la tabella delle fasi.
 
-Da sapere: il build non hosted (`pnpm build`) e i server di dev funzionano ancora come prima; `elib` e `episode` restano strumenti del Pi (servono cache EPUB, Kobo, trascrizioni).
+Da sapere: `pnpm build` produce il sito (sempre «hosted»: i dati arrivano dall'API a runtime); `elib` e `episode` lavorano direttamente su Turso/R2 dal laptop o dal Pi (per la cache EPUB, il Kobo e le trascrizioni servono comunque la macchina giusta).
 
 
 ### Trascrizioni podcast

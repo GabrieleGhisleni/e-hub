@@ -21,7 +21,6 @@ export function TranscriptDialog({ episode }: { episode: Episode }) {
   const [progress, setProgress] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const hosted = import.meta.env.VITE_HOSTED === "1";
   const videoId = episode.youtubeId ?? extractYoutubeId(episode.url);
 
   async function save(transcript: TranscriptChoice) {
@@ -34,9 +33,7 @@ export function TranscriptDialog({ episode }: { episode: Episode }) {
         "success",
         transcript.mode === "none"
           ? "Trascrizione rimossa."
-          : hosted
-            ? "Trascrizione salvata nel tuo account."
-            : "Trascrizione salvata.",
+          : "Trascrizione salvata nel tuo account.",
       );
       window.location.reload();
     } catch (e) {
@@ -62,7 +59,7 @@ export function TranscriptDialog({ episode }: { episode: Episode }) {
           <DialogTitle>Trascrizione dell’episodio</DialogTitle>
           <DialogDescription>
             {episode.transcriptSource
-              ? `Origine: ${episode.transcriptSource === "api" ? "Groq · API" : episode.transcriptSource === "askchannel" ? "AskChannel · importazione" : episode.transcriptSource}. ${hosted ? "Disponibile anche da altri dispositivi." : ""}`
+              ? `Origine: ${episode.transcriptSource === "api" ? "Groq · API" : episode.transcriptSource === "askchannel" ? "AskChannel · importazione" : episode.transcriptSource}. Disponibile anche da altri dispositivi.`
               : "Aggiungi una trascrizione all’episodio."}
           </DialogDescription>
         </DialogHeader>

@@ -13,8 +13,7 @@ import type {
  * Explorations store. Components only talk to `ExploreStore`; the app picks the implementation at startup
  * (`setExploreStore`):
  *
- * - local dev: `createHttpExploreStore()`, the dev server's /api/explore (files in packages/explore/data, editable);
- * - published site: `createStaticExploreStore(explorations)`, the files bundled at build time, read-only;
+ * - the app: `createHttpExploreStore()`, the API's /api/explore (docs/hosting.md);
  * - tests: `createMemoryExploreStore()`.
  *
  * Writes are not optimistic: the server answers with the whole exploration, which replaces the cached copy. A
@@ -208,56 +207,6 @@ function createState(readOnly: boolean) {
       meta = { ...meta, ...patch };
       emit();
     },
-  };
-}
-
-const readOnlyError = () =>
-  new ExploreApiError("Le esplorazioni sono in sola lettura sul sito pubblicato.", 405);
-
-/** The published site: the explorations bundled at build time, read-only. */
-export function createStaticExploreStore(explorations: readonly unknown[]): ExploreStore {
-  const state = createState(true);
-  state.setAll(explorations.filter(isExploration));
-  state.setMeta({ status: "ready" });
-  const reject = async (): Promise<never> => {
-    throw readOnlyError();
-  };
-  return {
-    getAll: state.getAll,
-    get: state.get,
-    getMeta: state.getMeta,
-    subscribe: state.subscribe,
-    reload: async () => {},
-    fetchOne: async (id) => {
-      const found = state.get(id);
-      if (!found) throw new ExploreApiError("Esplorazione non trovata.", 404);
-      return found;
-    },
-    libraryBooks: async () => [],
-    create: reject,
-    update: reject,
-    addBook: reject,
-    uploadEpub: reject,
-    removeBook: reject,
-    // The published site has no summaries in progress: every source reports "none".
-    summaries: async (id) => ({
-      books: (state.get(id)?.sources ?? []).map((source) => ({
-        bookId: source.id,
-        origin: source.origin,
-        state: "none" as const,
-      })),
-    }),
-    retrySummary: reject,
-    retrySynthesis: reject,
-    setVerdict: reject,
-    addNote: reject,
-    removeNote: reject,
-    addJournal: reject,
-    setNotebook: reject,
-    appendNotebook: reject,
-    kobo: reject,
-    topics: async () => [],
-    dismissError: () => {},
   };
 }
 

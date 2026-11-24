@@ -27,7 +27,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @ehub/web build:hosted
+      - run: pnpm --filter @ehub/web build
         env:
           BASE_PATH: /
           # Public address of the API (the Pi behind its tunnel): repository variable, not a secret.

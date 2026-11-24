@@ -523,6 +523,24 @@ export function registerCommands(program: Command, ctx: CliContext): void {
   }
 
   program
+    .command("library")
+    .description("elenca i libri della libreria (id e titolo), per `new --book` e `add --book`")
+    .option("--json", "stampa JSON")
+    .action(async (options: { json?: boolean }) => {
+      const books = await withLibraryDeps(deps).listLibraryBookRefs();
+      if (options.json) {
+        ctx.out(JSON.stringify(books, null, 2));
+        return;
+      }
+      if (books.length === 0) {
+        ctx.out("Nessun libro in libreria.");
+        return;
+      }
+      const rows = books.map((b) => [b.id, b.authors.join(", "), b.title]);
+      for (const line of formatTable(["ID", "Autori", "Titolo"], rows)) ctx.out(line);
+    });
+
+  program
     .command("validate")
     .description("valida tutti i file delle esplorazioni (exit 1 se ce ne sono di non validi)")
     .action(async () => {

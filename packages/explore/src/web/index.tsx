@@ -19,7 +19,6 @@ export {
   type VerdictInput,
   createHttpExploreStore,
   createMemoryExploreStore,
-  createStaticExploreStore,
   exploreStore,
   explorationsOfBook,
   isExploration,

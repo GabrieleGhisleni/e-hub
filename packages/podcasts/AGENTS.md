@@ -4,16 +4,15 @@ Personal reading log for podcast episodes: a summary, notes and tags per episode
 
 ## Data layout
 
-- **In git** (public repo, published to GitHub Pages): `data/shows/`, `data/episodes/`, `data/conversations/`, `public/shows/` (show images).
-- **Local only, gitignored**: `data/transcripts/` (third-party transcript text, copyrighted), `data/audio/` (temporary), `data/cache/` (clones and indexes).
-- Why: the repo is public and transcripts are not ours to publish. `pnpm check:tracked` fails the CI build if a local path is tracked.
-- `data/` is excluded from the formatter. Do not format it.
+- **In the database** (Turso, per user; docs/hosting.md): shows, episodes, conversations and transcripts. Show images go to R2 / `public/shows/`.
+- **Local only, gitignored**: `data/transcripts/`, `data/audio/` (temporary), `data/cache/` (clones and indexes). The repo is public and third-party transcripts are not ours to publish.
+- There are no data files in the repo any more; `pnpm episode`, `pnpm tags`, `pnpm transcript` and `pnpm transcribe` work on the owner's data in Turso (keys and `EHUB_OWNER_EMAIL` in `.env.local`).
 
 ## Write point
 
 - All writes go through the CLI (`pnpm episode add`, `pnpm episode save`), which the dev UI also uses through the same core.
-- Never edit `data/**/*.json` by hand. Validation, slugs, timestamps and the transcript guard live in `src/core`.
-- Tests and experiments: set `E_PODCASTS_DATA_DIR` (and `E_PODCASTS_PUBLIC_DIR` for show images) to a temp copy. Never write to the real `data/` for a test.
+- Never write to the database by hand. Validation, slugs, timestamps and the transcript guard live in `src/core`.
+- Tests and experiments: set `E_PODCASTS_DATA_DIR` (and `E_PODCASTS_PUBLIC_DIR` for show images) to a temp folder: the CLI then works on files there and never touches Turso.
 
 ## Output format for `episode save`
 
@@ -57,7 +56,6 @@ Pass `--expected-updated-at <updatedAt>` with the `updatedAt` you read from the 
 | `pnpm typecheck`                                                         | TypeScript checks for web, web tests and node code                        |
 | `pnpm lint` / `pnpm lint:fix`                                            | oxlint                                                                    |
 | `pnpm format` / `pnpm format:check`                                      | oxfmt (format only your own files; never the whole repo when others work) |
-| `pnpm check:tracked` / `pnpm check:bundle`                               | CI guards: no local data tracked, no dev-only code in the bundle          |
 | `pnpm episode add <url> [--added-at D] [--feed U \| --no-feed] [--json]` | Add an episode (and its show if new)                                      |
 | `pnpm episode save <slug> --input <file\|-> [--expected-updated-at T]`   | Apply summary/notes/tags/guests/conversations                             |
 | `pnpm tags [--json]`                                                     | Existing tags with episode counts (read-only)                             |

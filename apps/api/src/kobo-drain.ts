@@ -9,8 +9,8 @@ import { boot } from "./boot.ts";
 
 process.env.ELIB_KOBO_QUEUE = "1";
 const { env, config, docs } = await boot();
-if (!docs || env.KOBO_OWNER_EMAIL === "") {
-  console.log("kobo queue: nessun proprietario del Kobo (KOBO_OWNER_EMAIL) o database non configurato");
+if (env.KOBO_OWNER_EMAIL === "") {
+  console.log("kobo queue: nessun proprietario del Kobo (KOBO_OWNER_EMAIL)");
   process.exit(0);
 }
 const owner = await docs.users.findByEmail(env.KOBO_OWNER_EMAIL);

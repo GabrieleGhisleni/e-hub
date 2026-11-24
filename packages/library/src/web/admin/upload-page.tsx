@@ -8,7 +8,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
-import { API_LIMITS, UploadResponseSchema, type UploadResponse } from "@shared/api";
+import { UploadResponseSchema, type UploadResponse } from "@shared/api";
 import { UNSORTED_TOPIC_ID } from "@shared/labels";
 import { BookCover } from "@library/components/book-cover";
 import { Button } from "@ehub/ui/components/button";
@@ -32,7 +32,7 @@ import { libraryPath } from "@library/lib/paths";
 
 const MIB = 1024 * 1024;
 // Leave room for the multipart envelope under Cloudflare's hosted request limit.
-const EPUB_MAX_BYTES = import.meta.env.VITE_HOSTED === "1" ? 99 * MIB : API_LIMITS.epubMaxBytes;
+const EPUB_MAX_BYTES = 99 * MIB;
 const EPUB_MAX_MIB = EPUB_MAX_BYTES / MIB;
 
 type Stage =

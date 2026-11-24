@@ -17,7 +17,6 @@ export {
   type NotesStore,
   createHttpNotesStore,
   createMemoryNotesStore,
-  createStaticNotesStore,
   notesStore,
   setNotesStore,
   useItemNotes,

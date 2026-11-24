@@ -9,8 +9,7 @@
     "./schema": "./src/schema.ts",
     "./node": "./src/node/index.ts",
     "./server": "./src/server/app.ts",
-    "./chat": "./src/chat/index.ts",
-    "./vite": "./src/node/vite.ts"
+    "./chat": "./src/chat/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

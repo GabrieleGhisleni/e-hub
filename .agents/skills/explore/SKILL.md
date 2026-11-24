@@ -1,6 +1,6 @@
 ---
 name: explore
-description: Esplora uno o più libri partendo da una domanda, prima di leggerli, e chiude con un verdetto per libro (leggere tutto, leggere i capitoli X, non leggere, da decidere). Usala quando l'utente vuole esplorare un tema nei suoi libri, decidere se o cosa leggere, o continuare un'esplorazione esistente (anche iniziata nella chat dell'app). Lavora sui file di packages/explore/data attraverso la CLI `pnpm --silent explore`.
+description: Esplora uno o più libri partendo da una domanda, prima di leggerli, e chiude con un verdetto per libro (leggere tutto, leggere i capitoli X, non leggere, da decidere). Usala quando l'utente vuole esplorare un tema nei suoi libri, decidere se o cosa leggere, o continuare un'esplorazione esistente (anche iniziata nella chat dell'app). Lavora sui dati dell'utente in Turso attraverso la CLI `pnpm --silent explore`.
 ---
 
 # Esplorazione di libri
@@ -26,7 +26,7 @@ La stessa esplorazione si apre anche nell'app (`pnpm dev`, pagina `/explore/<id>
   ```bash
   pnpm --silent explore new --title "Nietzsche e la morale cristiana" --question "Che cosa dice Nietzsche della morale cristiana, e dove?" --book 78w462eb --epub /home/<utente>/Scaricati/genealogia.epub
   ```
-  Gli ID dei libri in libreria sono le cartelle di `packages/library/data/books/` (titolo in `book.json`). Per aggiungere o togliere fonti dopo: `pnpm --silent explore add <id> --book <bookId>` (oppure `--epub <file>`), `pnpm --silent explore remove <id> --book <bookId>`.
+  Gli ID dei libri in libreria si vedono con `pnpm --silent explore library` (id e titolo, dal database). Per aggiungere o togliere fonti dopo: `pnpm --silent explore add <id> --book <bookId>` (oppure `--epub <file>`), `pnpm --silent explore remove <id> --book <bookId>`.
 
 ## 2. Preparazione delle fonti e budget
 
@@ -38,7 +38,7 @@ Per ogni libro estrae il testo se manca (`elib text` per i libri della libreria,
 
 - La cartella del testo sta fuori dal repo: se non puoi leggerla, chiedi all'utente di aggiungere `~/.cache/e-library` alle directory leggibili.
 - **Strategia "intero"** (totale sotto la soglia, 500k token di default; `--budget` per cambiarla): leggi tutti i capitoli di tutti i libri, saltando le parti accessorie (copyright, ringraziamenti, indici).
-- **Strategia "per capitoli"**: parti da `00-index.md` e, per i libri della libreria, da `packages/library/data/books/<id>/summary.json` (sintesi del libro e di ogni capitolo). Poi cerca con `grep -i -n` nei capitoli, espandendo la query con sinonimi e traduzioni nella lingua del libro (per esempio _pity_, _compassion_, _Mitleid_, _compassione_), e leggi solo i capitoli pertinenti.
+- **Strategia "per capitoli"**: parti da `00-index.md` e, per i libri della libreria, dalla loro sintesi (libro e capitoli) che `prepare` mette accanto ai testi. Poi cerca con `grep -i -n` nei capitoli, espandendo la query con sinonimi e traduzioni nella lingua del libro (per esempio _pity_, _compassion_, _Mitleid_, _compassione_), e leggi solo i capitoli pertinenti.
 - Se un EPUB "solo da esplorare" non è più in cache, `prepare` lo dice: chiedi all'utente il file e rilancia `pnpm --silent explore add <id> --epub <file>`.
 
 ## 3. Esplorazione

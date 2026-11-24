@@ -1,7 +1,7 @@
 import { Link, NavLink } from "react-router";
 import { cn, Container, Logo } from "@ehub/ui";
-import { LogIn, Settings } from "lucide-react";
-import { currentSession, HOSTED } from "../session";
+import { LogIn } from "lucide-react";
+import { currentSession } from "../session";
 
 const logoUrl = `${import.meta.env.BASE_URL}ehub.svg`;
 
@@ -13,7 +13,7 @@ const NAV_ITEMS = [
 ] as const;
 
 function AccountLink() {
-  const label = currentSession ? `Account di ${currentSession.email}` : HOSTED ? "Accedi" : "Impostazioni";
+  const label = currentSession ? `Account di ${currentSession.email}` : "Accedi";
 
   return (
     <NavLink
@@ -30,13 +30,11 @@ function AccountLink() {
     >
       {currentSession ? (
         <span aria-hidden>{currentSession.email.slice(0, 1).toLocaleUpperCase("it-IT")}</span>
-      ) : HOSTED ? (
+      ) : (
         <>
           <LogIn aria-hidden className="size-4" />
           Accedi
         </>
-      ) : (
-        <Settings aria-hidden className="size-5" />
       )}
     </NavLink>
   );

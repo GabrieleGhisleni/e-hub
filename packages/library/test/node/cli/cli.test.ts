@@ -76,24 +76,8 @@ describe("elib CLI", () => {
   it("--help lists the commands; unknown commands fail", async () => {
     const help = await elib(t, "--help");
     expect(help.code).toBe(0);
-    for (const name of ["sync", "import", "validate"]) expect(help.stdout).toContain(name);
+    for (const name of ["sync", "import", "summarize"]) expect(help.stdout).toContain(name);
     expect((await elib(t, "nope")).code).not.toBe(0);
-  });
-
-  it("validate: exit 0 on valid data, 1 with an invalid book", async () => {
-    let run = await elib(t, "validate");
-    expect(run).toMatchObject({ code: 0 });
-    expect(run.stdout).toContain("0 error(s), 0 warning(s)");
-    await mkdir(path.join(t.env.dataDir, "books", BOOK.id), { recursive: true });
-    await writeFile(
-      path.join(t.env.dataDir, "books", BOOK.id, "book.json"),
-      JSON.stringify({ ...BOOK, topic: "inesistente" }),
-    );
-    run = await elib(t, "validate");
-    expect(run.code).toBe(1);
-    expect(run.stdout).toMatch(/error: .*inesistente/);
-    const json = await elib(t, "validate", "--json");
-    expect(JSON.parse(json.stdout).errors.length).toBeGreaterThan(0);
   });
 
   it("sync mirrors the repo onto the Kobo; --prune deletes orphans only; exit 1 on errors", async () => {

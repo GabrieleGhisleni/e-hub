@@ -1,7 +1,7 @@
-import { HOSTED, currentSession } from "../session";
+import { currentSession } from "../session";
 
 export function DemoBanner() {
-  if (!HOSTED || currentSession) return null;
+  if (currentSession) return null;
 
   return (
     <div className="border-b bg-muted px-4 py-2 text-center text-sm text-muted-foreground">

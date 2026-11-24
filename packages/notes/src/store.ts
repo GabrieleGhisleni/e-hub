@@ -5,8 +5,7 @@ import { type Note, type NoteItemRef, itemKey } from "./types";
  * Notes store. Components only talk to `NotesStore`; the app picks the implementation at startup
  * (`setNotesStore`):
  *
- * - local dev: `createHttpNotesStore()`, the dev server's /api/notes (files in packages/notes/data, in git);
- * - published site: `createStaticNotesStore(notes)`, the notes bundled at build time, read-only;
+ * - the app: `createHttpNotesStore()`, the API's /api/notes (docs/hosting.md);
  * - tests: `createMemoryNotesStore()`.
  *
  * Writes are optimistic: the UI changes at once, the request follows; if it fails the store reloads from the
@@ -154,30 +153,6 @@ export function createMemoryNotesStore(
     dismissError() {
       state.setMeta({ error: null });
     },
-  };
-}
-
-/** The published site: the notes bundled at build time, read-only. */
-export function createStaticNotesStore(notes: readonly unknown[]): NotesStore {
-  const valid = notes.filter(isNote);
-  const state = createState(valid, {
-    status: "ready",
-    readOnly: true,
-    error: null,
-    rejectedDraft: null,
-  });
-  const readOnly = () => {
-    throw new Error("Le note sono in sola lettura sul sito pubblicato.");
-  };
-  return {
-    getAll: state.getAll,
-    getMeta: state.getMeta,
-    subscribe: state.subscribe,
-    add: readOnly,
-    update: readOnly,
-    remove: readOnly,
-    reload() {},
-    dismissError() {},
   };
 }
 

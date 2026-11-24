@@ -5,7 +5,6 @@
   "type": "module",
   "exports": {
     "./web": "./src/web/entry.tsx",
-    "./vite": "./scripts/static-pages.ts",
     "./server": "./src/server/index.ts",
     "./note-guard": "./src/core/note-guard.ts",
     "./chat-context": "./src/core/chat-context.ts",
@@ -14,8 +13,6 @@
   },
   "scripts": {
     "test": "vitest run",
-    "check:tracked": "tsx scripts/check-tracked.ts",
-    "check:bundle": "tsx scripts/check-bundle.ts",
     "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.web-test.json && tsc --noEmit -p tsconfig.node.json",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",

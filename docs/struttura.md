@@ -25,10 +25,10 @@ AGENTS.md         Istruzioni per gli agenti (CLAUDE.md è un link a questo file)
 
 - `apps/web` dipende dai pacchetti `@ehub/*` e li espone come rotte: `/library`, `/podcasts`, `/notes`, `/explore`.
 - Stack: React + Tailwind CSS + shadcn/ui; i componenti condivisi vivono in `packages/ui`.
-- I server di scrittura (Hono) esistono solo in dev e non entrano nella build statica.
+- Un solo server Hono (`apps/api`): sul Pi in produzione, sul laptop con `pnpm dev` (collegato allo stesso Turso).
 
 ## Dati
 
-I dati stanno in `packages/*/data` come file JSON, versionati in git e pubblicati con il sito. Non si modificano a mano: si passa dalla UI locale o dalle CLI dei moduli.
+I dati stanno in **Turso** (documenti, per utente) e **R2** (EPUB, copertine), non nel repo. Non si modificano a mano: si passa dalla UI o dalle CLI dei moduli.
 
-Il repo è pubblico, quindi alcuni dati restano solo in locale (gitignored): trascrizioni, audio e cache dei podcast in `packages/podcasts/data/`.
+Restano solo in locale (gitignored) le cache di lavoro dei podcast in `packages/podcasts/data/` (audio, cache; le trascrizioni stanno nel database).

@@ -1,12 +1,11 @@
 /**
- * Login of the hosted site. Google Identity Services gives the browser an ID token, the API trades it for its own
+ * Login of the site. Google Identity Services gives the browser an ID token, the API trades it for its own
  * session token (30 days); we keep it in localStorage and attach it to the calls to the API (no cookies). Admin controls show up
  * only with a valid session: logging in and out reload the page, so the flag is read once at startup
  * (`globalThis.__EHUB_ADMIN__`, which vite.config.ts wires to the admin gates).
  */
 
-export const HOSTED = import.meta.env.VITE_HOSTED === "1";
-/** Origin of the API (the Pi, behind its tunnel). Empty = same origin (local dev with the Vite proxy). */
+/** Origin of the API (the Pi, behind its tunnel). Empty = same origin (`pnpm dev`: the Vite proxy to the local API). */
 /** Google OAuth client id (public): the same one the API checks the ID token against. */
 export const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) ?? "";
 export const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/+$/, "");
@@ -118,9 +117,26 @@ export function apiFetch(
   };
 }
 
+/**
+ * `pnpm dev` only (`VITE_DEV_LOGIN=1`): the local API, which runs on loopback against the real database, hands out a
+ * session for the owner, so development needs no Google login. Anywhere else the variable is unset and this does nothing.
+ */
+async function devLogin(): Promise<void> {
+  if (import.meta.env.VITE_DEV_LOGIN !== "1" || typeof window === "undefined") return;
+  if (loadSession(window.localStorage)) return;
+  try {
+    const response = await fetch(`${API_URL}/auth/dev`, { method: "POST" });
+    const body = (await response.json()) as { token?: unknown };
+    if (response.ok && typeof body.token === "string") storeToken(window.localStorage, body.token);
+  } catch {
+    /* the API is not up yet: the page shows the demo / login as usual */
+  }
+}
+await devLogin();
+
 /** Startup: sets the admin flag and wraps `fetch`. Import this before anything else. */
 export function bootSession(): Session | null {
-  if (!HOSTED) return null;
+  if (typeof window === "undefined") return null;
   const storage = window.localStorage;
   const session = loadSession(storage);
   (globalThis as { __EHUB_ADMIN__?: boolean }).__EHUB_ADMIN__ = session !== null;

@@ -10,12 +10,12 @@ import { ModuleLayout } from "@podcasts/components/site-layout";
 import { EpisodeRoute } from "@podcasts/pages/episode";
 import { HomePage } from "@podcasts/pages/home";
 import { NotFoundPage } from "@podcasts/pages/not-found";
-import { loadRemoteSiteData, siteData } from "@podcasts/data";
+import { loadRemoteSiteData } from "@podcasts/data";
 import { SiteDataProvider, type SiteData } from "@podcasts/site-data";
 
 export { PODCASTS_BASE } from "@podcasts/lib/paths";
 
-/** Hosted build: the catalog arrives from the API before the pages render. */
+/** The catalog arrives from the API before the pages render. */
 function RemotePodcastsLayout() {
   const [state, setState] = useState<{ data: SiteData } | { error: Error } | null>(null);
   useEffect(() => {
@@ -49,14 +49,13 @@ function PodcastsLayout({ data }: { data: SiteData }) {
 
 /**
  * The module's routes, to be spread into the shell's router. `data` defaults
- * to the catalog bundled from `data/`; tests pass synthetic data.
+ * to the catalog fetched from the API; tests pass synthetic data.
  */
-export function podcastsRoutes(data: SiteData = siteData): RouteObject[] {
-  const hosted = import.meta.env.VITE_HOSTED === "1";
+export function podcastsRoutes(data?: SiteData): RouteObject[] {
   return [
     {
       path: "podcasts",
-      element: hosted && data === siteData ? <RemotePodcastsLayout /> : <PodcastsLayout data={data} />,
+      element: data ? <PodcastsLayout data={data} /> : <RemotePodcastsLayout />,
       children: [
         { index: true, element: <HomePage /> },
         { path: "episode/:slug", element: <EpisodeRoute /> },

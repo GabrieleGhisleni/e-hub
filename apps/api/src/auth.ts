@@ -61,8 +61,8 @@ export function parseAllowedEmails(value: string | undefined): Set<string> {
   );
 }
 
-/** Reachable without a session: the login (the caller has none yet) and the health check. */
-const PUBLIC_ROUTES = new Set(["POST /auth/google", "GET /api/health", "HEAD /api/health"]);
+/** Reachable without a session: the logins (the caller has none yet; `/auth/dev` exists only in `pnpm dev`) and the health check. */
+const PUBLIC_ROUTES = new Set(["POST /auth/google", "POST /auth/dev", "GET /api/health", "HEAD /api/health"]);
 
 /**
  * The only requests served without a token: GETs that show the demo (read-only, as the reserved user `demo`).
@@ -86,11 +86,6 @@ export interface AuthOptions {
   allowedEmails: ReadonlySet<string>;
   /** GETs served without a token as the `demo` user (default `DEMO_GETS`; `[]` turns the demo off). */
   demoGets?: readonly RegExp[];
-  /**
-   * `false` (API_LOCAL_DEV, plain files, no database): the request is authenticated but not scoped to a user, since
-   * local files have no owner. Default `true`.
-   */
-  scopeToUser?: boolean;
 }
 
 function deny(status: 401 | 403, code: string, message: string): Response {
@@ -98,7 +93,6 @@ function deny(status: 401 | 403, code: string, message: string): Response {
 }
 
 export function authMiddleware(options: AuthOptions): MiddlewareHandler {
-  const scope = options.scopeToUser ?? true;
   const demoGets = options.demoGets ?? DEMO_GETS;
   return async (c, next) => {
     const path = new URL(c.req.url).pathname;
@@ -106,7 +100,7 @@ export function authMiddleware(options: AuthOptions): MiddlewareHandler {
     const header = c.req.header("authorization") ?? "";
     const token = /^Bearer (.+)$/i.exec(header)?.[1];
     // No token at all + a demo GET: served as the reserved demo user. A bad token never falls back to the demo.
-    if (!header && scope && (c.req.method === "GET" || c.req.method === "HEAD") && demoGets.some((re) => re.test(path))) {
+    if (!header && (c.req.method === "GET" || c.req.method === "HEAD") && demoGets.some((re) => re.test(path))) {
       return runAsUser(DEMO_USER_ID, () => next());
     }
     if (!token) return deny(401, "unauthorized", "Accesso richiesto.");
@@ -123,7 +117,6 @@ export function authMiddleware(options: AuthOptions): MiddlewareHandler {
     }
     c.set("userId", identity.userId);
     c.set("email", identity.email);
-    if (!scope) return next();
     return runAsUser(identity.userId, () => next(), { email: identity.email });
   };
 }

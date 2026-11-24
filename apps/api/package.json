@@ -5,6 +5,7 @@
   "type": "module",
   "description": "The one Hono server of the hosted setup (runs on the Raspberry Pi): auth, CORS and every module's routes",
   "scripts": {
+    "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
     "bundle": "tsx scripts/bundle.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",

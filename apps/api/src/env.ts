@@ -20,10 +20,13 @@ const Env = z.object({
   ALLOWED_EMAILS: List,
   /** Email of the one user who owns the Kobo (host/port/SSH key are the owner's). Empty: nobody has the Kobo. */
   KOBO_OWNER_EMAIL: z.string().default("").transform((v) => v.trim().toLowerCase()),
-  /** Folder that holds the four data dirs (mount roots when hosted; real files otherwise). */
+  /** Folder that holds the four data dirs, used as mount roots (default: the packages' own default paths). */
   EHUB_DATA_ROOT: z.string().default(""),
-  /** `1`: no login, loopback only. For `pnpm` on the laptop; refused with a non-loopback HOST. */
-  API_LOCAL_DEV: z.enum(["0", "1"]).default("0"),
+  /**
+   * `pnpm dev` on the laptop: this email's user (an existing one, in the real database) can get a session without
+   * Google through `POST /auth/dev`. Refused unless HOST is loopback. Never set it on the Pi.
+   */
+  API_DEV_OWNER_EMAIL: z.string().default("").transform((v) => v.trim().toLowerCase()),
 });
 export type ApiEnv = z.output<typeof Env>;
 

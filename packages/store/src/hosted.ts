@@ -5,6 +5,7 @@
  */
 import { type Backend, type DirEntry, type FileChange, mountBackend } from "./backend.ts";
 import { type BlobStore, scopedBlobs } from "./blobs.ts";
+import { missingHostedEnv, r2FromEnv, tursoFromEnv } from "./config.ts";
 import { type DocClient, type UserDocs } from "./docs.ts";
 import { requireUserId } from "./user-context.ts";
 
@@ -299,4 +300,35 @@ export function mountHosted(roots: DataRoots, docs: DocClient, blobs: BlobStore)
   mountBackend(roots.explore, new HostedBackend(docs, blobs, exploreLayout));
   mountBackend(roots.notes, new HostedBackend(docs, blobs, notesLayout));
   mountBackend(roots.podcasts, new HostedBackend(docs, blobs, podcastsLayout));
+}
+
+export interface DirectMount {
+  /** The owner whose data the CLI works on (their Google `sub`, or the `email:` placeholder before their first login). */
+  userId: string;
+  email: string;
+  blobs: BlobStore;
+}
+
+/**
+ * For the CLIs on the laptop: mounts the given data dirs straight on Turso/R2 with the keys of `.env.local` (the same
+ * database the API uses), so `elib` and `explore` see the data of the owner without going through the API. The owner is
+ * `EHUB_OWNER_EMAIL` (or `API_DEV_OWNER_EMAIL`, `KOBO_OWNER_EMAIL`). The caller runs the rest inside
+ * `runAsUser(mount.userId, …, { email })`.
+ */
+export async function mountDirectFromEnv(
+  roots: Partial<DataRoots>,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<DirectMount> {
+  const missing = missingHostedEnv(env);
+  if (missing.length > 0) throw new Error(`Mancano queste variabili in .env.local: ${missing.join(", ")}`);
+  const email = (env.EHUB_OWNER_EMAIL || env.API_DEV_OWNER_EMAIL || env.KOBO_OWNER_EMAIL || "").trim().toLowerCase();
+  if (!email) throw new Error("Imposta EHUB_OWNER_EMAIL in .env.local: l'email dell'utente di cui usare i dati.");
+  const docs = tursoFromEnv(env)!;
+  const blobs = r2FromEnv(env)!;
+  const owner = await docs.users.findByEmail(email);
+  if (!owner) throw new Error(`Nel database non c'è nessun utente con l'email ${email}: accedi una volta con Google.`);
+  for (const [name, dir] of Object.entries(roots) as [keyof DataRoots, string][]) {
+    mountBackend(dir, new HostedBackend(docs, blobs, LAYOUTS[name]));
+  }
+  return { userId: owner.id, email: owner.email, blobs };
 }

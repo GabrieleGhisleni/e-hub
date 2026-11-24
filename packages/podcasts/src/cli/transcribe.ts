@@ -7,6 +7,7 @@
  * output, 4 episode/show/audio not found, 8 transcript already present
  * (use --force), 130 interrupted.
  */
+import { runOnOwnerData } from "./owner";
 import { parseArgs } from "node:util";
 import { userEnv } from "@ehub/store";
 import { CoreError, EXIT_CODES, exitCodeFor } from "../core/errors";
@@ -154,4 +155,4 @@ async function main(argv: string[]): Promise<number> {
   }
 }
 
-process.exitCode = await main(process.argv.slice(2));
+process.exitCode = await runOnOwnerData(() => main(process.argv.slice(2)));

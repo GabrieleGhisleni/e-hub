@@ -103,9 +103,7 @@ function AddEpisodeForm({ onDone }: { onDone: () => void }) {
           result.transcript.status === "none"
             ? "Nessuna trascrizione selezionata."
             : `Trascrizione salvata (${result.transcript.segments} segmenti).` +
-                (import.meta.env.VITE_HOSTED === "1"
-                  ? " Disponibile nell’account anche da altri dispositivi."
-                  : ""),
+                " Disponibile nell’account anche da altri dispositivi.",
         );
       } else {
         flashAfterWrite("info", "Episodio già presente: aperto quello esistente.");

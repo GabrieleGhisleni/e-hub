@@ -8,7 +8,7 @@ ELIB     := pnpm --filter @ehub/library elib
 
 .DEFAULT_GOAL := help
 .PHONY: help install dev build preview typecheck test check \
-        db-status db-sync db-push validate kobo-sync-dry \
+        kobo-sync-dry \
         logs logs-tail logs-errors status update-logs health
 
 help: ## Elenco dei comandi
@@ -18,10 +18,10 @@ help: ## Elenco dei comandi
 install: ## Installa le dipendenze
 	pnpm install
 
-dev: ## App + server locali su http://127.0.0.1:5173
+dev: ## Sito + API locale (database Turso vero) su http://127.0.0.1:5173
 	pnpm dev
 
-build: ## Build statica in apps/web/dist
+build: ## Build del sito in apps/web/dist
 	pnpm build
 
 preview: ## Anteprima della build
@@ -36,18 +36,6 @@ test: ## Test di tutti i pacchetti
 check: typecheck test build ## Verifica completa prima di un commit
 
 # ---- libreria
-validate: ## Controlla packages/library/data
-	$(ELIB) validate
-
-db-status: ## Libreria locale vs account hosted (serve EHUB_API_URL/TOKEN)
-	$(ELIB) db status
-
-db-sync: ## Anteprima di cosa si allinea tra locale e account
-	$(ELIB) db sync
-
-db-push: ## Allinea davvero (copia ciò che manca; i file diversi restano)
-	$(ELIB) db sync --apply
-
 kobo-sync-dry: ## Cosa cambierebbe sul Kobo (nessuna scrittura)
 	$(ELIB) sync --dry-run
 

@@ -4,7 +4,6 @@ import {
   ExploreApiError,
   createHttpExploreStore,
   createMemoryExploreStore,
-  createStaticExploreStore,
   isExploration,
 } from "../../src/web/store.ts";
 
@@ -86,16 +85,7 @@ describe("http explore store", () => {
   });
 });
 
-describe("static explore store", () => {
-  it("serves the bundled explorations read-only and rejects writes", async () => {
-    const store = createStaticExploreStore([sampleExploration(), { not: "an exploration" }]);
-    expect(store.getMeta()).toMatchObject({ status: "ready", readOnly: true });
-    expect(store.getAll()).toHaveLength(1);
-    await expect(store.fetchOne(EXPLORATION_ID)).resolves.toMatchObject({ id: EXPLORATION_ID });
-    await expect(store.fetchOne("2026-11-12-missing")).rejects.toMatchObject({ status: 404 });
-    await expect(store.addJournal(EXPLORATION_ID, "x")).rejects.toThrow(/sola lettura/);
-  });
-
+describe("explorations by shape", () => {
   it("recognises explorations by shape", () => {
     expect(isExploration(sampleExploration())).toBe(true);
     expect(isExploration({ version: 2 })).toBe(false);
@@ -104,12 +94,6 @@ describe("static explore store", () => {
 });
 
 describe("notebook in the stores", () => {
-  it("the static store rejects notebook writes", async () => {
-    const store = createStaticExploreStore([sampleExploration()]);
-    await expect(store.setNotebook(EXPLORATION_ID, "x")).rejects.toThrow(/sola lettura/);
-    await expect(store.appendNotebook(EXPLORATION_ID, "x")).rejects.toThrow(/sola lettura/);
-  });
-
   it("the memory store sets, appends and clears the notebook like the server", async () => {
     const store = createMemoryExploreStore([sampleExploration()]);
     const set = await store.setNotebook(EXPLORATION_ID, "  Uno  ");

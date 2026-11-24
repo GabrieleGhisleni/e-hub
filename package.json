@@ -5,12 +5,18 @@
   "type": "module",
   "description": "Unified e-library + e-podcasts platform (one React app, shared UX)",
   "scripts": {
-    "dev": "pnpm --parallel --filter @ehub/web --filter @ehub/library run dev",
+    "dev": "pnpm --parallel --filter @ehub/web --filter @ehub/api run dev",
     "build": "pnpm --filter @ehub/web build",
     "preview": "pnpm --filter @ehub/web preview",
     "explore": "pnpm --silent --dir packages/explore run explore",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"
   },
-  "devEngines": { "packageManager": { "name": "pnpm", "version": "^11.18.0", "onFail": "download" } }
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.18.0",
+      "onFail": "download"
+    }
+  }
 }

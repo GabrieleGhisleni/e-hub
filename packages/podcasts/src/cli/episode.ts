@@ -9,6 +9,7 @@
  * 2 usage, 3 validation, 4 not found, 5 conflict, 6 transcript guard,
  * 7 duplicate, 8 already exists).
  */
+import { runOnOwnerData } from "./owner";
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { CoreError, EXIT_CODES, ValidationError, exitCodeFor } from "../core/errors";
@@ -134,4 +135,4 @@ async function main(argv: string[]): Promise<number> {
   }
 }
 
-process.exitCode = await main(process.argv.slice(2));
+process.exitCode = await runOnOwnerData(() => main(process.argv.slice(2)));

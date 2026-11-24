@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createHttpNotesStore, createMemoryNotesStore, createStaticNotesStore } from "./store";
+import { createHttpNotesStore, createMemoryNotesStore } from "./store";
 import { matchesTokens, searchTokens } from "./text";
 import type { Note, NoteItemRef } from "./types";
 
@@ -48,27 +48,6 @@ describe("memory notes store", () => {
     store.add(book, "a");
     store.add({ ...book, title: "New title" }, "b");
     expect(store.getAll().map((n) => n.item.title)).toEqual(["New title", "New title"]);
-  });
-});
-
-describe("static notes store", () => {
-  it("is read-only and drops entries that are not notes (or point outside their module)", () => {
-    const valid: Note = {
-      id: "1",
-      item: book,
-      body: "x",
-      pinned: false,
-      createdAt: "2026-11-10T12:00:00.000Z",
-      updatedAt: "2026-11-10T12:00:00.000Z",
-    };
-    const store = createStaticNotesStore([
-      valid,
-      { id: 2 },
-      { ...valid, id: "3", item: { ...book, href: "javascript:alert(1)" } },
-    ]);
-    expect(store.getAll().map((n) => n.id)).toEqual(["1"]);
-    expect(store.getMeta()).toMatchObject({ readOnly: true, status: "ready" });
-    expect(() => store.add(book, "y")).toThrow();
   });
 });
 

@@ -2,6 +2,7 @@
  * `pnpm transcript export <slug> [--out <file>]` — the local transcript as
  * compact markdown for an agent (DESIGN.md §4.4). Read-only; stdout by default.
  */
+import { runOnOwnerData } from "./owner";
 import { writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { CoreError, EXIT_CODES, exitCodeFor } from "../core/errors";
@@ -51,4 +52,4 @@ async function main(argv: string[]): Promise<number> {
   }
 }
 
-process.exitCode = await main(process.argv.slice(2));
+process.exitCode = await runOnOwnerData(() => main(process.argv.slice(2)));

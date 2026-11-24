@@ -111,7 +111,7 @@ export function EpisodeEditorDialog({
         result.written ? `Campi aggiornati: ${result.changedFields.join(", ")}` : undefined,
       );
       onOpenChange(false);
-      if (result.written && import.meta.env.VITE_HOSTED === "1") window.location.reload();
+      if (result.written) window.location.reload();
     } catch (e) {
       if (e instanceof ApiError && e.isConflict) {
         setConflict(true);

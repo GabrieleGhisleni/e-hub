@@ -47,7 +47,7 @@ describe("errors", () => {
       friendlyMessage(
         new ApiRequestError({ status: 0, code: "network", message: "Failed to fetch" }),
       ),
-    ).toMatch(/server locale/);
+    ).toMatch(/server di e-hub/);
     expect(
       friendlyMessage(
         new ApiRequestError({ status: 400, code: "not-an-epub", message: "Non è un EPUB." }),

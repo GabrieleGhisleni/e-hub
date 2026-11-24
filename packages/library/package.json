@@ -7,7 +7,6 @@
   "type": "module",
   "exports": {
     "./web": "./src/web/entry.tsx",
-    "./vite": "./src/node/vite/index.ts",
     "./config": "./src/node/config/index.ts",
     "./chat-context": "./src/node/chat/index.ts",
     "./explore": "./src/node/explore/index.ts",
@@ -18,8 +17,6 @@
     "./kobo": "./src/node/kobo/index.ts"
   },
   "scripts": {
-    "dev": "pnpm server",
-    "server": "tsx watch src/node/server/main.ts",
     "typecheck": "tsc -b",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
@@ -27,7 +24,6 @@
     "format:check": "oxfmt --check",
     "test": "vitest run",
     "test:watch": "vitest",
-    "validate:data": "tsx src/node/site-data/validate-cli.ts",
     "demo-data": "tsx scripts/demo-data.ts",
     "elib": "tsx src/node/cli/main.ts"
   },

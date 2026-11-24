@@ -7,7 +7,6 @@ import {
   MemoryBlobStore,
   MemoryDocClient,
   TursoDocClient,
-  localDbFromEnv,
   missingHostedEnv,
   splitStatements,
   type SqlClient,
@@ -171,10 +170,9 @@ describe("R2BlobStore", () => {
   });
 });
 
-describe("local libSQL database (file: / :memory:)", () => {
-  it("works with the real client and the migration, no token needed", async () => {
-    const env = { TURSO_DATABASE_URL: ":memory:" };
-    expect(missingHostedEnv({ ...env, R2_ACCOUNT_ID: "a", R2_ACCESS_KEY_ID: "b", R2_SECRET_ACCESS_KEY: "c", R2_BUCKET: "d" })).toEqual([]);
+describe("libSQL in memory (tests only)", () => {
+  it("works with the real client and the migration", async () => {
+    expect(missingHostedEnv({})).toContain("TURSO_AUTH_TOKEN");
     const { createClient } = await import("@libsql/client");
     const client = createClient({ url: ":memory:" });
     for (const sql of splitStatements(
@@ -186,6 +184,5 @@ describe("local libSQL database (file: / :memory:)", () => {
     const docs = new TursoDocClient(client).forUser("u1");
     await docs.put("books", "a", { x: 1 });
     expect((await docs.get("books", "a"))?.data).toEqual({ x: 1 });
-    expect(await localDbFromEnv({ TURSO_DATABASE_URL: "libsql://x.turso.io" })).toBeNull();
   });
 });

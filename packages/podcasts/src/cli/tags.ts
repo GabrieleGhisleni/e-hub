@@ -2,6 +2,7 @@
  * `pnpm tags [--json]` — existing tags with episode counts, most used first.
  * Read-only. Plain output: one `tag<TAB>count` per line.
  */
+import { runOnOwnerData } from "./owner";
 import { parseArgs } from "node:util";
 import { CoreError, EXIT_CODES, exitCodeFor } from "../core/errors";
 import { listEpisodes } from "../core/store";
@@ -30,4 +31,4 @@ async function main(argv: string[]): Promise<number> {
   }
 }
 
-process.exitCode = await main(process.argv.slice(2));
+process.exitCode = await runOnOwnerData(() => main(process.argv.slice(2)));
