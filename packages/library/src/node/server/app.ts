@@ -37,6 +37,8 @@ export interface AppOptions {
   limits?: Partial<typeof API_LIMITS>;
   /** Z-Library client (default: built from the environment, see `zlibraryEnvFrom`). Tests inject a fake. */
   zlibrary?: ZlibraryClient;
+  /** LibGen fallback (default: real client; `null` disables it, tests inject a fake). */
+  libgen?: LibgenClient | null;
   /** Request check (default: the local Host/Origin checks). The hosted server passes its own (docs/hosting.md). */
   access?: MiddlewareHandler;
   /** Public URL of the API, used for the absolute cover URLs of the site data (default: the request origin). */
@@ -176,7 +178,7 @@ export function createApp(
   registerSettingsRoutes(app, jsonLimit);
 
   const zlibrary = options.zlibrary ?? perUserZlibrary(services.ctx.cacheDir);
-  registerZlibraryRoutes(app, services, zlibrary, jsonLimit, new LibgenClient());
+  registerZlibraryRoutes(app, services, zlibrary, jsonLimit, options.libgen === null ? undefined : (options.libgen ?? new LibgenClient()));
   registerHealthRoutes(app, services, async () => (typeof zlibrary === "function" ? zlibrary() : zlibrary));
 
   app.notFound((c) =>

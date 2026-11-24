@@ -31,8 +31,10 @@ describe("Z-Library routes", () => {
   };
   let analyzeUpload: ReturnType<typeof vi.fn>;
   let app: ReturnType<typeof createApp>;
+  const libgen = { search: vi.fn(), download: vi.fn() };
 
   beforeEach(async () => {
+    libgen.search.mockReset().mockRejectedValue(new Error("libgen spento nei test"));
     cacheDir = await mkdtemp(path.join(tmpdir(), "zlib-routes-"));
     client = {
       configured: false,
@@ -58,7 +60,7 @@ describe("Z-Library routes", () => {
       } as unknown as ServiceContext,
       analyzeUpload,
     } as unknown as Services;
-    app = createApp(services, config, { zlibrary: client as unknown as ZlibraryClient });
+    app = createApp(services, config, { zlibrary: client as unknown as ZlibraryClient, libgen: libgen as never });
   });
 
   afterEach(async () => {
@@ -168,6 +170,14 @@ describe("Z-Library routes", () => {
     expect(res.status).toBe(429);
     const body = (await res.json()) as { error: { code: string; message: string } };
     expect(body.error).toEqual({ code: "zlibrary-limit", message: "Limite raggiunto." });
+  });
+
+  it("falls back to LibGen when Z-Library fails, and reports Z-Library's error when LibGen fails too", async () => {
+    client.search.mockRejectedValue(new ZlibraryError("failed", "giù"));
+    libgen.search.mockResolvedValue({ books: [], page: 1, totalPages: null, totalItems: null, filteredOut: 0 });
+    expect((await post(zlibraryPaths.search, { query: "dune" })).status).toBe(200);
+    libgen.search.mockRejectedValue(new Error("libgen giù"));
+    expect((await post(zlibraryPaths.search, { query: "dune" })).status).toBe(502);
   });
 
   it("a not-configured error becomes 503 zlibrary-not-configured", async () => {
