@@ -61,4 +61,19 @@ describe("hosted site routes", () => {
     const fresh = (await (await app.request("/api/library/site/index.json", { headers })).json()) as typeof index;
     expect(fresh.books[0]!.title).toBe("Rinominato");
   });
+
+  it("cover URLs are https on a public host and keep the origin on loopback", async () => {
+    await writeBook(tmp.dataDir, { id: "ab12cd34", title: "Il giardino", authors: ["Ada Esempio"], topic: "narrativa", status: "to-read" });
+    await saveCover(tmp.dataDir, "ab12cd34", new Uint8Array([1, 2, 3, 4]));
+    const services = fakeServices({
+      ctx: { logger: silentLogger, cacheDir: "/nonexistent-cache", dataDir: tmp.dataDir } as unknown as ServiceContext,
+    });
+    const app = createApp(services, CONFIG, { access: async (_c, next) => next() }); // the hosted API checks access itself
+    const urlFor = async (origin: string) => {
+      const res = await app.request(`${origin}/api/library/site/index.json`, { headers: { host: new URL(origin).host } });
+      return ((await res.json()) as { books: { coverUrl: string }[] }).books[0]!.coverUrl;
+    };
+    expect(await urlFor("http://api.example.com")).toMatch(/^https:\/\/api\.example\.com\//);
+    expect(await urlFor("http://127.0.0.1:8788")).toMatch(/^http:\/\/127\.0\.0\.1:8788\//);
+  });
 });

@@ -63,7 +63,14 @@ export function registerSiteRoutes(app: Hono, options: SiteRoutesOptions): SiteC
     }
     return rebuild(owner, origin);
   };
-  const originOf = (url: string) => (options.publicUrl ?? new URL(url).origin).replace(/\/+$/, "");
+  // Behind the tunnel the request arrives as plain http: a public host is always served over https, and an http cover
+  // URL on the https site would cost a redirect per image. Loopback (`pnpm dev`) stays as it is.
+  const originOf = (url: string) => {
+    if (options.publicUrl) return options.publicUrl.replace(/\/+$/, "");
+    const u = new URL(url);
+    const local = /^(127\.0\.0\.1|localhost|\[::1\])$/.test(u.hostname) || u.hostname.endsWith(".localhost");
+    return local ? u.origin : `https://${u.host}`;
+  };
 
   app.get(`${SITE}/index.json`, async (c) => c.json((await load(originOf(c.req.url))).index));
   app.get(`${SITE}/books/:file`, async (c) => {
