@@ -3,7 +3,7 @@
  * file as an attachment), and the EPUB staged like an upload. Registered before `app.notFound`.
  */
 import type { Hono, MiddlewareHandler } from "hono";
-import type { ZlibraryStatusResponse } from "../../shared/zlibrary.ts";
+import type { ZlibraryBook, ZlibraryStatusResponse } from "../../shared/zlibrary.ts";
 import { ZlibraryLoginRequestSchema, ZlibrarySearchRequestSchema, zlibraryPaths } from "../../shared/zlibrary.ts";
 import { ServiceError, type Services } from "../services/index.ts";
 import {
@@ -13,6 +13,7 @@ import {
   safeFileStem,
 } from "../zlibrary/index.ts";
 import { LIBGEN_ID, LibgenClient } from "../zlibrary/libgen.ts";
+import { findOpenLibraryCover } from "../openlibrary/index.ts";
 import { jsonBody } from "./http.ts";
 
 const EPUB_PATH = "/api/library/zlibrary/books/:id/:hash/epub";
@@ -70,19 +71,15 @@ export function registerZlibraryRoutes(
   app.post(zlibraryPaths.search, jsonLimit, async (c) => {
     const client = await pick();
     const body = await jsonBody(c, ZlibrarySearchRequestSchema);
-    // Z-Library first; when it is not connected or fails, LibGen (no account) answers instead.
-    try {
-      return c.json(await client.search(body));
-    } catch (error) {
-      if (libgen && error instanceof ZlibraryError) {
-        try {
-          return c.json(await libgen.search(body));
-        } catch {
-          // LibGen is down too: report Z-Library's own error
-        }
-      }
-      return await guard(() => Promise.reject(error));
+    // Both providers are asked; one failing (or not being connected) only drops its results.
+    const [z, l] = await Promise.allSettled([client.search(body), libgen ? libgen.search(body) : Promise.reject(new Error("off"))]);
+    if (z.status === "fulfilled" && l.status === "fulfilled") {
+      const lg = await withCovers(l.value.books);
+      return c.json({ ...z.value, books: [...z.value.books, ...lg], filteredOut: z.value.filteredOut + l.value.filteredOut });
     }
+    if (z.status === "fulfilled") return c.json(z.value);
+    if (l.status === "fulfilled") return c.json({ ...l.value, books: await withCovers(l.value.books) });
+    return await guard(() => Promise.reject(z.reason));
   });
 
   app.post(EPUB_PATH, async (c) => {
@@ -174,4 +171,35 @@ function errorMessage(error: unknown): string {
 
 function failNoLibgen(): never {
   throw new ServiceError("zlibrary-failed", 502, "LibGen non è abilitato.");
+}
+
+/** LibGen's thumbnails are empty files, so its covers come from Open Library (title + author match only). Never throws. */
+async function withCovers(books: ZlibraryBook[]): Promise<ZlibraryBook[]> {
+  const queue = [...books.keys()];
+  const out = [...books];
+  const work = async (book: ZlibraryBook): Promise<ZlibraryBook> => {
+      try {
+        const title = book.title.split(/[:(\[]/)[0]!.trim() || book.title;
+        const author = book.author.split(/[;&]/)[0]!.replace(/\[.*?\]/g, "").trim();
+        const known = author && book.author !== "Autore sconosciuto" ? [author] : [];
+        const match =
+          (await findOpenLibraryCover({ title, authors: known }, { timeoutMs: 5000 })) ??
+          (known.length ? await findOpenLibraryCover({ title }, { timeoutMs: 5000 }) : null);
+        // title-author matches always ask for confirmation: accept only a title that agrees with ours
+        const flat = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+        const ours = flat(title);
+        const theirs = flat(match?.olTitle ?? "");
+        if (!match || !theirs || !(ours.includes(theirs) || theirs.includes(ours))) return book;
+        return { ...book, cover: `https://covers.openlibrary.org/b/id/${match.coverId}-M.jpg` };
+      } catch {
+        return book;
+      }
+  };
+  // a few at a time: Open Library throttles bursts
+  await Promise.all(
+    Array.from({ length: 4 }, async () => {
+      for (let i = queue.shift(); i !== undefined; i = queue.shift()) out[i] = await work(books[i]!);
+    }),
+  );
+  return out;
 }

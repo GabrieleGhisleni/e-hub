@@ -38,8 +38,8 @@ export class LibgenClient {
       ["filesuns", "all"],
       ["page", String(req.page)],
     ]);
-    const { text, base } = await this.get(`/index.php?${params}`);
-    const all = parseLibgenResults(text, base);
+    const { text } = await this.get(`/index.php?${params}`);
+    const all = parseLibgenResults(text);
     const exts = req.extensions.map((e) => e.toUpperCase());
     const maxBytes = req.maxSizeMb === undefined ? undefined : req.maxSizeMb * 1024 * 1024;
     const books = all.filter((b) => {
@@ -98,7 +98,7 @@ export class LibgenClient {
     for (const base of this.bases) {
       try {
         const response = await fetch(`${base}${pathAndQuery}`, {
-          headers: { "User-Agent": USER_AGENT, Accept: "text/html", Cookie: "covers=on" },
+          headers: { "User-Agent": USER_AGENT, Accept: "text/html", },
           signal: AbortSignal.timeout(20_000),
         });
         if (!response.ok) {
@@ -145,7 +145,7 @@ function parseSize(label: string): number | null {
 }
 
 /** Parses the result table of libgen.li `index.php` (cells: title, author, publisher, year, language, pages, size, ext, mirrors). */
-export function parseLibgenResults(html: string, base = DEFAULT_BASE_URL): ZlibraryBook[] {
+export function parseLibgenResults(html: string): ZlibraryBook[] {
   const books: ZlibraryBook[] = [];
   const seen = new Set<string>();
   for (const row of html.match(/<tr[\s>][\s\S]*?<\/tr>/gi) ?? []) {
@@ -173,7 +173,7 @@ export function parseLibgenResults(html: string, base = DEFAULT_BASE_URL): Zlibr
       sizeLabel,
       language: cells[4] || null,
       publisher: cells[2] || null,
-      cover: coverOf(row, base),
+      cover: null, // libgen's thumbnails are empty files: the route fills it from Open Library
       description: null,
       pages: pages > 0 ? pages : null,
       isbn: null,
@@ -181,15 +181,4 @@ export function parseLibgenResults(html: string, base = DEFAULT_BASE_URL): Zlibr
     });
   }
   return books;
-}
-
-/** The row's cover thumbnail (`/…covers/…_small.jpg`, shown with the `covers=on` cookie), as an absolute URL. */
-function coverOf(row: string, base: string): string | null {
-  const src = /<img[^>]+src=["']([^"']*covers\/[^"']+)["']/i.exec(row)?.[1];
-  if (!src) return null;
-  try {
-    return new URL(decodeEntities(src), base).toString();
-  } catch {
-    return null;
-  }
 }

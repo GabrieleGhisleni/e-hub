@@ -12,7 +12,7 @@ const html = `<table id="tablelibgen"><tr><th>Title</th></tr>
 
 describe("LibGen parser", () => {
   it("maps a result row to a book", () => {
-    const [b] = parseLibgenResults(html, "https://libgen.li");
+    const [b] = parseLibgenResults(html);
     expect(b).toMatchObject({
       id: "libgen",
       hash: MD5,
@@ -22,7 +22,6 @@ describe("LibGen parser", () => {
       pages: 320,
       language: "Italian",
     });
-    expect(b!.cover).toBe("https://libgen.li/fictioncovers/1/abc_small.jpg");
     expect(b!.source).toBe("libgen");
     expect(b!.title).toBe("Lettere a Lucilio");
     expect(b!.size).toBe(Math.round(1.5 * 1024 * 1024));
