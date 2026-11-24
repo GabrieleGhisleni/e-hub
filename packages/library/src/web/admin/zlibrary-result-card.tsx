@@ -132,6 +132,7 @@ export function ZlibraryResultCard({
 
         <div className="mt-2 flex flex-wrap gap-1.5">
           <Badge accent>{book.extension.toUpperCase()}</Badge>
+          <Badge>{book.source === "libgen" ? "LibGen" : "Z-Library"}</Badge>
           {badges.map((badge) => (
             <Badge key={badge}>{badge}</Badge>
           ))}

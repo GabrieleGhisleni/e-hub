@@ -540,6 +540,7 @@ function toBook(raw: Record<string, unknown>): ZlibraryBook | null {
     description: str(raw.description),
     pages: toNumber(raw.pages) || null,
     isbn: str(raw.identifier),
+    source: "zlibrary",
   };
 }
 

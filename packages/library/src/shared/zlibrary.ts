@@ -79,6 +79,8 @@ export const ZlibraryBookSchema = z.object({
   description: z.string().nullable(),
   pages: z.number().nullable(),
   isbn: z.string().nullable(),
+  /** Which provider the result comes from. */
+  source: z.enum(["zlibrary", "libgen"]).default("zlibrary"),
 });
 export type ZlibraryBook = z.infer<typeof ZlibraryBookSchema>;
 

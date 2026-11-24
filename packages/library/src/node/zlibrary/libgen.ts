@@ -38,8 +38,8 @@ export class LibgenClient {
       ["filesuns", "all"],
       ["page", String(req.page)],
     ]);
-    const html = await this.get(`/index.php?${params}`);
-    const all = parseLibgenResults(html);
+    const { text, base } = await this.get(`/index.php?${params}`);
+    const all = parseLibgenResults(text, base);
     const exts = req.extensions.map((e) => e.toUpperCase());
     const maxBytes = req.maxSizeMb === undefined ? undefined : req.maxSizeMb * 1024 * 1024;
     const books = all.filter((b) => {
@@ -54,7 +54,7 @@ export class LibgenClient {
 
   async download(md5: string, maxBytes: number, onlyExtension?: string): Promise<DownloadedFile> {
     if (!/^[a-f0-9]{32}$/i.test(md5)) throw new ZlibraryError("failed", "Identificativo LibGen non valido.");
-    const page = await this.get(`/ads.php?md5=${md5}`);
+    const { text: page } = await this.get(`/ads.php?md5=${md5}`);
     const link = /href=["']((?:https?:\/\/[^"']+)?\/?get\.php\?md5=[^"']+)["']/i.exec(page)?.[1];
     if (!link) throw new ZlibraryError("failed", "LibGen non ha fornito un link di download.");
     const href = decodeEntities(link);
@@ -93,19 +93,19 @@ export class LibgenClient {
     throw new ZlibraryError("failed", `Download da LibGen non riuscito: ${lastError}`);
   }
 
-  private async get(pathAndQuery: string): Promise<string> {
+  private async get(pathAndQuery: string): Promise<{ text: string; base: string }> {
     let lastError = "nessun mirror";
     for (const base of this.bases) {
       try {
         const response = await fetch(`${base}${pathAndQuery}`, {
-          headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
+          headers: { "User-Agent": USER_AGENT, Accept: "text/html", Cookie: "covers=on" },
           signal: AbortSignal.timeout(20_000),
         });
         if (!response.ok) {
           lastError = `${new URL(base).host}: HTTP ${response.status}`;
           continue;
         }
-        return await response.text();
+        return { text: await response.text(), base };
       } catch (error) {
         lastError = `${new URL(base).host}: ${(error as Error).message}`;
       }
@@ -145,16 +145,19 @@ function parseSize(label: string): number | null {
 }
 
 /** Parses the result table of libgen.li `index.php` (cells: title, author, publisher, year, language, pages, size, ext, mirrors). */
-export function parseLibgenResults(html: string): ZlibraryBook[] {
+export function parseLibgenResults(html: string, base = DEFAULT_BASE_URL): ZlibraryBook[] {
   const books: ZlibraryBook[] = [];
   const seen = new Set<string>();
   for (const row of html.match(/<tr[\s>][\s\S]*?<\/tr>/gi) ?? []) {
     const md5 = /md5=([a-f0-9]{32})/i.exec(row)?.[1]?.toLowerCase();
     if (!md5 || seen.has(md5)) continue;
-    const cells = (row.match(/<td[\s>][\s\S]*?<\/td>/gi) ?? []).map(textOf);
+    let tds: string[] = row.match(/<td[\s>][\s\S]*?<\/td>/gi) ?? [];
+    // with the covers cookie the first column is the thumbnail alone
+    if (tds[0] && /<img/i.test(tds[0]) && textOf(tds[0]) === "") tds = tds.slice(1);
+    const cells = tds.map(textOf);
     if (cells.length < 8) continue;
     seen.add(md5);
-    const titleCell = /<td[\s>][\s\S]*?<\/td>/i.exec(row)![0];
+    const titleCell = tds[0]!;
     const titleLink = /href=["']edition\.php[^"']*["'][^>]*>([\s\S]*?)<\/a>/i.exec(titleCell)?.[1];
     const year = Number(/\d{4}/.exec(cells[3] ?? "")?.[0]);
     const pages = Number(/\d+/.exec(cells[5] ?? "")?.[0]);
@@ -170,11 +173,23 @@ export function parseLibgenResults(html: string): ZlibraryBook[] {
       sizeLabel,
       language: cells[4] || null,
       publisher: cells[2] || null,
-      cover: null,
+      cover: coverOf(row, base),
       description: null,
       pages: pages > 0 ? pages : null,
       isbn: null,
+      source: "libgen",
     });
   }
   return books;
+}
+
+/** The row's cover thumbnail (`/…covers/…_small.jpg`, shown with the `covers=on` cookie), as an absolute URL. */
+function coverOf(row: string, base: string): string | null {
+  const src = /<img[^>]+src=["']([^"']*covers\/[^"']+)["']/i.exec(row)?.[1];
+  if (!src) return null;
+  try {
+    return new URL(decodeEntities(src), base).toString();
+  } catch {
+    return null;
+  }
 }

@@ -4,6 +4,7 @@ import { parseLibgenResults } from "../../../src/node/zlibrary/libgen.ts";
 const MD5 = "0123456789abcdef0123456789abcdef";
 const html = `<table id="tablelibgen"><tr><th>Title</th></tr>
 <tr>
+<td><a href="edition.php?id=1"><img src="/fictioncovers/1/abc_small.jpg"></a></td>
 <td><a data-html="true" title="Add<br>Lettere" href="edition.php?id=1">Lettere a Lucilio <i></i></a> <nobr><span>b</span></nobr></td>
 <td>Seneca, Lucio Anneo,  </td><td>Mondadori</td><td>2019</td><td>Italian</td><td>320</td>
 <td><a href="file.php?id=9">1.5 MB</a></td><td>epub</td>
@@ -11,7 +12,7 @@ const html = `<table id="tablelibgen"><tr><th>Title</th></tr>
 
 describe("LibGen parser", () => {
   it("maps a result row to a book", () => {
-    const [b] = parseLibgenResults(html);
+    const [b] = parseLibgenResults(html, "https://libgen.li");
     expect(b).toMatchObject({
       id: "libgen",
       hash: MD5,
@@ -21,6 +22,8 @@ describe("LibGen parser", () => {
       pages: 320,
       language: "Italian",
     });
+    expect(b!.cover).toBe("https://libgen.li/fictioncovers/1/abc_small.jpg");
+    expect(b!.source).toBe("libgen");
     expect(b!.title).toBe("Lettere a Lucilio");
     expect(b!.size).toBe(Math.round(1.5 * 1024 * 1024));
   });
