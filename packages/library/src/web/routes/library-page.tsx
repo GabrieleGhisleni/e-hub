@@ -189,30 +189,10 @@ export function LibraryPage() {
             index ? (
               <>
                 {resultCountLabel(visible.length, index.books.length)}
-                {!query.showRead && query.statuses.length === 0 && stats.read > 0 ? (
-                  <>
-                    {" "}
-                    · letti nascosti ·{" "}
-                    <button
-                      type="button"
-                      className="font-medium text-brand underline-offset-4 hover:underline"
-                      onClick={() => commit({ ...query, showRead: true })}
-                    >
-                      mostra
-                    </button>
-                  </>
-                ) : null}
               </>
             ) : (
               " "
             )
-          }
-          actions={
-            index && query.showRead ? (
-              <Button size="sm" variant="ghost" onClick={() => commit({ ...query, showRead: false })}>
-                Nascondi i letti
-              </Button>
-            ) : undefined
           }
           chips={index ? activeChips(index, query, commit) : []}
           onClear={() => commit(clearFilters(query))}

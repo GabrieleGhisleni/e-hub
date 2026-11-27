@@ -71,8 +71,7 @@ const confessioni = card({
 const books = [promessi, delitto, principe, moby, confessioni];
 
 function q(partial: Partial<LibraryQuery>): LibraryQuery {
-  // showRead on: these tests are about search and filters, not the default "hide the read" view.
-  return { ...EMPTY_QUERY, showRead: true, ...partial };
+  return { ...EMPTY_QUERY, ...partial };
 }
 
 describe("normalizeText / searchTokens", () => {
@@ -191,7 +190,6 @@ describe("URL state", () => {
       topic: "narrativa",
       tags: ["classici", "russi"],
       statuses: ["reading", "read"],
-      showRead: false,
       sort: "author",
     });
   });
@@ -204,7 +202,6 @@ describe("URL state", () => {
       topic: null,
       tags: ["Classici"],
       statuses: ["read"],
-      showRead: false,
       sort: "title",
     });
   });
@@ -218,7 +215,6 @@ describe("URL state", () => {
     expect(params.toString()).toBe("q=dante&tag=poesia&status=to-read&status=read");
     expect(libraryQueryString(EMPTY_QUERY)).toBe("");
     expect(libraryQueryString({ ...EMPTY_QUERY, sort: "recent" })).toBe("?sort=recent");
-    expect(libraryQueryString({ ...EMPTY_QUERY, showRead: true })).toBe("?letti=1");
   });
   it("round-trips", () => {
     const query = q({
@@ -233,13 +229,11 @@ describe("URL state", () => {
 });
 
 describe("read books and manual order", () => {
-  it("hides the read books by default, unless a status is chosen or showRead is on", () => {
+  it("shows the read books by default, and a status filter narrows them", () => {
     const all = [promessi, delitto, principe, moby, confessioni];
     const read = all.filter((b) => b.status === "read");
     expect(read.length).toBeGreaterThan(0);
-    const hidden = filterBooks(all, EMPTY_QUERY);
-    expect(hidden.some((b) => b.status === "read")).toBe(false);
-    expect(filterBooks(all, { ...EMPTY_QUERY, showRead: true })).toHaveLength(all.length);
+    expect(filterBooks(all, EMPTY_QUERY)).toHaveLength(all.length);
     expect(filterBooks(all, { ...EMPTY_QUERY, statuses: ["read"] })).toHaveLength(read.length);
   });
   it("sorts by the manual order, unknown books after by title", () => {

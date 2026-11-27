@@ -35,8 +35,6 @@ export interface LibraryQuery {
   tags: string[];
   /** Selected statuses (a book must have one of them). */
   statuses: BookStatus[];
-  /** Show the books already read even when no status is selected (default: hidden, the list is "what is left"). */
-  showRead: boolean;
   sort: SortKey;
 }
 
@@ -45,7 +43,6 @@ export const EMPTY_QUERY: Readonly<LibraryQuery> = Object.freeze({
   topic: null,
   tags: [],
   statuses: [],
-  showRead: false,
   sort: DEFAULT_SORT,
 });
 
@@ -55,8 +52,6 @@ export const QUERY_PARAMS = {
   topic: "topic",
   tag: "tag",
   status: "status",
-  /** `?letti=1`: include the read books. */
-  showRead: "letti",
   sort: "sort",
 } as const;
 
@@ -97,7 +92,6 @@ export function parseLibraryQuery(params: URLSearchParams): LibraryQuery {
     topic: topic === "" ? null : topic,
     tags,
     statuses: STATUS_ORDER.filter((s) => wanted.has(s)),
-    showRead: params.get(QUERY_PARAMS.showRead) === "1",
     sort: isSortKey(sort) ? sort : DEFAULT_SORT,
   };
 }
@@ -113,7 +107,6 @@ export function serializeLibraryQuery(query: LibraryQuery): URLSearchParams {
   for (const status of STATUS_ORDER) {
     if (statuses.has(status)) params.append(QUERY_PARAMS.status, status);
   }
-  if (query.showRead) params.set(QUERY_PARAMS.showRead, "1");
   if (query.sort !== DEFAULT_SORT) params.set(QUERY_PARAMS.sort, query.sort);
   return params;
 }
@@ -211,8 +204,6 @@ interface Matcher {
   topic: string | null;
   tagKeys: string[];
   statuses: ReadonlySet<BookStatus>;
-  /** Books already read are left out when no status is chosen and `showRead` is off. */
-  hideRead: boolean;
 }
 
 function matcher(query: LibraryQuery): Matcher {
@@ -221,7 +212,6 @@ function matcher(query: LibraryQuery): Matcher {
     topic: query.topic,
     tagKeys: uniqueBy(query.tags.map(tagKey), (k) => k),
     statuses: new Set(query.statuses),
-    hideRead: !query.showRead && query.statuses.length === 0,
   };
 }
 
@@ -229,7 +219,6 @@ function matches(book: BookCard, m: Matcher, skip?: Facet): boolean {
   if (skip !== "topic" && m.topic !== null && book.topic !== m.topic) return false;
   if (skip !== "statuses") {
     if (m.statuses.size > 0 && !m.statuses.has(book.status)) return false;
-    if (m.hideRead && book.status === "read") return false;
   }
   if (skip !== "tags" && m.tagKeys.length > 0) {
     const keys = new Set(book.tags.map(tagKey));

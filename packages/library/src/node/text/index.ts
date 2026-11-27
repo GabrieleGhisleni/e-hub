@@ -3,6 +3,7 @@
  * Book text never goes into the repo (PLAN §14): the output dir is checked against the repo root at runtime.
  */
 import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { slugify } from "../../shared/slug.ts";
@@ -90,7 +91,12 @@ async function realpathOfExistingAncestor(target: string): Promise<string> {
 }
 
 /** Throws `UnsafeTextOutputError` when `dir` is the repo root or inside it (symlinks resolved). */
-export async function assertOutsideRepo(dir: string, repoRoot: string = REPO_ROOT): Promise<void> {
+export async function assertOutsideRepo(dir: string, repoRoot?: string): Promise<void> {
+  // Bundled API (Pi, /opt/ehub): REPO_ROOT degenerates to `/` and there is no repo to protect.
+  if (repoRoot === undefined) {
+    if (!existsSync(path.join(REPO_ROOT, "package.json"))) return;
+    repoRoot = REPO_ROOT;
+  }
   const target = await realpathOfExistingAncestor(dir);
   const root = await realpathOfExistingAncestor(repoRoot);
   const relative = path.relative(root, target);
